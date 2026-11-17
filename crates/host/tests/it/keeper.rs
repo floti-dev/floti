@@ -61,7 +61,7 @@ impl KillableHost {
         Self::start_with(dirs, agent, |command| {
             command
                 .arg("--desktop")
-                .arg(app.join("Helm.exe"))
+                .arg(app.join("Floti.exe"))
                 .arg("--desktop-arg")
                 .arg(app.join("resources app"));
         })
@@ -849,7 +849,7 @@ async fn after_a_restart_a_host_that_does_not_speak_the_keepers_link_version_end
 
 /// Helm's client folder, with a device key of its own and the host on
 /// `dirs`' data folder pinned, as Helm's is once it has connected.
-async fn helm_client(dirs: &TestDirs) -> PathBuf {
+async fn desktop_client(dirs: &TestDirs) -> PathBuf {
     let folder = dirs.root().join("Floti data").join("host-client");
     let mut keys = ClientKeys::open(&folder).expect("set up Floti's client keys");
     let mut host = None;
@@ -917,7 +917,7 @@ async fn s15_ending_a_protocol_1_host_leaves_its_keeper_running_and_the_next_hos
         .await;
     let keeper = keeper_above(session_pid);
     drop(client);
-    let folder = helm_client(&dirs).await;
+    let folder = desktop_client(&dirs).await;
 
     let ended = end_old_host(&dirs, &folder).await;
     assert_eq!(
@@ -986,7 +986,7 @@ async fn s15_after_ending_a_protocol_1_host_whose_keeper_the_next_host_cannot_ta
     let (session, session_pid) = fake_session(&mut client, &agent, &in_session, "", 1).await;
     let keeper = keeper_above(session_pid);
     drop(client);
-    let folder = helm_client(&dirs).await;
+    let folder = desktop_client(&dirs).await;
 
     let ended = end_old_host(&dirs, &folder).await;
     assert_eq!(
@@ -1025,9 +1025,9 @@ async fn s15_end_old_host_ends_nothing_for_a_host_of_this_protocol() {
     let mut client = TestClient::connect(&endpoint, TERMINAL).await;
     let folder = dirs.folder("a project");
     let (session, pid) = fake_session(&mut client, &agent, &folder, "", 1).await;
-    let helm = helm_client(&dirs).await;
+    let desktop = desktop_client(&dirs).await;
 
-    let left = end_old_host(&dirs, &helm).await;
+    let left = end_old_host(&dirs, &desktop).await;
     assert_eq!(left.status.code(), Some(9));
     let said = String::from_utf8_lossy(&left.stderr);
     assert!(

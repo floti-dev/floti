@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { HUE_TINT_ALPHA, PALETTE_HUES } from '@helm/core/types'
+import { HUE_TINT_ALPHA, PALETTE_HUES } from '@floti/core/types'
 
 /**
  * The primitives stylesheet a plugin page is served (`/__floti/floti.css`), read

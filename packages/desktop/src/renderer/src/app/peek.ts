@@ -7,7 +7,7 @@ import {
   type ChildPlace,
   type PaneLayout,
   type SessionRecord
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 
 /**

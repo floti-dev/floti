@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, type AppSettings } from '@helm/core'
+import { DEFAULT_SETTINGS, type AppSettings } from '@floti/core'
 import { FakeConnection, fakeLink, reconnectingLink } from '../../../test/host-connection'
 import type { HostLink } from './link'
 import type * as P from './protocol'
@@ -88,7 +88,7 @@ const backend = (patch: Partial<P.BackendStatus> = {}): P.BackendStatus => ({
 
 const LISTING: P.TemplateListing = {
   templates: [],
-  dir: resolve('/fixture home/.config/helm/templates'),
+  dir: resolve('/fixture home/.config/floti/templates'),
   problems: []
 }
 

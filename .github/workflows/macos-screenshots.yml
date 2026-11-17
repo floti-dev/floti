@@ -48,7 +48,7 @@ on:
       - packages/desktop/scripts/stage-floti.mjs
       - packages/desktop/scripts/screenshots/**
       # The launch and the fake-claude world the capture runs in.
-      - packages/desktop/e2e/helm.ts
+      - packages/desktop/e2e/desktop.ts
       - packages/desktop/test/world.ts
       - test/fake-agents/**
 
@@ -119,7 +119,7 @@ jobs:
       - name: Launch Floti with the fake claude and capture each view
         id: capture
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: pnpm --filter @helm/desktop exec node scripts/playwright.mjs test -c scripts/screenshots
+        run: pnpm --filter @floti/desktop exec node scripts/playwright.mjs test -c scripts/screenshots
 
       # Whatever the capture wrote, even from a run that failed partway; there
       # is nothing to upload when the build or its check stopped the job first.

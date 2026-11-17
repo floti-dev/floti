@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import type { Project } from '@helm/core'
+import type { Project } from '@floti/core'
 import { cn } from '../lib/cn'
 import { PROJECT_KIND_ICON } from '../lib/projectIcons'
 import { ROW_SELECTED, ROW_SELECTED_GROUP } from '../lib/rows'

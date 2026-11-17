@@ -1,6 +1,6 @@
 import type { JSX, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { isSplit, type PaneNode } from '@helm/core/types'
+import { isSplit, type PaneNode } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import {
   dragShares,

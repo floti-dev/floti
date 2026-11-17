@@ -6,7 +6,7 @@ import {
   type HostAddRequest,
   type HostFailureCause,
   type RemoteHost
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { rm } from 'node:fs/promises'
 import type { HostPlaces, LocalHost } from './launcher'
 import { RemoteHostError, remoteClientFolder, startRemoteHost, type RemoteLauncherDeps } from './remote-launcher'

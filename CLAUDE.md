@@ -114,7 +114,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - `packages/core` never imports Electron (`no-electron-in-core` in
   `eslint.config.js`). If core needs something from the host, the host passes
   it in.
-- A value import into the browser bundle comes from `@helm/core/types`, never
+- A value import into the browser bundle comes from `@floti/core/types`, never
   the package root. This fails at rollup, not at typecheck.
 - Every channel a Floti page uses is declared in `shared/ipc.ts`. The preload
   exposes three generic functions; a feature adds a channel, not a bridge
@@ -206,7 +206,7 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
 - `will-navigate` and `setWindowOpenHandler` are denied on every web-contents
   in `main/index.ts`. Browser views are exempted by a `webContents.id` registry
   read inside those guards. Widen the registry, never the guard.
-- Every navigation goes through `browserReachAllows` in `@helm/core`, an
+- Every navigation goes through `browserReachAllows` in `@floti/core`, an
   agent's also through `agentReach` and `browserMcpLocalOnly`. `file:` and
   custom schemes are refused there.
 - A view can lose its web contents. Reach them only through `contentsOf` in

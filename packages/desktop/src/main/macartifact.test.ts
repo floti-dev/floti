@@ -7,7 +7,7 @@ import { signatureProblem } from '../../scripts/verify-mac-artifact.mjs'
  * made with a Developer ID certificate, and an app with none.
  */
 
-const ADHOC = `Executable=/Volumes/Helm 2.3.3-arm64/Helm.app/Contents/MacOS/Helm
+const ADHOC = `Executable=/Volumes/Floti 2.3.3-arm64/Floti.app/Contents/MacOS/Floti
 Identifier=dev.floti.desktop
 Format=app bundle with Mach-O thin (arm64)
 CodeDirectory v=20400 size=1234 flags=0x2(adhoc) hashes=28+7 location=embedded
@@ -18,7 +18,7 @@ Sealed Resources version=2 rules=13 files=104
 Internal requirements count=0 size=12
 `
 
-const DEVELOPER_ID = `Executable=/Applications/Helm.app/Contents/MacOS/Helm
+const DEVELOPER_ID = `Executable=/Applications/Floti.app/Contents/MacOS/Floti
 Identifier=dev.floti.desktop
 Format=app bundle with Mach-O thin (arm64)
 CodeDirectory v=20500 size=1234 flags=0x10000(runtime) hashes=28+7 location=embedded
@@ -44,8 +44,8 @@ describe('the macOS artefact check, reading codesign', () => {
   })
 
   it('refuses an unsigned app, and a report that says neither, with what codesign printed', () => {
-    expect(signatureProblem('/Volumes/Helm/Helm.app: code object is not signed at all\n')).toBe(
-      'the app is not signed:\n/Volumes/Helm/Helm.app: code object is not signed at all'
+    expect(signatureProblem('/Volumes/Floti/Floti.app: code object is not signed at all\n')).toBe(
+      'the app is not signed:\n/Volumes/Floti/Floti.app: code object is not signed at all'
     )
     const neither = ADHOC.replace('Signature=adhoc\n', 'Signature size=4442\n').replace('flags=0x2(adhoc)', 'flags=0x0(none)')
     expect(signatureProblem(neither)).toBe(`the signature is not ad-hoc:\n${neither.trim()}`)

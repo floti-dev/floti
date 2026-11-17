@@ -1,4 +1,4 @@
-import type { ContentFileKind } from '@helm/core'
+import type { ContentFileKind } from '@floti/core'
 import { ArtifactIcon, CommandIcon, DocIcon, SlidersIcon } from '../components/icons'
 
 /**

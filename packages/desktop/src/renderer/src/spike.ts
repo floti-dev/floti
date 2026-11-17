@@ -1,7 +1,7 @@
 import { createTerminal, type TerminalHost } from './terminal'
 import { LatencyRecorder } from './latency'
 import { makeProbeHandler } from './probe'
-import type { HelmBridge } from '../../shared/ipc'
+import type { DesktopBridge } from '../../shared/ipc'
 import type { ProbeOp } from '../../shared/protocol'
 
 /**
@@ -13,17 +13,17 @@ import type { ProbeOp } from '../../shared/protocol'
  * stays a separate page from the app: the checks measure a terminal, not a
  * terminal inside a layout that might have changed under it.
  *
- * It goes through the same typed bridge as the app - `window.helm` is the only
+ * It goes through the same typed bridge as the app - `window.desktop` is the only
  * thing the preload exposes, in either page.
  */
 
 declare global {
   interface Window {
-    readonly helm: HelmBridge
+    readonly desktop: DesktopBridge
   }
 }
 
-const helm = window.helm
+const desktop = window.desktop
 
 let host: TerminalHost | null = null
 const latency = new LatencyRecorder()
@@ -81,7 +81,7 @@ function answer(req: ProbeOp): unknown {
   }
 }
 
-helm.on('probe:req', ({ id, req }) => {
+desktop.on('probe:req', ({ id, req }) => {
   void (async () => {
     let value: unknown
     try {
@@ -89,23 +89,23 @@ helm.on('probe:req', ({ id, req }) => {
     } catch (err) {
       value = { error: String(err) }
     }
-    helm.send('probe:res', { id, value })
+    desktop.send('probe:res', { id, value })
   })()
 })
 
-helm.on('term:create', (opts) => {
+desktop.on('term:create', (opts) => {
   host = createTerminal(document.getElementById('terminal')!, opts, {
     onInput: (data) => {
       latency.hostInput()
-      helm.send('pty:input', data)
+      desktop.send('pty:input', data)
     },
-    onResize: (cols, rows) => helm.send('pty:resize', { cols, rows }),
-    readClipboard: () => helm.invoke('clipboard:read'),
-    writeClipboard: async (text) => (await helm.invoke('clipboard:write', text)).outcome,
-    openLink: (url) => void helm.invoke('shell:openExternal', { url }),
+    onResize: (cols, rows) => desktop.send('pty:resize', { cols, rows }),
+    readClipboard: () => desktop.invoke('clipboard:read'),
+    writeClipboard: async (text) => (await desktop.invoke('clipboard:write', text)).outcome,
+    openLink: (url) => void desktop.invoke('shell:openExternal', { url }),
     onKeyDown: (at) => latency.keyDown(at)
   })
-  helm.send('term:created', {
+  desktop.send('term:created', {
     rendererKind: host.rendererKind,
     cols: host.term.cols,
     rows: host.term.rows,
@@ -113,16 +113,16 @@ helm.on('term:create', (opts) => {
   })
 })
 
-helm.on('term:write', (data) => {
+desktop.on('term:write', (data) => {
   host?.term.write(data, () => {
     const n = latency.countPending(data)
     if (n > 0) requestAnimationFrame(() => latency.close(n))
   })
 })
 
-helm.on('term:resize', ({ cols, rows }) => {
+desktop.on('term:resize', ({ cols, rows }) => {
   host?.term.resize(cols, rows)
-  helm.send('term:resized')
+  desktop.send('term:resized')
 })
 
-helm.send('renderer:ready')
+desktop.send('renderer:ready')

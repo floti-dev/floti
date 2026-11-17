@@ -1,6 +1,6 @@
 import type { DragEvent, JSX, KeyboardEvent } from 'react'
 import { useState } from 'react'
-import type { Profile } from '@helm/core'
+import type { Profile } from '@floti/core'
 import { cn } from '../lib/cn'
 import { hasPrimaryModifier } from '../lib/platform'
 import {

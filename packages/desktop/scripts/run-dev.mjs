@@ -84,7 +84,7 @@ if (drivePort !== null) env.REMOTE_DEBUGGING_PORT = drivePort
 /**
  * A driven window's agents: the fakes, chosen in the dev database after its
  * copy above and before the app opens it. `drive-agents.ts` is TypeScript
- * that writes through `@helm/core`'s own store, so it is loaded through
+ * that writes through `@floti/core`'s own store, so it is loaded through
  * Vite's module runner, the way Vite loads a config file.
  */
 const drive = drivePort === null ? null : await prepareDriveAgents()

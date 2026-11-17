@@ -1,5 +1,5 @@
 import { type BrowserWindow, dialog } from 'electron'
-import type { Profile } from '@helm/core'
+import type { Profile } from '@floti/core'
 import type {
   EventChannel,
   EventPayload,

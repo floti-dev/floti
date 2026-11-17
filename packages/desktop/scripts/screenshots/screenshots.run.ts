@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { repoRoot } from '../../test/world'
-import { expect, startSession, terminalText, test, type Helm } from '../../e2e/helm'
+import { expect, startSession, terminalText, test, type Desktop } from '../../e2e/desktop'
 
 /**
  * A screenshot of every destination on the rail and of a session's terminal,
@@ -41,11 +41,11 @@ const BOUNDS = { width: 1440, height: 900 }
  * The page's router (`app/inspect.ts`): it sends a host channel such as
  * `settings:write` to the local host, which main does not answer.
  */
-type HelmWindow = Window & { __helmRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
+type FlotiWindow = Window & { __flotiRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
 
 /** Fits the main window to `BOUNDS` inside the screen, in front, and returns where it is on screen. */
-async function frontWindow(helm: Helm): Promise<{ x: number; y: number; width: number; height: number }> {
-  return helm.app.evaluate(({ BrowserWindow, screen }, size) => {
+async function frontWindow(desktop: Desktop): Promise<{ x: number; y: number; width: number; height: number }> {
+  return desktop.app.evaluate(({ BrowserWindow, screen }, size) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.isVisible())
     if (win === undefined) throw new Error('Floti has no visible window')
     const area = screen.getPrimaryDisplay().workArea
@@ -70,11 +70,11 @@ async function settle(ui: Page): Promise<void> {
   await ui.waitForTimeout(400)
 }
 
-async function shoot(helm: Helm, dir: string, name: string): Promise<void> {
-  await settle(helm.window)
-  await helm.window.screenshot({ path: join(dir, `${name}.png`) })
+async function shoot(desktop: Desktop, dir: string, name: string): Promise<void> {
+  await settle(desktop.window)
+  await desktop.window.screenshot({ path: join(dir, `${name}.png`) })
   if (process.platform !== 'darwin') return
-  const { x, y, width, height } = await frontWindow(helm)
+  const { x, y, width, height } = await frontWindow(desktop)
   try {
     execFileSync('screencapture', ['-x', `-R${String(x)},${String(y)},${String(width)},${String(height)}`, join(dir, `${name}.window.png`)], {
       stdio: ['ignore', 'pipe', 'pipe']
@@ -84,10 +84,10 @@ async function shoot(helm: Helm, dir: string, name: string): Promise<void> {
   }
 }
 
-test('every rail destination and a session terminal, in the light and the dark theme', async ({ helm }) => {
-  const ui = helm.window
+test('every rail destination and a session terminal, in the light and the dark theme', async ({ desktop }) => {
+  const ui = desktop.window
   rmSync(OUT, { recursive: true, force: true })
-  await frontWindow(helm)
+  await frontWindow(desktop)
 
   // A running session first, so the Sessions view and the terminal have
   // something in them. The fake claude prints its banner and waits for input.
@@ -103,7 +103,7 @@ test('every rail destination and a session terminal, in the light and the dark t
   for (const theme of THEMES) {
     const dir = join(OUT, theme)
     mkdirSync(dir, { recursive: true })
-    await ui.evaluate((value) => (window as unknown as HelmWindow).__helmRouted.invoke('settings:write', { theme: value }), theme)
+    await ui.evaluate((value) => (window as unknown as FlotiWindow).__flotiRouted.invoke('settings:write', { theme: value }), theme)
     await expect.poll(() => ui.evaluate(() => document.documentElement.style.colorScheme)).toBe(theme)
 
     for (const [index, id] of destinations.entries()) {
@@ -111,14 +111,14 @@ test('every rail destination and a session terminal, in the light and the dark t
       // Pressing a view that is already showing puts the sidebar away.
       if ((await button.getAttribute('aria-current')) !== 'true') await button.click()
       await expect(button).toHaveAttribute('aria-current', 'true')
-      await shoot(helm, dir, `${String(index + 1).padStart(2, '0')}-${id}`)
+      await shoot(desktop, dir, `${String(index + 1).padStart(2, '0')}-${id}`)
     }
 
     const sessions = rail.locator('[data-rail="sessions"]')
     if ((await sessions.getAttribute('aria-current')) !== 'true') await sessions.click()
     await ui.getByRole('tab', { name: /^alpha/ }).first().click()
     await expect.poll(() => terminalText(ui, session)).toContain('Claude Code')
-    await shoot(helm, dir, `${String(destinations.length + 1).padStart(2, '0')}-terminal`)
+    await shoot(desktop, dir, `${String(destinations.length + 1).padStart(2, '0')}-terminal`)
   }
 
   console.log(`screenshots in ${OUT}`)

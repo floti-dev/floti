@@ -60,7 +60,7 @@ fn a_host_started_without_a_desktop_never_shows_one() {
 }
 
 #[test]
-fn open_helm_opens_the_desktop_and_stop_host_asks_saying_how_many_sessions_it_ends() {
+fn open_floti_opens_the_desktop_and_stop_host_asks_saying_how_many_sessions_it_ends() {
     assert_eq!(
         on_pick(TrayItem::OpenDesktop, occupied(2, 0, 0)),
         Step::Open
@@ -151,7 +151,7 @@ struct Driven {
 
 fn desktop() -> DesktopCommand {
     DesktopCommand {
-        program: OsString::from("C:\\Program Files\\Helm\\Helm.exe"),
+        program: OsString::from("C:\\Program Files\\Floti\\Floti.exe"),
         args: vec![OsString::from("an app folder")],
     }
 }
@@ -248,7 +248,7 @@ async fn a_host_with_a_client_attached_from_the_start_shows_nothing_until_it_lea
 }
 
 #[tokio::test]
-async fn open_helm_starts_the_desktop_that_started_the_host() {
+async fn open_floti_starts_the_desktop_that_started_the_host() {
     let mut tray = drive(occupied(1, 0, 0), &[]);
     tray.next().await;
     tray.picks.send(TrayItem::OpenDesktop).unwrap();

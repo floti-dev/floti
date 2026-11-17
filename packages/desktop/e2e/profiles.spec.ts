@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { workspaceIn, plantWorkspace } from '../test/overlay-world'
 import type { Page } from '@playwright/test'
-import { claudeRunIn, expect, sessionIdOf, shimFolderOf, terminalText, test as base } from './helm'
+import { claudeRunIn, expect, sessionIdOf, shimFolderOf, terminalText, test as base } from './desktop'
 
 /**
  * The world gets a workspace before the app starts, so the first scan finds it:
@@ -18,15 +18,15 @@ const test = base.extend({
 })
 
 /** The window's routed bridge (`inspect.ts`): host features over the window's own connection. */
-type Bridge = { __helmRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
+type Bridge = { __flotiRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
 const invoke = <T>(window: Page, channel: string): Promise<T> =>
-  window.evaluate((name) => (window as unknown as Bridge).__helmRouted.invoke(name), channel) as Promise<T>
+  window.evaluate((name) => (window as unknown as Bridge).__flotiRouted.invoke(name), channel) as Promise<T>
 
 test('a profile made in the New profile dialog is saved in the host and starts its composition, name and opening prompt when it is saved', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const hub = workspaceIn(world)
   const after = (argv: readonly string[], flag: string): string | undefined => argv[argv.indexOf(flag) + 1]
 

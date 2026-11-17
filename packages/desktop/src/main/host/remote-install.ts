@@ -31,7 +31,7 @@ import {
   type InstallOutcome,
   type ProtocolVersionNumbers,
   type RemoteSystem
-} from '@helm/core/types'
+} from '@floti/core/types'
 import type { HostConnection, HostSubscription } from './client'
 import type * as P from './protocol'
 import { runsAsWritten, systemWsl, transportArgv, type TransportPrograms } from './remote-launcher'
@@ -541,7 +541,7 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
     const { protocolNumbers, os: builtFor, cpu, ...named } = there.found
     const verdict = judgeProtocol(protocolNumbers, deps.protocol)
     const system = systemOfBuild(builtFor, cpu)
-    if (verdict === 'newer') return { kind: 'newer', found: named, ours: formatProtocol(deps.protocol), helm: deps.version }
+    if (verdict === 'newer') return { kind: 'newer', found: named, ours: formatProtocol(deps.protocol), desktop: deps.version }
     if (verdict === 'ok' && !olderForUpdate(named, forUpdate)) {
       return { kind: 'ready', found: named, system, floti: there.path }
     }
@@ -565,7 +565,7 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
       const { protocolNumbers, os, cpu, ...named } = found
       const verdict = judgeProtocol(protocolNumbers, deps.protocol)
       if (verdict === 'newer') {
-        return { kind: 'newer', found: named, ours: formatProtocol(deps.protocol), helm: deps.version }
+        return { kind: 'newer', found: named, ours: formatProtocol(deps.protocol), desktop: deps.version }
       }
       if (verdict === 'ok' && !olderForUpdate(named, forUpdate)) {
         return { kind: 'ready', found: named, system: systemOfBuild(os, cpu) }

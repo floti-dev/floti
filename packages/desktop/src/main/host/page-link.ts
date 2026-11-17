@@ -1,4 +1,4 @@
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import type { EventPayload, HostLinkOpened, RefusedVersions } from '../../shared/ipc'
 import type { PageBridge } from './launcher'
 
@@ -29,7 +29,7 @@ import type { PageBridge } from './launcher'
  */
 
 /** A Helm page, as much of its web contents as this needs. */
-export interface HelmPage {
+export interface FlotiPage {
   readonly id: number
   send<K extends 'hostLink:data' | 'hostLink:ended'>(channel: K, payload: EventPayload<K>): void
   /** Calls `listener` each time the page navigates away, reloads or closes. */
@@ -44,7 +44,7 @@ export interface PageLinksDeps {
   /** What the log calls the host: the local host when absent. */
   name?: string
   /** Whether a web contents is one of Helm's own pages. */
-  isHelmPage: (id: number) => boolean
+  isFlotiPage: (id: number) => boolean
   /** Settles once main's own link has connected; rejects with the sentence saying why it could not. */
   ready: () => Promise<unknown>
   /** Whether main's link ended the host on purpose, and whether Helm starts a new one if it is gone. */
@@ -62,7 +62,7 @@ export interface PageLinksDeps {
 
 export interface PageLinks {
   /** Opens `page`'s connection, ending any it had. Throws for a page that is not Helm's. */
-  open(page: HelmPage): Promise<HostLinkOpened>
+  open(page: FlotiPage): Promise<HostLinkOpened>
   /** A page's bytes for its bridge; anything not from the page that opened `connection` is dropped. */
   send(pageId: number, connection: number, bytes: Uint8Array): void
   /** The page closed `connection`. */
@@ -79,7 +79,7 @@ export interface PageLinks {
 }
 
 interface Open {
-  page: HelmPage
+  page: FlotiPage
   bridge: PageBridge
 }
 
@@ -121,7 +121,7 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
 
   return {
     async open(page) {
-      if (!deps.isHelmPage(page.id)) throw new Error(FOREIGN_PAGE)
+      if (!deps.isFlotiPage(page.id)) throw new Error(FOREIGN_PAGE)
       if (!watched.has(page.id)) {
         watched.add(page.id)
         page.onGone(() => pageGone(page.id))
@@ -195,7 +195,7 @@ export function createPageLinks(deps: PageLinksDeps): PageLinks {
  */
 export interface HostPageLinks {
   /** Opens `page`'s connection to `host`: this PC's when null or `local`. */
-  open(page: HelmPage, host: string | null): Promise<HostLinkOpened>
+  open(page: FlotiPage, host: string | null): Promise<HostLinkOpened>
   send(pageId: number, connection: number, bytes: Uint8Array): void
   close(pageId: number, connection: number): void
   /** Ends this PC's host's page bridges; each remote host's are its link's. */

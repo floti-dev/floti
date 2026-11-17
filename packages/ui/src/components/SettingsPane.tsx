@@ -31,7 +31,7 @@ import {
   type ThemeListing,
   type ThemeState,
   type ThemeTokens
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './SettingsSections'
 import { SEGMENT_ON } from '../lib/segmented'
@@ -53,7 +53,7 @@ import {
   useDraft
 } from './SettingsKit'
 import { CheckIcon, CloseIcon, PlusIcon, RefreshIcon } from './icons'
-import type { SetupClaudeStatus } from './SetupPane'
+import type { SetupClaudeStatus } from '../lib/claudeStatus'
 import { HostsSettings, type HostInstallActions, type HostsSettingsProps, type SettingsHost } from './HostsSettings'
 import { DevicesSettings, type DevicesSettingsProps } from './DevicesSettings'
 
@@ -108,6 +108,8 @@ export interface SettingsPaneProps {
   onLocateClaude: () => void
   /** Writes `claudePath: null` - back to whatever discovery finds. */
   onClearClaudeOverride: () => void
+  /** Starts the guided first run again at step 1, in its own window. */
+  onShowWalkthrough: () => void
 
   roots: string[]
   /** What the current roots turned up, so "it worked" is visible here. */
@@ -361,6 +363,7 @@ export function SettingsPane({
   onRecheck,
   onLocateClaude,
   onClearClaudeOverride,
+  onShowWalkthrough,
   roots,
   projectCount,
   scanning,
@@ -440,7 +443,7 @@ export function SettingsPane({
   // Workspace and Agents hold two groups each and keep their headings; every
   // other section is one group, whose title is the page's and whose hint is the
   // line under it.
-  const sole = section !== 'workspace' && section !== 'agents'
+  const sole = section !== 'workspace' && section !== 'agents' && section !== 'general'
 
   return (
     <SettingsPage
@@ -536,6 +539,13 @@ export function SettingsPane({
                       }
                     >
                       Clear override
+                    </Action>
+                  </Actions>
+                </Group>
+                <Group name="walkthrough" title="Walkthrough" hint="The steps Floti opened with the first time.">
+                  <Actions>
+                    <Action data-settings-show-walkthrough onClick={onShowWalkthrough}>
+                      Show the walkthrough
                     </Action>
                   </Actions>
                 </Group>

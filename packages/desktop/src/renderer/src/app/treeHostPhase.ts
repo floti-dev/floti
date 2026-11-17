@@ -1,6 +1,6 @@
-import type { RemoteHost, RemoteHostConnection } from '@helm/core/types'
-import { classifyHostFailure, type HostFailureCause } from '@helm/core/types'
-import type { TreeHostFailure, TreeHostPhase } from '@helm/ui'
+import type { RemoteHost, RemoteHostConnection } from '@floti/core/types'
+import { classifyHostFailure, type HostFailureCause } from '@floti/core/types'
+import type { TreeHostFailure, TreeHostPhase } from '@floti/ui'
 
 /** What the window has read of a host's sessions (`useHostWorkspaces`). */
 export interface HostListing {

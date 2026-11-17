@@ -622,7 +622,7 @@ function repoRoot(): string | null {
   try {
     const pkg: unknown = JSON.parse(readFileSync(join(candidate, 'package.json'), 'utf8'))
     const name = (pkg as Record<string, unknown>)['name']
-    if (name === 'helm-workspace') return candidate
+    if (name === 'floti-workspace') return candidate
   } catch {
     return null
   }
@@ -929,7 +929,7 @@ async function cliChecks(ctx: CheckContext): Promise<Check[]> {
     configDirExists: boolean
     auth: string
     authSignal: string
-  }>(ctx.win, `window.helm.invoke('setup:status')`)
+  }>(ctx.win, `window.desktop.invoke('setup:status')`)
 
   // A second opinion that shares no code with `claude-cli.ts`: ask Windows
   // itself where the program is, and run the one it names.
@@ -978,7 +978,7 @@ async function cliChecks(ctx: CheckContext): Promise<Check[]> {
         status.tested === handTested &&
         (independentAuth !== 'authenticated' || status.auth === 'authenticated'),
       detail: {
-        helm: status,
+        desktop: status,
         independent: {
           where: wherePath,
           path: independentPath,
@@ -1029,7 +1029,7 @@ async function firstRunChecks(
   // asserted rather than assumed.
   const settings = await js<{ scanRoots: string[]; firstRunCompletedAt: string | null }>(
     win,
-    `window.helm.invoke('settings:read')`
+    `window.desktop.invoke('settings:read')`
   )
   const paneShowing = await pollJs(win, `document.querySelector('[data-setup-pane]')`, 20_000)
   const sidebarAbsent = !(await exists(win, 'aside'))
@@ -1127,7 +1127,7 @@ async function reachLauncher(
   // --- PKG-5: the machine is not signed in, and the pane says what to do -----
   const status = await js<{ auth: string; authSignal: string; configDir: string; configDirExists: boolean }>(
     win,
-    `window.helm.invoke('setup:status')`
+    `window.desktop.invoke('setup:status')`
   )
   const guidance = await text(win, '[data-setup-auth-guidance]')
   const guidanceShown = await exists(win, '[data-setup-auth-guidance]')
@@ -1163,14 +1163,14 @@ async function reachLauncher(
     'TransportSecurity'
   ]
   const dataFiles = walk(dataDir)
-  const helmWrote = dataFiles.filter(
+  const desktopWrote = dataFiles.filter(
     (f) => !CHROMIUM_OWNED.some((name) => f === name || f.startsWith(`${name}/`))
   )
-  const secretLooking = helmWrote.filter((f) => /credential|token|oauth|secret|\.key$/i.test(f))
+  const secretLooking = desktopWrote.filter((f) => /credential|token|oauth|secret|\.key$/i.test(f))
 
   // And what it persisted: the settings shape has no field a credential could
   // live in, which is checked rather than asserted from the type.
-  const persisted = await js<Record<string, unknown>>(win, `window.helm.invoke('settings:read')`)
+  const persisted = await js<Record<string, unknown>>(win, `window.desktop.invoke('settings:read')`)
   const settingsKeys = Object.keys(persisted).sort()
   const secretKeys = settingsKeys.filter((k) => /credential|token|oauth|secret|key|password/i.test(k))
 
@@ -1193,7 +1193,7 @@ async function reachLauncher(
       credentialsAbsent,
       configDirStillAbsent,
       dataDirEntries: dataFiles.length,
-      writtenByHelm: helmWrote,
+      writtenByDesktop: desktopWrote,
       secretLookingFiles: secretLooking,
       persistedSettingKeys: settingsKeys,
       secretLookingSettingKeys: secretKeys,
@@ -1202,7 +1202,7 @@ async function reachLauncher(
     notes: [
       `Floti's answer is "${status.auth}" because ${status.authSignal}.`,
       'The independent read is the absence of the file, checked here without opening it.',
-      `The guidance is the whole of the remedy: a sentence telling the user to run \`claude\` once. There is no login form and no token field, none of the ${String(helmWrote.length)} entries Floti wrote is named like a credential, and none of the ${String(settingsKeys.length)} persisted settings is a field one could live in.`,
+      `The guidance is the whole of the remedy: a sentence telling the user to run \`claude\` once. There is no login form and no token field, none of the ${String(desktopWrote.length)} entries Floti wrote is named like a credential, and none of the ${String(settingsKeys.length)} persisted settings is a field one could live in.`,
       "Chromium's own profile directories are excluded from that count and listed in the source: one of its stores is called \"Trust Tokens\", which is a browser feature and would be a false positive in both directions."
     ]
   })
@@ -1230,7 +1230,7 @@ async function reachLauncher(
 
   const after = await js<{ scanRoots: string[]; firstRunCompletedAt: string | null }>(
     win,
-    `window.helm.invoke('settings:read')`
+    `window.desktop.invoke('settings:read')`
   )
 
   checks.push({
@@ -1627,7 +1627,7 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
   // function of this.
   await js<unknown>(
     win,
-    `window.helm.invoke('settings:write', { claudePath: ${JSON.stringify(fixtures.stubCli)} })`
+    `window.desktop.invoke('settings:write', { claudePath: ${JSON.stringify(fixtures.stubCli)} })`
   )
   const bannerUp = await pollJs(win, `document.querySelector('[data-version-banner]')`, 20_000)
   const bannerText = (await text(win, '[data-version-banner]')).replace(/\s+/g, ' ').trim()
@@ -1636,7 +1636,7 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
     semver: string | null
     tested: boolean
     testedRange: { min: string; max: string }
-  }>(win, `window.helm.invoke('setup:status')`)
+  }>(win, `window.desktop.invoke('setup:status')`)
   const shot = await screenshot(win, shotDir, 'packaging-version-banner.png')
 
   // Not blocked: the launcher underneath still works. A sidebar row opens its
@@ -1671,7 +1671,7 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
   await sleep(400)
   const dismissed = !(await exists(win, '[data-version-banner]'))
 
-  await js<unknown>(win, `window.helm.invoke('settings:write', { claudePath: null })`)
+  await js<unknown>(win, `window.desktop.invoke('settings:write', { claudePath: null })`)
   await sleep(800)
   const bannerAfterRestore = await exists(win, '[data-version-banner]')
 
@@ -1702,7 +1702,7 @@ async function versionGroup(ctx: CheckContext, shotDir: string, fixtures: Fixtur
       detail: {
         stub: fixtures.stubCli,
         stubSaysDirectly: stubVersion,
-        helmStatus: status,
+        desktopStatus: status,
         handComputedOutsideRange: handOutside,
         range,
         bannerBefore,

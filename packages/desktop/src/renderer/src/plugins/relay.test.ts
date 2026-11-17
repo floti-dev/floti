@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FlotiTheme } from '@floti-dev/plugin-sdk'
-import type { HelmBridge, PluginCallOutcome, PluginCallRequest, PluginDelivery } from '../../../shared/ipc'
+import type { DesktopBridge, PluginCallOutcome, PluginCallRequest, PluginDelivery } from '../../../shared/ipc'
 import { CONNECT, HELLO, type ConnectMessage, type FlotiMessage } from '../../plugin-runtime/wire'
 import { CRASH_GRACE_MS, LOAD_GRACE_MS, createPluginRelay, type PluginRelay, type SurfaceSpec } from './relay'
 
@@ -76,7 +76,7 @@ function fakeMain() {
     return () => set.delete(listener)
   })
   return {
-    ipc: { invoke, send, on } as unknown as HelmBridge,
+    ipc: { invoke, send, on } as unknown as DesktopBridge,
     invoke,
     send,
     calls,

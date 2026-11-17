@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FlotiBridge, FlotiContext, FlotiError, FlotiTheme } from '@floti-dev/plugin-sdk'
-import { BUILTIN_THEMES, PALETTE_HUES, pluginThemeOf, resolveTheme, type ThemeKind } from '@helm/core/types'
+import { BUILTIN_THEMES, PALETTE_HUES, pluginThemeOf, resolveTheme, type ThemeKind } from '@floti/core/types'
 import type { PluginFetchRequest, PluginFetchResponse } from '../../shared/ipc'
 import { installBridge } from './bridge'
 import { CONNECT, HELLO, contextName, type FrameMessage } from './wire'

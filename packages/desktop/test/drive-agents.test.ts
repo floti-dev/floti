@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFi
 import { tmpdir } from 'node:os'
 import { join, relative, isAbsolute } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { openStore, readSettings, writeSettings, type AppSettings } from '@helm/core'
+import { openStore, readSettings, writeSettings, type AppSettings } from '@floti/core'
 import { prepareDriveAgents } from '../scripts/drive-agents'
 
 /**
@@ -82,6 +82,15 @@ describe('the agents a driven dev window runs', () => {
     const drive = prepareDriveAgents(root, dataDir, { fresh: true })
 
     expect(settingsIn(dataDir).claudePath).toBe(drive.agents[0]?.program)
+  })
+
+  it('leaves the walkthrough started in a first-run database it makes', () => {
+    const { root, dataDir } = devRun()
+
+    prepareDriveAgents(root, dataDir, { fresh: true })
+
+    const settings = settingsIn(dataDir)
+    expect(settings.walkthrough).not.toBeNull()
   })
 
   it('keeps what the fakes wrote across launches, and starts it over when fresh', () => {

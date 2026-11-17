@@ -169,7 +169,7 @@ export interface TabBarProps {
  * another pane's strip, or its drop zones, which never saw the drag start, can
  * accept it.
  */
-export const TAB_MIME = 'application/x-helm-tab'
+export const TAB_MIME = 'application/x-floti-tab'
 
 /**
  * A pane's tabs, as one-line pills.

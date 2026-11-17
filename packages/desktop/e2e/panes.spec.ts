@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
-import type { AppSettings, SavedPaneNode } from '@helm/core'
-import { expect, keepClearOfCursor, startSession, test, typeLine } from './helm'
+import type { AppSettings, SavedPaneNode } from '@floti/core'
+import { expect, keepClearOfCursor, startSession, test, typeLine } from './desktop'
 
 type Zone = 'left' | 'right' | 'top' | 'bottom' | 'center'
 
@@ -22,9 +22,9 @@ async function dropOn(tab: Locator, pane: Locator, zone: Zone): Promise<void> {
 const pane = (window: Page, name: string): Locator => window.getByRole('region', { name })
 
 /** The window's routed bridge (`inspect.ts`): what the window's hooks call. */
-type Bridge = { __helmRouted: { invoke: (channel: string) => Promise<unknown> } }
+type Bridge = { __flotiRouted: { invoke: (channel: string) => Promise<unknown> } }
 const savedLayout = async (window: Page): Promise<AppSettings['paneLayout']> =>
-  ((await window.evaluate(() => (window as unknown as Bridge).__helmRouted.invoke('settings:read'))) as AppSettings).paneLayout
+  ((await window.evaluate(() => (window as unknown as Bridge).__flotiRouted.invoke('settings:read'))) as AppSettings).paneLayout
 
 /** The saved arrangement by shape, each group as its tab count: `row(1, column(1, 1))`. */
 async function savedShape(window: Page): Promise<string> {
@@ -40,8 +40,8 @@ async function savedFirstShare(window: Page): Promise<number | null> {
   return root !== undefined && 'axis' in root ? (root.sizes[0] ?? null) : null
 }
 
-test('two sessions side by side, and the one waiting on an answer is marked', async ({ helm }) => {
-  const { window } = helm
+test('two sessions side by side, and the one waiting on an answer is marked', async ({ desktop }) => {
+  const { window } = desktop
   await startSession(window, 'alpha')
   await startSession(window, 'beta')
 
@@ -63,8 +63,8 @@ test('two sessions side by side, and the one waiting on an answer is marked', as
   await expect(window.getByRole('contentinfo')).toContainText('2 idle')
 })
 
-test('a tab dragged to a pane’s side opens a pane there, and one dropped in its middle joins it', async ({ helm }) => {
-  const { window } = helm
+test('a tab dragged to a pane’s side opens a pane there, and one dropped in its middle joins it', async ({ desktop }) => {
+  const { window } = desktop
   await startSession(window, 'alpha')
   await startSession(window, 'beta')
   await window.locator('[data-rail="settings"]').click()
@@ -105,10 +105,10 @@ test('a tab dragged to a pane’s side opens a pane there, and one dropped in it
 })
 
 test('a divider is dragged to resize the panes either side, and the arrangement survives a restart', async ({
-  helm,
+  desktop,
   relaunch
 }) => {
-  let { window } = helm
+  let { window } = desktop
   // The sessions pane stays in the first pane once Settings has gone to a second.
   await window.locator('[data-open-sessions]').click()
   await window.locator('[data-rail="settings"]').click()
@@ -116,7 +116,7 @@ test('a divider is dragged to resize the panes either side, and the arrangement 
   await expect(pane(window, 'First pane').getByRole('tab')).toHaveText(['Sessions'])
   await expect(pane(window, 'Second pane').getByRole('tab')).toHaveText(['Settings'])
 
-  await keepClearOfCursor(helm)
+  await keepClearOfCursor(desktop)
   const before = (await pane(window, 'First pane').boundingBox())!
   const divider = (await window.locator('[data-sash]').boundingBox())!
   await window.mouse.move(divider.x + divider.width / 2, divider.y + divider.height / 2)

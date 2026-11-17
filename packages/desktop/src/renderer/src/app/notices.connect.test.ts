@@ -5,7 +5,7 @@ import {
   type ChildMember,
   type PaneLayout,
   type PlaceScope
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { describe, expect, it, vi } from 'vitest'
 import { FakeConnection, fakeReach, reconnectingReach } from '../../../../test/fake-connection'
 import type * as P from '../../../shared/host/protocol'

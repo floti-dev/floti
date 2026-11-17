@@ -6,7 +6,7 @@ import { sessionFromHost } from '../../../../shared/host/records'
 import type {
   EventChannel,
   EventPayload,
-  HelmBridge,
+  DesktopBridge,
   PluginCallRequest,
   PluginInfo,
   RequestChannel,
@@ -96,7 +96,7 @@ function ownBridge(answers: Record<string, (payload: unknown) => unknown> = {}) 
       listeners.set(channel, set)
       return () => set.delete(listener)
     }
-  } as unknown as HelmBridge
+  } as unknown as DesktopBridge
   const push = <K extends EventChannel>(channel: K, payload: EventPayload<K>): void => {
     for (const listener of listeners.get(channel) ?? []) listener(payload)
   }

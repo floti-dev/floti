@@ -1,4 +1,4 @@
-import { NO_HOST_LINE, hostFlotiOlder, saysNotFound, type RemoteHost, type RemoteHostConnection } from '@helm/core/types'
+import { NO_HOST_LINE, hostFlotiOlder, saysNotFound, type RemoteHost, type RemoteHostConnection } from '@floti/core/types'
 import type { RemoteHostStates } from '../../shared/ipc'
 import type { HostConnection, HostSubscription } from './client'
 import type { LocalHost, PageBridge } from './launcher'
@@ -130,7 +130,7 @@ export interface RemoteHostLinksDeps {
   forget: (host: RemoteHost) => Promise<void>
   /** Where every host stands, after each change. */
   changed: (states: RemoteHostStates) => void
-  isHelmPage: (id: number) => boolean
+  isFlotiPage: (id: number) => boolean
   appVersion: string
   /** The computer's name, which each page's `hello` gives as this device's name. */
   deviceName?: string
@@ -234,7 +234,7 @@ export function createRemoteHostLinks(deps: RemoteHostLinksDeps): RemoteHostLink
       appVersion: deps.appVersion,
       ...(deps.deviceName !== undefined ? { deviceName: deps.deviceName } : {}),
       name: host.name,
-      isHelmPage: deps.isHelmPage,
+      isFlotiPage: deps.isFlotiPage,
       // A page connects only while main is connected; it never makes main try.
       ready: () =>
         entry.link.current() !== null

@@ -30,7 +30,7 @@ import { REPO_ROOT } from '../../scripts/test-posix.mjs'
 const SCRIPT = join(REPO_ROOT, 'scripts', 'test-leftovers.mjs')
 const FIXTURE = join(REPO_ROOT, 'test', 'fixtures', 'leaky-step.mjs')
 const TMP = join('/', 'tmp')
-const CHECKOUT = join('/', 'work', 'helm')
+const CHECKOUT = join('/', 'work', 'floti')
 const PLACES = { temps: [TMP], checkouts: [CHECKOUT] }
 
 /** What the OS says of a process it will say nothing about. */
@@ -57,7 +57,7 @@ const pids = (rows: ProcessRow[] | null): number[] | null => (rows === null ? nu
  */
 const BEFORE: ProcessRow[] = [
   row(1, 0, 'init', 1),
-  row(10, 1, 'helm', 2),
+  row(10, 1, 'floti', 2),
   row(11, 10, 'claude', 3),
   row(12, 11, 'node', 4, 'node fake-claude.mjs'),
   row(20, 1, 'runner', 5),
@@ -438,12 +438,12 @@ describe("reading a process's mark and working folder", () => {
       {},
       {
         'ps -wwE -o command= -p 7': `/opt/node/bin/node -e x leaky-step-child PATH=/usr/bin TEST_LEFTOVERS_MARK=${MARK} HOME=/Users/runner\n`,
-        'lsof -a -d cwd -p 7 -Fn': 'p7\nfcwd\nn/Users/runner/work/helm/helm\n',
+        'lsof -a -d cwd -p 7 -Fn': 'p7\nfcwd\nn/Users/runner/work/floti/floti\n',
         'ps -wwE -o command= -p 8': 'bash /Library/Application Support/Veertu/Anka/addons/ankaupd.sh PATH=/usr/bin\n',
         'lsof -a -d cwd -p 8 -Fn': 'p8\nfcwd\nn/\n'
       }
     )
-    expect(inspectProcess(7, MARK, 'darwin', io)).toEqual({ marked: true, cwd: '/Users/runner/work/helm/helm' })
+    expect(inspectProcess(7, MARK, 'darwin', io)).toEqual({ marked: true, cwd: '/Users/runner/work/floti/floti' })
     expect(inspectProcess(8, MARK, 'darwin', io)).toEqual({ marked: false, cwd: '/' })
     expect(inspectProcess(9, MARK, 'darwin', io)).toEqual(UNREADABLE)
     expect(runs).toContain('lsof -a -d cwd -p 9 -Fn')
@@ -457,7 +457,7 @@ describe("reading a process's mark and working folder", () => {
   })
 
   it('takes the working folder from the n line of lsof -Fn', () => {
-    expect(parseLsofCwd('p12\nfcwd\nn/Users/runner/work/helm helm\n')).toBe('/Users/runner/work/helm helm')
+    expect(parseLsofCwd('p12\nfcwd\nn/Users/runner/work/floti floti\n')).toBe('/Users/runner/work/floti floti')
     expect(parseLsofCwd('p12\n')).toBeNull()
     expect(parseLsofCwd('')).toBeNull()
   })

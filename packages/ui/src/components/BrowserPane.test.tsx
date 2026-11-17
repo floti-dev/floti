@@ -7,7 +7,7 @@ import {
   type BrowserHistoryEntry,
   type BrowserSearch,
   type BrowserSuggestions
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { overlayMounted, overlayOpen } from '../lib/overlay'
 import { fakeMenuLayer, type FakeMenuLayer } from '../lib/menuLayer.testkit'
 import { BrowserEmpty, BrowserPane, browserPageBlank, type BrowserPaneProps, type BrowserPaneState } from './BrowserPane'

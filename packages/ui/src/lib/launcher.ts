@@ -1,4 +1,4 @@
-import type { EffortLevel, PermissionMode, Profile, Project } from '@helm/core/types'
+import type { EffortLevel, PermissionMode, Profile, Project } from '@floti/core/types'
 
 /**
  * What the new-session launcher decides before anything is drawn: which

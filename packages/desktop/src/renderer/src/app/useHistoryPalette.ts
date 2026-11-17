@@ -5,8 +5,8 @@ import type {
   HistorySession,
   HistorySummary,
   LaunchAgents
-} from '@helm/core'
-import type { HistoryAnswer } from '@helm/ui'
+} from '@floti/core'
+import type { HistoryAnswer } from '@floti/ui'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 
@@ -94,7 +94,7 @@ function patched(answer: HistoryAnswer, updated: HistorySession): HistoryAnswer 
 }
 
 export function useHistoryPalette(host: string, open: boolean): HistoryPaletteState {
-  const helm = bridgeFor(host)
+  const desktop = bridgeFor(host)
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const [summary, setSummary] = useState<HistorySummary | null>(null)
@@ -137,14 +137,14 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
   useEffect(() => {
     if (!open) return
     let live = true
-    const off = helm.on('history:changed', (next) => {
+    const off = desktop.on('history:changed', (next) => {
       if (!live) return
       setSummary(next)
       setSummaryError(null)
       setVersion((count) => count + 1)
     })
     // A read that failed is "could not look", never "nothing there".
-    helm.invoke('history:summary').then(
+    desktop.invoke('history:summary').then(
       (next) => {
         if (!live) return
         setSummary(next)
@@ -152,12 +152,12 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
       },
       (err: unknown) => live && setSummaryError(readable(err))
     )
-    helm.invoke('history:projects').then(
+    desktop.invoke('history:projects').then(
       (next) => live && setProjects(next),
       (err: unknown) => live && setFoldersError(readable(err))
     )
     // A listing that could not be read is "not known", never "every agent gone".
-    helm.invoke('agents:list').then(
+    desktop.invoke('agents:list').then(
       (next) => live && setAgents(next),
       () => undefined
     )
@@ -165,11 +165,11 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
       live = false
       off()
     }
-  }, [helm, open])
+  }, [desktop, open])
 
   const read = useCallback(
-    (request: HistoryQuery) => helm.invoke('history:sessions', request).then(answerOf, failed),
-    [helm]
+    (request: HistoryQuery) => desktop.invoke('history:sessions', request).then(answerOf, failed),
+    [desktop]
   )
 
   useEffect(() => {
@@ -223,7 +223,7 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
   const rename = useCallback(
     async (session: HistorySession, name: string | null) => {
       try {
-        const updated = await helm.invoke('history:rename', { sessionId: session.sessionId, name })
+        const updated = await desktop.invoke('history:rename', { sessionId: session.sessionId, name })
         if (updated === null) return null
         setRecent((answer) => patched(answer, updated))
         setTitles((answer) => patched(answer, updated))
@@ -236,7 +236,7 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
         return readable(err)
       }
     },
-    [helm]
+    [desktop]
   )
 
   // A retry answers only the host and the opening it was asked in: one that
@@ -248,7 +248,7 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
   const retry = useCallback(() => {
     const at = asking.current
     const still = (): boolean => asking.current === at
-    void helm
+    void desktop
       .invoke('history:refresh')
       .then(
         (next) => {
@@ -259,7 +259,7 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
         (err: unknown) => still() && setSummaryError(readable(err))
       )
       .finally(() => still() && setVersion((count) => count + 1))
-  }, [helm])
+  }, [desktop])
 
   return {
     query,

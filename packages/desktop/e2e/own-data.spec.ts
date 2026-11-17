@@ -7,11 +7,11 @@ import {
   openStore,
   renameHistorySession,
   writeSettings
-} from '@helm/core'
+} from '@floti/core'
 import { appendPrompts, claudeTree, sessionUuid, transcriptFile } from '../test/history-fixture'
 import type { World } from '../test/world'
 import type { OwnDataCopyState } from '../src/shared/ipc'
-import { expect, openHistory, test as base } from './helm'
+import { expect, openHistory, test as base } from './desktop'
 
 /**
  * What only Helm's own database holds - a conversation it archived whose
@@ -25,14 +25,14 @@ const PROMPT = 'draft the migration'
 const REPLY = 'The migration adds two columns to the ledger.'
 const NAME = 'Migration plan'
 
-const helmDb = (world: World): string => join(world.dataDir, 'desktop.db')
+const desktopDb = (world: World): string => join(world.dataDir, 'desktop.db')
 
 /** The `n`th message of a conversation: its session id with the fourth group numbering the message. */
 const messageUuid = (sessionId: string, n: number): string =>
   `${sessionId.slice(0, 19)}${n.toString(16).padStart(4, '0')}${sessionId.slice(23)}`
 
 function archive(world: World, sessionId: string, texts: readonly string[], at: number): void {
-  const store = openStore({ file: helmDb(world) })
+  const store = openStore({ file: desktopDb(world) })
   try {
     archiveTranscriptFile(store, {
       file: transcriptFile(claudeTree(world.claudeDir), sessionId, world.projects.alpha),
@@ -65,7 +65,7 @@ function seedOwnData(world: World): void {
   const at = Date.now() - 60 * 60 * 1000
   appendPrompts(claudeTree(world.claudeDir), [{ sessionId: KEPT, project: world.projects.alpha, display: PROMPT, at }])
   archive(world, KEPT, [PROMPT, REPLY], at)
-  const store = openStore({ file: helmDb(world) })
+  const store = openStore({ file: desktopDb(world) })
   try {
     renameHistorySession(store, KEPT, NAME)
     indexUsageFile(store, {
@@ -108,8 +108,8 @@ const copyState = (window: Page): Promise<OwnDataCopyState> =>
   window.evaluate(
     () =>
       (
-        window as unknown as { helm: { invoke: (channel: string) => Promise<OwnDataCopyState> } }
-      ).helm.invoke('ownData:state')
+        window as unknown as { desktop: { invoke: (channel: string) => Promise<OwnDataCopyState> } }
+      ).desktop.invoke('ownData:state')
   )
 
 /**
@@ -134,14 +134,14 @@ async function showsTheArchivedConversation(window: Page): Promise<void> {
 
 test('History and the archived conversation show what only desktop.db held, once copied into the host', async ({
   world,
-  helm
+  desktop
 }) => {
-  const before = readFileSync(helmDb(world))
-  await expect.poll(async () => (await copyState(helm.window)).state).toBe('finished')
+  const before = readFileSync(desktopDb(world))
+  await expect.poll(async () => (await copyState(desktop.window)).state).toBe('finished')
 
-  await showsTheArchivedConversation(helm.window)
+  await showsTheArchivedConversation(desktop.window)
 
-  await expect(helm.window.locator('[data-own-data-banner]')).toHaveCount(0)
+  await expect(desktop.window.locator('[data-own-data-banner]')).toHaveCount(0)
   // The copy wrote the host's database, never Helm's.
-  expect(readFileSync(helmDb(world)).equals(before)).toBe(true)
+  expect(readFileSync(desktopDb(world)).equals(before)).toBe(true)
 })

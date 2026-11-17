@@ -10,7 +10,7 @@ import {
   type ThemeDefinition,
   type ThemeListing,
   type ThemeState
-} from '@helm/core/types'
+} from '@floti/core/types'
 import type { SettingsHost } from './HostsSettings'
 import {
   SettingsPane,
@@ -19,7 +19,7 @@ import {
   type SettingsPaneProps,
   type UpdateView
 } from './SettingsPane'
-import type { SetupClaudeStatus } from './SetupPane'
+import type { SetupClaudeStatus } from '../lib/claudeStatus'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './SettingsSections'
 
 const builtin = (id: string): ThemeDefinition => {
@@ -28,7 +28,7 @@ const builtin = (id: string): ThemeDefinition => {
   return theme
 }
 
-const LISTING: ThemeListing = { dir: 'C:\\helm data\\themes', themes: [...BUILTIN_THEMES], errors: [] }
+const LISTING: ThemeListing = { dir: 'C:\\floti data\\themes', themes: [...BUILTIN_THEMES], errors: [] }
 
 /** The theme main says is on screen. */
 const showing = (theme: ThemeDefinition, preference: ThemeState['preference'] = theme.kind): ThemeState => ({
@@ -69,6 +69,7 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     onRecheck: vi.fn(),
     onLocateClaude: vi.fn(),
     onClearClaudeOverride: vi.fn(),
+    onShowWalkthrough: vi.fn(),
     roots: ['C:\\work\\my repos'],
     projectCount: 3,
     scanning: false,
@@ -85,7 +86,7 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     updateCheck: true,
     onUpdateCheckChange: vi.fn(),
     appVersion: '1.2.0',
-    releasesUrl: 'https://github.com/example/helm/releases/latest',
+    releasesUrl: 'https://github.com/example/floti/releases/latest',
     update: null,
     updateError: null,
     updateChecking: false,
@@ -110,7 +111,7 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     transcriptArchiveMaxBytes: DEFAULT_SETTINGS.transcriptArchiveMaxBytes,
     onTranscriptArchiveMaxBytesChange: vi.fn(),
     templateCount: 0,
-    templatesDir: 'C:\\helm data\\templates',
+    templatesDir: 'C:\\floti data\\templates',
     onManageTemplates: vi.fn(),
     onRevealTemplates: vi.fn(),
     filesWrap: false,
@@ -166,10 +167,16 @@ function fact(container: HTMLElement, label: string): string {
 }
 
 describe('SettingsPane', () => {
+  it('opens the walkthrough again from General', async () => {
+    const { props } = renderPane()
+    await userEvent.click(within(group('Walkthrough')).getByRole('button', { name: 'Show the walkthrough' }))
+    expect(props.onShowWalkthrough).toHaveBeenCalledTimes(1)
+  })
+
   it('draws each section on its own: its title, its groups in order, and their controls', () => {
     const { rerender } = renderPane()
     const sections: Array<[SettingsSectionId, string, string[]]> = [
-      ['general', 'General', ['Claude CLI']],
+      ['general', 'General', ['Claude CLI', 'Walkthrough']],
       ['appearance', 'Appearance', ['Appearance']],
       ['terminal', 'Terminal', ['Terminal']],
       ['sessions', 'Sessions', ['Sessions']],
@@ -195,12 +202,13 @@ describe('SettingsPane', () => {
         ['button', 'Locate manually…'],
         ['button', 'Clear override']
       ],
+      Walkthrough: [['button', 'Show the walkthrough']],
       Workspace: [
         ['button', 'Stop scanning C:\\work\\my repos'],
         ['button', 'Add a folder']
       ],
       'Workspace templates': [
-        ['button', 'C:\\helm data\\templates'],
+        ['button', 'C:\\floti data\\templates'],
         ['button', 'Manage templates']
       ],
       Appearance: [
@@ -604,7 +612,7 @@ describe('SettingsPane', () => {
     })
 
     it('keeps Release notes open, to the same page, whatever the host said', async () => {
-      const url = 'https://github.com/example/helm/releases/latest'
+      const url = 'https://github.com/example/floti/releases/latest'
       const { props, rerender } = renderPane({ section: 'updates', releasesUrl: url, updateChecking: true })
       const notes = (): HTMLElement => within(group('Updates')).getByRole('button', { name: 'Release notes' })
 

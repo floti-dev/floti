@@ -45,8 +45,8 @@ window, so `floti.tabs.open`, `floti.open`, `floti.secrets.request` and
 ## Run it
 
 ```powershell
-pnpm --filter @helm/sample-plugin build
-pnpm --filter @helm/sample-plugin serve      # the API, in a terminal of its own
+pnpm --filter @floti/sample-plugin build
+pnpm --filter @floti/sample-plugin serve      # the API, in a terminal of its own
 $env:FLOTI_PLUGINS = "$PWD\examples\sample-plugin"; pnpm dev
 ```
 
@@ -61,6 +61,6 @@ A session started while the plugin is on has its tools as `floti-plugin-sample`:
 ask it to list the Sample items, or to add one, and the panel shows the new
 item at once.
 
-`pnpm --filter @helm/sample-plugin watch` rebuilds on every save. Floti watches
+`pnpm --filter @floti/sample-plugin watch` rebuilds on every save. Floti watches
 the folder and reloads the plugin when what it loads changes, so there is no
 need to reload the window.

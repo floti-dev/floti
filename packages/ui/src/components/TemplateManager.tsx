@@ -6,7 +6,7 @@ import type {
   ConfigTree,
   TemplateChoice,
   TemplateDetail
-} from '@helm/core'
+} from '@floti/core'
 import { cn } from '../lib/cn'
 import { ROW_SELECTED } from '../lib/rows'
 import { formatAge, formatBytes } from '../lib/time'

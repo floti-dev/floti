@@ -48,7 +48,7 @@ function macContext(platform: string): Parameters<typeof afterPack>[0] {
   return {
     appOutDir: join(root, 'mac-arm64'),
     electronPlatformName: platform,
-    packager: { getResourcesDir: (appOutDir: string) => join(appOutDir, 'Helm.app', 'Contents', 'Resources') }
+    packager: { getResourcesDir: (appOutDir: string) => join(appOutDir, 'Floti.app', 'Contents', 'Resources') }
   }
 }
 
@@ -104,7 +104,7 @@ describe("electron-builder's afterPack hook", () => {
   onPosix("makes the Mac app's unpacked spawn-helper executable, before it is signed", () => {
     const context = macContext('darwin')
     const dir = nodePty(packagedNodePty(context), ['darwin-arm64'])
-    expect(dir).toBe(join(root, 'mac-arm64', 'Helm.app', 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules', 'node-pty'))
+    expect(dir).toBe(join(root, 'mac-arm64', 'Floti.app', 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules', 'node-pty'))
     afterPack(context)
     accessSync(join(dir, 'prebuilds', 'darwin-arm64', 'spawn-helper'), constants.X_OK)
   })

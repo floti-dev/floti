@@ -43,23 +43,23 @@ function historyAdapter() {
 function routerFor() {
   bridge.reset()
   const host = historyAdapter()
-  const helm = createRouter({
+  const desktop = createRouter({
     own: bridge,
     adapters: [host.adapter],
     clientOnly: isClientOnly,
     log: () => undefined
   })
-  return { helm, host }
+  return { desktop, host }
 }
 
 describe('where the window’s calls go', () => {
   it('sends a channel an adapter takes to the host, and keeps a client-only one on the preload’s bridge', async () => {
     const r = routerFor()
     bridge.answer('clipboard:read', () => ({ text: 'copied' }))
-    expect(await r.helm.invoke('history:summary')).toMatchObject({ sessions: 9 })
+    expect(await r.desktop.invoke('history:summary')).toMatchObject({ sessions: 9 })
     expect(bridge.invoked('history:summary')).toEqual([])
-    expect(await r.helm.invoke('clipboard:read')).toEqual({ text: 'copied' })
-    r.helm.send('sessions:watch', { watching: false })
+    expect(await r.desktop.invoke('clipboard:read')).toEqual({ text: 'copied' })
+    r.desktop.send('sessions:watch', { watching: false })
     expect(r.host.asked).toEqual(['history:summary', 'sessions:watch false'])
     expect(bridge.sent('sessions:watch')).toEqual([])
   })
@@ -67,10 +67,10 @@ describe('where the window’s calls go', () => {
   it('S6: refuses a channel that is neither client-only nor routed at once, rather than asking main', async () => {
     const r = routerFor()
     bridge.answer('session:list', () => [])
-    await expect(r.helm.invoke('session:list')).rejects.toThrow(refusedSentence('session:list'))
-    r.helm.send('session:input', { id: 1, data: 'x' })
+    await expect(r.desktop.invoke('session:list')).rejects.toThrow(refusedSentence('session:list'))
+    r.desktop.send('session:input', { id: 1, data: 'x' })
     const heard: unknown[] = []
-    r.helm.on('session:exit', (payload) => heard.push(payload))
+    r.desktop.on('session:exit', (payload) => heard.push(payload))
     bridge.emit('session:exit', { id: 1 } as never)
     expect(bridge.invoked('session:list')).toEqual([])
     expect(bridge.sent('session:input')).toEqual([])
@@ -80,7 +80,7 @@ describe('where the window’s calls go', () => {
   it('hears a routed event from the host, never from the preload’s bridge, until it stops listening', () => {
     const r = routerFor()
     const seen: number[] = []
-    const off = r.helm.on('history:changed', (summary) => seen.push(summary.sessions))
+    const off = r.desktop.on('history:changed', (summary) => seen.push(summary.sessions))
     bridge.emit('history:changed', SUMMARY)
     r.host.push({ ...SUMMARY, sessions: 5 })
     expect(seen).toEqual([5])
@@ -103,7 +103,7 @@ describe('where the window’s calls go', () => {
 describe('every channel a Floti page uses', () => {
   /** The window's adapters, as its bridge builds them, on a preload that answers nothing. */
   async function windowAdapters() {
-    Object.defineProperty(window, 'helm', { value: bridge, configurable: true })
+    Object.defineProperty(window, 'desktop', { value: bridge, configurable: true })
     const { hostAdapters } = await import('../bridge')
     return hostAdapters
   }

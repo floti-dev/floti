@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HistoryPage, HistoryProject, HistorySession, LaunchAgents, SessionRecord } from '@helm/core'
+import type { HistoryPage, HistoryProject, HistorySession, LaunchAgents, SessionRecord } from '@floti/core'
 import type { LaunchedSession } from '../../../shared/ipc'
 import { bridge, remoteBridge } from './bridge.testkit'
 import { useNewSession } from './useNewSession'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SetupClaudeStatus } from '../components/SetupPane'
+import type { SetupClaudeStatus } from './claudeStatus'
 import { claudeBanner } from './claudeBanner'
 
 const status = (over: Partial<SetupClaudeStatus>): SetupClaudeStatus => ({

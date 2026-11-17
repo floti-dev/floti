@@ -504,6 +504,7 @@ async fn s1_floti_host_is_one_executable_that_starts_and_serves_clients() {
             backend: Some(BackendId::new("shell")),
             agent: None,
             chosen: None,
+            opening_prompt: None,
             cols: 80,
             rows: 24,
         })
@@ -1026,7 +1027,7 @@ fn host_a_desktop_started(dirs: &TestDirs) -> HostProcess {
     HostProcess::spawn(
         floti_host_command(dirs)
             .arg("--desktop")
-            .arg(app.join("Helm.exe"))
+            .arg(app.join("Floti.exe"))
             .arg("--desktop-arg")
             .arg(app.join("resources app")),
     )

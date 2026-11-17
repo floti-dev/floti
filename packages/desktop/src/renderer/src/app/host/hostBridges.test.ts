@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, LOCAL_HOST_KEY } from "@helm/core/types";
+import { DEFAULT_SETTINGS, LOCAL_HOST_KEY } from "@floti/core/types";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeConnection, fakeReach } from "../../../../../test/fake-connection";
 import type { RemoteHostStates } from "../../../../shared/ipc";
@@ -149,7 +149,7 @@ describe("one bridge per host", () => {
     const w = world();
     const first = w.bridges.hostBridge("h-build");
     expect(w.bridges.hostBridge("h-build")).toBe(first);
-    expect(w.bridges.bridgeFor("h-build")).toBe(first.helm);
+    expect(w.bridges.bridgeFor("h-build")).toBe(first.desktop);
     expect(w.linked).toEqual(["h-build"]);
 
     const seen: string[] = [];

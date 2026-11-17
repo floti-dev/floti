@@ -579,7 +579,7 @@ async fn call_tool(url: &str, token: &str, tool: &str, arguments: Value) -> (boo
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s10_a_launch_carries_one_mcp_config_in_its_own_launch_folder_naming_helm_sessions_with_its_token()
+async fn s10_a_launch_carries_one_mcp_config_in_its_own_launch_folder_naming_floti_sessions_with_its_token()
  {
     let world = World::new();
     let host = world.host();
@@ -855,7 +855,7 @@ async fn s8_with_every_family_off_a_launch_has_no_mcp_config_and_no_tool_file() 
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s9_switching_helm_sessions_off_takes_its_route_away_at_once_and_on_gives_it_back() {
+async fn s9_switching_floti_sessions_off_takes_its_route_away_at_once_and_on_gives_it_back() {
     let world = World::new();
     let host = world.host();
     let mut client = world.client().await;
@@ -965,7 +965,7 @@ fn ended_process() -> (std::process::Child, u32) {
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s13_s2_the_server_names_itself_helm_sessions_negotiates_and_lists_todays_tools_from_the_shared_table()
+async fn s13_s2_the_server_names_itself_floti_sessions_negotiates_and_lists_todays_tools_from_the_shared_table()
  {
     let world = World::new();
     let host = world.host();
@@ -1530,7 +1530,7 @@ async fn status_of(url: &str, method: &str, token: Option<&str>, origin: Option<
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s2_s3_a_session_started_with_helms_window_attached_lists_todays_browser_tools_and_that_window_answers_its_calls()
+async fn s2_s3_a_session_started_with_the_desktops_window_attached_lists_todays_browser_tools_and_that_window_answers_its_calls()
  {
     let world = World::new();
     let host = world.host();
@@ -1614,7 +1614,7 @@ async fn s2_s3_a_session_started_with_helms_window_attached_lists_todays_browser
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s9_a_session_started_with_no_browser_attached_has_no_helm_browser_entry_route_or_tool() {
+async fn s9_a_session_started_with_no_browser_attached_has_no_floti_browser_entry_route_or_tool() {
     let world = World::new();
     let host = world.host();
     // A terminal client, as a script or another device starts sessions.
@@ -1662,7 +1662,7 @@ async fn s9_a_session_started_with_no_browser_attached_has_no_helm_browser_entry
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s10_s11_s12_when_helms_window_detaches_browser_calls_fail_at_once_and_a_window_attached_again_takes_the_next()
+async fn s10_s11_s12_when_the_desktops_window_detaches_browser_calls_fail_at_once_and_a_window_attached_again_takes_the_next()
  {
     let world = World::new();
     let host = world.host();
@@ -1708,7 +1708,7 @@ async fn s10_s11_s12_when_helms_window_detaches_browser_calls_fail_at_once_and_a
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn s13_the_browser_tools_route_refuses_as_helms_listener_does_and_only_the_window_a_call_went_to_answers_it()
+async fn s13_the_browser_tools_route_refuses_as_the_desktops_listener_does_and_only_the_window_a_call_went_to_answers_it()
  {
     let world = World::new();
     let host = world.host();

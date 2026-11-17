@@ -1,4 +1,4 @@
-import { NOTICES_SEEN_HOSTS_MAX } from '@helm/core/types'
+import { NOTICES_SEEN_HOSTS_MAX } from '@floti/core/types'
 
 /**
  * What this device has shown of a host's notices: the `since` of the newest

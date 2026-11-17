@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { OwnDataCopyState } from '../../../shared/ipc'
-import { helm } from './bridge'
+import { desktop } from './bridge'
 
 export interface OwnDataNotice {
   /** Set while a copy of Helm's own data into the local host stopped part way and was not dismissed. */
@@ -21,11 +21,11 @@ export function useOwnDataCopy(): OwnDataNotice {
     let live = true
     let heard = false
     // Subscribed before asking, so a change between the two is not missed.
-    const off = helm.on('ownData:changed', (next) => {
+    const off = desktop.on('ownData:changed', (next) => {
       heard = true
       setState(next)
     })
-    void helm.invoke('ownData:state').then(
+    void desktop.invoke('ownData:state').then(
       (next) => {
         if (live && !heard) setState(next)
       },

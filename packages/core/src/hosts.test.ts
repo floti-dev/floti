@@ -214,7 +214,7 @@ describe('a host’s OS and CPU, kept with it', () => {
     expect(describeHostSystem({ os: 'Linux', cpu: 'x86_64' })).toBe('Linux x86_64')
   })
 
-  it('S1: a host kept before Helm kept its OS still loads', () => {
+  it('S1: a host kept with no OS still loads', () => {
     expect(remoteHostsProblem([{ id: 'h1', name: 'lab', transport: { kind: 'ssh', target: 'lab' } }])).toBeNull()
   })
 

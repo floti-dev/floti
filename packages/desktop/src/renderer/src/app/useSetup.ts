@@ -1,21 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AppSettings, TemplateChoice, TemplatePreview } from '@helm/core'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import type { AppSettings, TemplateChoice, TemplatePreview } from '@floti/core'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import type { ClaudeStatus } from '../../../shared/ipc'
-import { bridgeFor, helm } from './bridge'
+import { bridgeFor, desktop } from './bridge'
 
 /**
- * First run, and everything that stays true afterwards.
+ * The shell's CLI status and its new-workspace dialog. First run is the
+ * guided walkthrough's (`setup/SetupWindow.tsx`, `setup/ShellWalkthrough.tsx`).
  *
- * The pane is on screen whenever `settings` says there is nothing to scan and
- * no completion stamp - a *state*, not a wizard the app remembers having shown.
- * That is why nothing here holds a "step": quitting halfway through leaves the
- * settings exactly as they were, so the next launch resumes rather than
- * dropping the user into an empty launcher with a small button in the corner.
- *
- * The CLI status is fetched here and used twice: by the setup pane, and by the
- * version banner that outlives it. One request, one answer, so the two surfaces
- * cannot disagree about what version is installed.
+ * The CLI status is fetched here and used twice: by Settings, and by the
+ * version banner. One request, one answer, so the two surfaces cannot
+ * disagree about what version is installed.
  */
 
 export type WorkspaceDialogMode = 'new' | 'convert'
@@ -46,15 +41,8 @@ export interface SetupState {
   /** Why the last read failed, for the pane's Unknown; null once one succeeded. */
   statusError: string | null
   checking: boolean
-  suggestions: string[]
-  /** Why the suggestions could not be looked for; null when they were. */
-  suggestionsError: string | null
-  /** Whether the setup pane owns the window. */
-  needed: boolean
   recheck: () => void
   locateClaude: () => void
-  acceptSuggestion: (path: string) => void
-  finish: () => void
 
   /** The create-a-workspace dialog, which is reachable long after first run. */
   dialog: WorkspaceDialogMode | null
@@ -113,8 +101,6 @@ export function useSetup(
   const [status, setStatus] = useState<ClaudeStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [suggestionsError, setSuggestionsError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<WorkspaceDialogMode | null>(null)
   const [dialogHost, setDialogHost] = useState<string>(LOCAL_HOST_KEY)
   /** The dialog's host as the last opening left it, for callbacks that outlive a render. */
@@ -140,21 +126,11 @@ export function useSetup(
   /** The button. Shows a spinner, because the user asked and is waiting. */
   const recheck = useCallback(() => {
     setChecking(true)
-    void helm
+    void desktop
       .invoke('setup:status')
       .then(answered, failed)
       .finally(() => setChecking(false))
   }, [answered, failed])
-
-  useEffect(() => {
-    void helm.invoke('roots:suggest').then(
-      (next) => {
-        setSuggestions(next)
-        setSuggestionsError(null)
-      },
-      (err: unknown) => setSuggestionsError(sentence(err))
-    )
-  }, [])
 
   /**
    * Read on mount, and again whenever the chosen CLI changes - however it
@@ -167,7 +143,7 @@ export function useSetup(
    */
   useEffect(() => {
     let cancelled = false
-    void helm.invoke('setup:status').then(
+    void desktop.invoke('setup:status').then(
       (next) => {
         if (!cancelled) answered(next)
       },
@@ -182,7 +158,7 @@ export function useSetup(
 
   const locateClaude = useCallback(() => {
     setChecking(true)
-    void helm
+    void desktop
       .invoke('setup:locateClaude')
       .then(
         (next) => {
@@ -195,20 +171,6 @@ export function useSetup(
       )
       .finally(() => setChecking(false))
   }, [answered, failed])
-
-  const acceptSuggestion = useCallback(
-    (path: string) => {
-      void helm.invoke('roots:accept', { path }).then(() => onRootsChanged(LOCAL_HOST_KEY))
-    },
-    [onRootsChanged]
-  )
-
-  // No local state to update: the main process emits `settings:changed` from
-  // the same handler, and the launcher's copy of the settings is the one the
-  // pane's visibility is derived from.
-  const finish = useCallback(() => {
-    void helm.invoke('setup:complete')
-  }, [])
 
   /**
    * Re-reads the picker's rows.
@@ -310,7 +272,7 @@ export function useSetup(
   const chooseDialogDir = useCallback(() => {
     // The picker browses this PC's folders: a host on another computer's path is typed.
     if (dialogHostRef.current !== LOCAL_HOST_KEY) return
-    void helm
+    void desktop
       .invoke('path:chooseDirectory', {
         title: dialog === 'convert' ? 'Choose the folder to convert' : 'Create the workspace inside'
       })
@@ -370,22 +332,12 @@ export function useSetup(
     [onRootsChanged, onWorkspaceCreated]
   )
 
-  // One question: has this profile been through setup. Deliberately not "does
-  // it have roots" - the pane is where roots are acquired, and one that closed
-  // itself when the first folder landed would close halfway through its own job.
-  const needed = settings !== null && settings.firstRunCompletedAt === null
-
   return {
     status,
     statusError,
     checking,
-    suggestions,
-    suggestionsError,
-    needed,
     recheck,
     locateClaude,
-    acceptSuggestion,
-    finish,
     dialog,
     dialogHost,
     dialogDir,

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -21,6 +21,7 @@ import { sessions } from './schema'
 import { reconcileRunningSessions } from './sessions'
 import {
   readSettings,
+  settleWalkthrough,
   validateSetting,
   writeSetting,
   writeSettings,
@@ -155,6 +156,63 @@ describe('openStore', () => {
   })
 })
 
+describe('the walkthrough as the database opens', () => {
+  /** Opens `file` as main does: migrated, then the walkthrough settled. */
+  function openAsMain(file: string): Store {
+    const opened = openStore({ file })
+    settleWalkthrough(opened)
+    return opened
+  }
+
+  it('starts the walkthrough at step 1 on a database this open created: a first start', async () => {
+    await withFile((file, created) => {
+      created.close()
+      const fresh = openAsMain(join(dirname(file), 'fresh.db'))
+      try {
+        expect(readSettings(fresh).walkthrough).toEqual({ step: 1, workspace: null })
+      } finally {
+        fresh.close()
+      }
+    })
+  })
+
+  it('resumes the step it was closed on, and leaves a finished one finished', async () => {
+    await withFile((file, created) => {
+      created.close()
+      const fresh = join(dirname(file), 'fresh.db')
+      const first = openAsMain(fresh)
+      writeSettings(first, { walkthrough: { step: 3, workspace: null } })
+      first.close()
+
+      const again = openAsMain(fresh)
+      expect(readSettings(again).walkthrough).toEqual({ step: 3, workspace: null })
+      writeSettings(again, { walkthrough: null })
+      again.close()
+
+      const done = openAsMain(fresh)
+      try {
+        expect(readSettings(done).walkthrough).toBeNull()
+      } finally {
+        done.close()
+      }
+    })
+  })
+
+  it('never starts it on a database that was already here: that start opens the shell', async () => {
+    await withFile((file, created) => {
+      // `withFile`'s own open created it; this one finds it there.
+      created.close()
+      const existing = openAsMain(file)
+      try {
+        expect(existing.migrations.applied).toEqual([])
+        expect(readSettings(existing).walkthrough).toBeNull()
+      } finally {
+        existing.close()
+      }
+    })
+  })
+})
+
 describe('settings', () => {
   it('returns defaults for an empty database', () => {
     expect(readSettings(store)).toEqual(DEFAULT_SETTINGS)
@@ -208,6 +266,7 @@ describe('settings', () => {
         focused: 1
       },
       firstRunCompletedAt: '2026-08-09T12:00:00.000Z',
+      walkthrough: { step: 5, workspace: join(dir, 'my-work') },
       claudePath: join(dir, 'claude.exe'),
       terminalFontFamily: 'Consolas',
       terminalFontSize: 17,
@@ -574,7 +633,7 @@ describe('settings validation', () => {
     {
       key: 'scanRoots',
       good: [[], [join(tmpdir(), 'a')], [join(tmpdir(), 'a'), join(tmpdir(), 'b')]],
-      bad: [null, 'C:\\work', ['repos/helm'], ['../up'], [''], [17], [null]]
+      bad: [null, 'C:\\work', ['repos/floti'], ['../up'], [''], [17], [null]]
     },
     {
       key: 'pinnedProjects',
@@ -591,7 +650,7 @@ describe('settings validation', () => {
       bad: [
         [join(tmpdir(), 'alpha'), join(tmpdir(), 'ALPHA')],
         [join(tmpdir(), 'alpha'), join(tmpdir(), 'alpha')],
-        ['repos/helm'],
+        ['repos/floti'],
         ['../up'],
         [''],
         ['   '],
@@ -634,8 +693,8 @@ describe('settings validation', () => {
             children: [
               {
                 panes: [
-                  { kind: 'project', path: 'C:\\work\\helm' },
-                  { kind: 'pr', repoPath: 'C:\\work\\helm', number: 7 },
+                  { kind: 'project', path: 'C:\\work\\floti' },
+                  { kind: 'pr', repoPath: 'C:\\work\\floti', number: 7 },
                   { kind: 'pulls' },
                   { kind: 'session', id: 12 }
                 ],
@@ -649,7 +708,7 @@ describe('settings validation', () => {
                   {
                     panes: [
                       { kind: 'settings' },
-                      { kind: 'file', root: 'C:\\work\\helm', path: 'C:\\work\\helm\\README.md' }
+                      { kind: 'file', root: 'C:\\work\\floti', path: 'C:\\work\\floti\\README.md' }
                     ],
                     activeId: null
                   }
@@ -687,9 +746,9 @@ describe('settings validation', () => {
                 plugin: 'trackr',
                 pages: [
                   { tab: 'view', params: {}, title: null },
-                  { tab: 'view', params: { id: 'HELM-13' }, title: 'HELM-13' }
+                  { tab: 'view', params: { id: 'FLOTI-13' }, title: 'FLOTI-13' }
                 ],
-                active: 'plugin-page:trackr/view?{"id":"HELM-13"}'
+                active: 'plugin-page:trackr/view?{"id":"FLOTI-13"}'
               }
             ],
             activeId: 'plugin-pages:trackr'
@@ -805,6 +864,22 @@ describe('settings validation', () => {
       key: 'firstRunCompletedAt',
       good: [null, '2026-08-11T09:00:00.000Z'],
       bad: ['soon', '', 1786353684315, {}]
+    },
+    {
+      key: 'walkthrough',
+      good: [null, { step: 1, workspace: null }, { step: 6, workspace: 'C:\\Users\\you\\Projects\\my-work' }],
+      bad: [
+        {},
+        { step: 0, workspace: null },
+        { step: 7, workspace: null },
+        { step: '2', workspace: null },
+        { step: 3 },
+        { step: 5, workspace: '' },
+        { step: 5, workspace: 42 },
+        { step: 2, workspace: null, done: true },
+        [],
+        'welcome'
+      ]
     },
     {
       key: 'noticesSeen',
@@ -1209,7 +1284,8 @@ describe('settings validation', () => {
       quitSessions: { local: 'keep' },
       hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
       profilesCopiedToHostAt: null,
-      pluginsCopiedToHostAt: null
+      pluginsCopiedToHostAt: null,
+      walkthrough: null
     })
 
     expect(() => writeSettings(store, readSettings(store))).not.toThrow()
@@ -1264,6 +1340,7 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
   profilesCopiedToHostAt: null,
   pluginsCopiedToHostAt: null,
+  walkthrough: null,
   noticesSeen: {}
 })
 

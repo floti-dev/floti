@@ -8,7 +8,7 @@
  * file says reaches either place as the text it was typed as. A value that does
  * not parse is not a colour, whatever a browser might have made of it.
  *
- * Pure: no DOM, no Node. The renderer may import this through `@helm/core/types`.
+ * Pure: no DOM, no Node. The renderer may import this through `@floti/core/types`.
  */
 
 /** Channels 0-255, alpha 0-1. Always whole numbers on the channels. */

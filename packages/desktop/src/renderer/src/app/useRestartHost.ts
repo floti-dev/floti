@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { LocalHostRestartOffer } from "@helm/core/types";
+import type { LocalHostRestartOffer } from "@floti/core/types";
 
 /** The two calls Restart host to update makes of main. */
 export interface RestartHostDeps {

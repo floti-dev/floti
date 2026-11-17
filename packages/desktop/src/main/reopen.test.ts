@@ -6,7 +6,7 @@ import { createReopen, type QuitPhase } from './reopen'
  * open windows, and `finish()` the held `before-quit` ending, which calls
  * `quitFinished()` before `app.quit()`.
  */
-function helmWith(start: { phase?: QuitPhase; windows?: number } = {}) {
+function desktopWith(start: { phase?: QuitPhase; windows?: number } = {}) {
   let phase: QuitPhase = start.phase ?? 'running'
   let windows = start.windows ?? 0
   const openWindow = vi.fn(() => {
@@ -38,85 +38,85 @@ function helmWith(start: { phase?: QuitPhase; windows?: number } = {}) {
 
 describe('reopen while Floti quits', () => {
   it('opens no window in the quitting process', () => {
-    const helm = helmWith()
-    helm.startQuit()
+    const desktop = desktopWith()
+    desktop.startQuit()
 
-    helm.reopen.activate()
+    desktop.reopen.activate()
 
-    expect(helm.openWindow).not.toHaveBeenCalled()
-    expect(helm.relaunch).not.toHaveBeenCalled()
+    expect(desktop.openWindow).not.toHaveBeenCalled()
+    expect(desktop.relaunch).not.toHaveBeenCalled()
   })
 
   it('starts a fresh Floti once the quit has finished', () => {
-    const helm = helmWith()
-    helm.startQuit()
-    helm.reopen.activate()
+    const desktop = desktopWith()
+    desktop.startQuit()
+    desktop.reopen.activate()
 
-    helm.finish()
+    desktop.finish()
 
-    expect(helm.relaunch).toHaveBeenCalledTimes(1)
-    expect(helm.openWindow).not.toHaveBeenCalled()
+    expect(desktop.relaunch).toHaveBeenCalledTimes(1)
+    expect(desktop.openWindow).not.toHaveBeenCalled()
   })
 
   it('starts one fresh Floti however many times it was reopened', () => {
-    const helm = helmWith()
-    helm.startQuit()
-    helm.reopen.activate()
-    helm.reopen.activate()
+    const desktop = desktopWith()
+    desktop.startQuit()
+    desktop.reopen.activate()
+    desktop.reopen.activate()
 
-    helm.finish()
-    helm.reopen.activate()
+    desktop.finish()
+    desktop.reopen.activate()
 
-    expect(helm.relaunch).toHaveBeenCalledTimes(1)
+    expect(desktop.relaunch).toHaveBeenCalledTimes(1)
   })
 
   it('honours a reopen that comes after the quit finished, before the process exits', () => {
-    const helm = helmWith()
-    helm.startQuit()
-    helm.finish()
-    expect(helm.relaunch).not.toHaveBeenCalled()
+    const desktop = desktopWith()
+    desktop.startQuit()
+    desktop.finish()
+    expect(desktop.relaunch).not.toHaveBeenCalled()
 
-    helm.reopen.activate()
+    desktop.reopen.activate()
 
-    expect(helm.relaunch).toHaveBeenCalledTimes(1)
-    expect(helm.openWindow).not.toHaveBeenCalled()
+    expect(desktop.relaunch).toHaveBeenCalledTimes(1)
+    expect(desktop.openWindow).not.toHaveBeenCalled()
   })
 
   it('relaunches nothing when nobody reopened during the quit', () => {
-    const helm = helmWith()
-    helm.startQuit()
+    const desktop = desktopWith()
+    desktop.startQuit()
 
-    helm.finish()
+    desktop.finish()
 
-    expect(helm.relaunch).not.toHaveBeenCalled()
+    expect(desktop.relaunch).not.toHaveBeenCalled()
   })
 })
 
 describe('reopen with no quit underway', () => {
   it('opens the window when none is open', () => {
-    const helm = helmWith({ windows: 0 })
+    const desktop = desktopWith({ windows: 0 })
 
-    helm.reopen.activate()
+    desktop.reopen.activate()
 
-    expect(helm.openWindow).toHaveBeenCalledTimes(1)
-    expect(helm.relaunch).not.toHaveBeenCalled()
+    expect(desktop.openWindow).toHaveBeenCalledTimes(1)
+    expect(desktop.relaunch).not.toHaveBeenCalled()
   })
 
   it('opens no second window while one is open', () => {
-    const helm = helmWith({ windows: 1 })
+    const desktop = desktopWith({ windows: 1 })
 
-    helm.reopen.activate()
+    desktop.reopen.activate()
 
-    expect(helm.openWindow).not.toHaveBeenCalled()
+    expect(desktop.openWindow).not.toHaveBeenCalled()
   })
 
   it('relaunches nothing when a quit that nobody reopened during finishes later', () => {
-    const helm = helmWith({ windows: 0 })
-    helm.reopen.activate()
+    const desktop = desktopWith({ windows: 0 })
+    desktop.reopen.activate()
 
-    helm.startQuit()
-    helm.finish()
+    desktop.startQuit()
+    desktop.finish()
 
-    expect(helm.relaunch).not.toHaveBeenCalled()
+    expect(desktop.relaunch).not.toHaveBeenCalled()
   })
 })

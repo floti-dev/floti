@@ -1,4 +1,4 @@
-import type { RemoteHost } from '@helm/core/types'
+import type { RemoteHost } from '@floti/core/types'
 import type { HostConnection } from './client'
 
 /**

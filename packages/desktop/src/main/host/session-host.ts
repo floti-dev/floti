@@ -4,7 +4,7 @@ import type {
   SessionRecord,
   SessionRegistryEntry,
   SessionsOverview
-} from '@helm/core'
+} from '@floti/core'
 import type { BrowserOpener } from '../browser'
 import type {
   BrowserShare,

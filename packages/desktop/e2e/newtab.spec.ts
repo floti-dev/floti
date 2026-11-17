@@ -1,5 +1,5 @@
 import { fakeClaudeLogs, seedProfile } from '../test/world'
-import { claudeRunIn, expect, startSession, test as base } from './helm'
+import { claudeRunIn, expect, startSession, test as base } from './desktop'
 
 /**
  * A pane's `+`: what kind of tab first, then that tab, in that pane. The world
@@ -26,10 +26,10 @@ const test = base.extend({
 })
 
 test('a pane’s + opens a session, a profile session or a browser tab in that pane, focused or not', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const first = window.getByRole('region', { name: 'First pane' })
   const second = window.getByRole('region', { name: 'Second pane' })
 

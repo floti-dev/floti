@@ -17,11 +17,15 @@ import {
   openBrowserHistory,
   pluginThemeOf,
   quitEndsSessions,
+  WALKTHROUGH_SETUP_LAST,
+  WALKTHROUGH_START,
+  walkthroughInSetupWindow,
+  type WalkthroughStep,
   writeSetting,
   type AppliedTheme,
   type AppSettings,
   type Profile
-} from '@helm/core'
+} from '@floti/core'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { homedir } from 'node:os'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -235,19 +239,41 @@ function flotiPagePreferences(): WebPreferences {
   }
 }
 
+/**
+ * The Floti pages a window can show: the shell (`index`), the guided first
+ * run's setup window (`setup`, the same page told which window it is by
+ * `?window=setup`, so it runs with the same preload, guards and IPC
+ * boundary), and the spike harness.
+ */
+type WindowPage = 'index' | 'setup' | 'spike'
+
+/** The setup window's size: one question at a time, the design's 560px column and its foot. */
+const SETUP_WINDOW = { width: 600, height: 600 } as const
+
 function createWindow(
-  page: 'index' | 'spike',
+  page: WindowPage,
   bounds?: AppSettings['windowBounds'],
   theme?: AppliedTheme
 ): BrowserWindow {
+  const setup = page === 'setup'
   const win = new BrowserWindow({
-    width: bounds?.width ?? 1280,
-    height: bounds?.height ?? 820,
-    // Position is restored only when both coordinates were saved; handing
-    // Electron one of the two would place the window at the other's default.
-    ...(bounds?.x !== undefined && bounds.y !== undefined ? { x: bounds.x, y: bounds.y } : {}),
-    minWidth: 900,
-    minHeight: 560,
+    ...(setup
+      ? {
+          width: SETUP_WINDOW.width,
+          height: SETUP_WINDOW.height,
+          resizable: false,
+          maximizable: false,
+          fullscreenable: false
+        }
+      : {
+          width: bounds?.width ?? 1280,
+          height: bounds?.height ?? 820,
+          // Position is restored only when both coordinates were saved; handing
+          // Electron one of the two would place the window at the other's default.
+          ...(bounds?.x !== undefined && bounds.y !== undefined ? { x: bounds.x, y: bounds.y } : {}),
+          minWidth: 900,
+          minHeight: 560
+        }),
     // Painted before the renderer's first frame, so a cold start does not flash
     // white on a dark desktop. The theme's own canvas, so the frame Chromium
     // shows before any CSS has loaded is the colour the first paint lands on.
@@ -259,7 +285,7 @@ function createWindow(
     // and the OS draws its window controls into it (see chrome.ts). The spike
     // pages keep the native frame: their drivers predate the strip and measure
     // a page, not the chrome.
-    ...(page === 'index' && theme !== undefined ? windowChromeFor(process.platform, theme) : {}),
+    ...(page !== 'spike' && theme !== undefined ? windowChromeFor(process.platform, theme) : {}),
     // A packaged Electron window does NOT inherit the exe's icon: given no
     // `icon` it uses Electron's own, which is what the taskbar showed on
     // 2026-08-10 while the exe itself was correctly stamped.
@@ -276,13 +302,16 @@ function createWindow(
     webPreferences: flotiPagePreferences()
   })
 
-  if (page === 'index') void requestSmallCorners(win)
+  if (page !== 'spike') void requestSmallCorners(win)
 
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (devUrl) {
-    win.loadURL(page === 'index' ? devUrl : `${devUrl}/spike.html`)
+    win.loadURL(page === 'spike' ? `${devUrl}/spike.html` : setup ? `${devUrl}/?window=setup` : devUrl)
   } else {
-    win.loadFile(join(__dirname, `../renderer/${page === 'index' ? 'index' : 'spike'}.html`))
+    win.loadFile(
+      join(__dirname, `../renderer/${page === 'spike' ? 'spike' : 'index'}.html`),
+      setup ? { query: { window: 'setup' } } : {}
+    )
   }
   return win
 }
@@ -378,7 +407,10 @@ function startApp(options: AppOptions = {}): void {
    * has to answer by the time the window asks for its first panel. A service
    * marked `start: "enable"` starts here, in the background.
    */
+  /** The shell window, once it exists: none while the setup window runs steps 1 to 4. */
   let win: BrowserWindow | null = null
+  /** The guided first run's setup window, while it is open (`walkthrough`). */
+  let setupWin: BrowserWindow | null = null
   // `pnpm dev` starts from a fresh copy of the database every launch, so a
   // plugin being worked on is registered from FLOTI_PLUGINS instead of being
   // added again in Settings each time. Dev builds only: an installed Helm
@@ -421,8 +453,6 @@ function startApp(options: AppOptions = {}): void {
   installPluginPermissions()
   pluginFrameHosts = (id) => plugins.framesPlugins(id)
 
-  win = createWindow('index', services.settings.windowBounds ?? null, windowTheme())
-
   /*
    * Sessions and terminals run in the local host, which Helm connects to now
    * and starts when none answers.
@@ -457,9 +487,13 @@ function startApp(options: AppOptions = {}): void {
   })
   // An artifact frame keeps the window's scheme, answered from the host's bytes.
   serveArtifactsFrom((url) => desktopHost.files.artifactBytes(url))
-  // The window hears each step of the local host's connect as it begins; one
-  // that loads later asks for the step under way (`hostLink:currentStep`).
-  localHostSteps.onStep((step) => emit(win, 'hostLink:step', step))
+  // Each window hears each step of the local host's connect as it begins: the
+  // shell, and the setup window, whose step 3 says when the host is running.
+  // One that loads later asks for the step under way (`hostLink:currentStep`).
+  localHostSteps.onStep((step) => {
+    emit(win, 'hostLink:step', step)
+    emit(setupWin, 'hostLink:step', step)
+  })
   void desktopHost.link.connection().catch((err: unknown) => {
     console.warn(err instanceof Error ? err.message : String(err))
   })
@@ -476,13 +510,15 @@ function startApp(options: AppOptions = {}): void {
    * The window's own connection to the local host. No other page - a plugin
    * frame, an artifact frame, a page in the Browser tab - may open one.
    */
-  const isHelmPage = (id: number): boolean => win !== null && !win.isDestroyed() && win.webContents.id === id
+  const isWindow = (page: BrowserWindow | null, id: number): boolean =>
+    page !== null && !page.isDestroyed() && page.webContents.id === id
+  const isFlotiPage = (id: number): boolean => isWindow(win, id) || isWindow(setupWin, id)
   // One counter for every host's page connections, so a number names one.
   let nextPageConnection = 1
   const nextConnection = (): number => nextPageConnection++
   const localPageLinks = createLocalPageLinks(
     desktopHost.link,
-    isHelmPage,
+    isFlotiPage,
     (line) => console.log(line),
     nextConnection
   )
@@ -498,7 +534,7 @@ function startApp(options: AppOptions = {}): void {
     log: (line) => console.log(line)
   })
   const remoteHosts: RemoteHostLinks = createDesktopRemoteHosts({
-    isHelmPage,
+    isFlotiPage,
     nextConnection,
     changed: (states) => emit(win, 'remoteHosts:changed', states),
     plugins: desktopHost.remotePlugins,
@@ -545,8 +581,6 @@ function startApp(options: AppOptions = {}): void {
 
   /** The saved profiles, which live in the host; every reader of them in main reads this one. */
   const profileList = (): Profile[] => desktopHost.profiles.current()
-
-  attachArtifactConsole(win, (entry) => emit(win, 'content:artifactConsole', entry))
 
   /**
    * The Files view's hand-off to an editor; the host reads the files. Its
@@ -660,7 +694,12 @@ function startApp(options: AppOptions = {}): void {
       step: () => localHostSteps.current(),
       reconnect: () => desktopHost.link.reconnectNow()
     },
-    window: () => win,
+    // The shell, or the setup window while it is the only one.
+    window: () => win ?? setupWin,
+    walkthrough: {
+      openShell: () => walkthroughOpenShell(),
+      open: (step) => walkthroughOpen(step)
+    },
     ...(options.chooseDirectory !== undefined ? { chooseDirectory: options.chooseDirectory } : {}),
     ...(options.chooseFile !== undefined ? { chooseFile: options.chooseFile } : {}),
     hostSettingsChanged: () => desktopHost.link.writeSettings(),
@@ -714,43 +753,107 @@ function startApp(options: AppOptions = {}): void {
       persistBounds()
     }, 400)
   }
-  // The mouse's back and forward buttons arrive as an `app-command` on Windows
-  // and Linux (macOS has none; the window reads the buttons itself). Main only
-  // says where the pointer was: which page is in front, and whether the pointer
-  // is over the Browser tab, is the window's.
-  win.on('app-command', (_event, appCommand) => {
-    const command = appCommandBrowserCommand(appCommand)
-    if (command === null) return
-    const pointer = screen.getCursorScreenPoint()
-    const content = win?.getContentBounds()
-    if (content === undefined) return
-    emit(win, 'browser:pointerCommand', { command, at: { x: pointer.x - content.x, y: pointer.y - content.y } })
-  })
-  win.on('resize', scheduleBoundsPersist)
-  win.on('move', scheduleBoundsPersist)
+  /**
+   * Opens the shell window and wires what only it has: its bounds, its close
+   * through the quit gate, the mouse's back and forward buttons and its
+   * artifact console. Made at start when no walkthrough step comes first, or
+   * when the setup window hands over to it (`walkthrough:openShell`).
+   */
+  function openShell(): BrowserWindow {
+    const shellWindow = createWindow('index', services.settings.windowBounds ?? null, windowTheme())
+    win = shellWindow
+    attachArtifactConsole(shellWindow, (entry) => emit(shellWindow, 'content:artifactConsole', entry))
+
+    // The mouse's back and forward buttons arrive as an `app-command` on Windows
+    // and Linux (macOS has none; the window reads the buttons itself). Main only
+    // says where the pointer was: which page is in front, and whether the pointer
+    // is over the Browser tab, is the window's.
+    shellWindow.on('app-command', (_event, appCommand) => {
+      const command = appCommandBrowserCommand(appCommand)
+      if (command === null) return
+      const pointer = screen.getCursorScreenPoint()
+      const content = shellWindow.getContentBounds()
+      if (content === undefined) return
+      emit(win, 'browser:pointerCommand', { command, at: { x: pointer.x - content.x, y: pointer.y - content.y } })
+    })
+    shellWindow.on('resize', scheduleBoundsPersist)
+    shellWindow.on('move', scheduleBoundsPersist)
+
+    /**
+     * Closing the window ends every hosted session, so it asks first - once, for
+     * all of them, rather than a dialog per tab - through the quit gate, so a
+     * quit already agreed to from the menu is not asked about again.
+     *
+     * `close` is also the last moment the window still exists, so this is where
+     * the bounds are flushed: by `closed` the geometry is gone and whatever the
+     * debounce was still holding would be lost.
+     */
+    shellWindow.on('close', (event) => {
+      if (boundsTimer) clearTimeout(boundsTimer)
+      boundsTimer = null
+      persistBounds()
+
+      if (!quitGate.allowClose(() => shellWindow.close())) event.preventDefault()
+    })
+
+    shellWindow.on('closed', () => {
+      if (boundsTimer) clearTimeout(boundsTimer)
+      boundsTimer = null
+      win = null
+    })
+    return shellWindow
+  }
+
+  /** Opens the setup window, or brings the open one forward. */
+  function openSetup(): void {
+    if (setupWin !== null && !setupWin.isDestroyed()) {
+      setupWin.show()
+      setupWin.focus()
+      return
+    }
+    const page = createWindow('setup', null, windowTheme())
+    setupWin = page
+    page.on('closed', () => {
+      if (setupWin === page) setupWin = null
+    })
+  }
 
   /**
-   * Closing the window ends every hosted session, so it asks first - once, for
-   * all of them, rather than a dialog per tab - through the quit gate, so a
-   * quit already agreed to from the menu is not asked about again.
-   *
-   * `close` is also the last moment the window still exists, so this is where
-   * the bounds are flushed: by `closed` the geometry is gone and whatever the
-   * debounce was still holding would be lost.
+   * The setup window's hand-over: the shell opens, or the open one comes
+   * forward and hears the settings the setup window wrote, which were not
+   * sent to it as they were written; then the setup window closes. In that
+   * order, so there is never a moment with no window, which would quit.
    */
-  win.on('close', (event) => {
-    if (boundsTimer) clearTimeout(boundsTimer)
-    boundsTimer = null
-    persistBounds()
+  function walkthroughOpenShell(): void {
+    const shellWindow = win !== null && !win.isDestroyed() ? win : openShell()
+    emit(shellWindow, 'ownSettings:changed', services.settings)
+    shellWindow.show()
+    shellWindow.focus()
+    const page = setupWin
+    setupWin = null
+    if (page !== null && !page.isDestroyed()) page.close()
+  }
 
-    if (!quitGate.allowClose(() => win?.close())) event.preventDefault()
-  })
+  /**
+   * The setup window opened beside the shell at `step`: 1 from Settings >
+   * General's Show the walkthrough, 4 from Back on step 5, which keeps the
+   * workspace it chose.
+   */
+  function walkthroughOpen(step: WalkthroughStep): void {
+    const next = updateSettings(services, {
+      walkthrough:
+        step <= WALKTHROUGH_SETUP_LAST && step > 1
+          ? { step, workspace: services.settings.walkthrough?.workspace ?? null }
+          : WALKTHROUGH_START
+    })
+    emit(win, 'ownSettings:changed', next)
+    openSetup()
+  }
 
-  win.on('closed', () => {
-    if (boundsTimer) clearTimeout(boundsTimer)
-    boundsTimer = null
-    win = null
-  })
+  // A first start, or a walkthrough closed before its step 4 was done, opens
+  // on the setup window; every other start opens the shell.
+  if (walkthroughInSetupWindow(services.settings.walkthrough)) openSetup()
+  else openShell()
 
   // A reopen while the quit below is underway opens no window in this process;
   // it relaunches Helm once the quit has finished (reopen.ts).
@@ -759,7 +862,9 @@ function startApp(options: AppOptions = {}): void {
     quitPhase: () => hostStop,
     windowCount: () => BrowserWindow.getAllWindows().length,
     openWindow: () => {
-      win = createWindow('index', services.settings.windowBounds ?? null, windowTheme())
+      // A walkthrough left at steps 1 to 4 reopens on its setup window.
+      if (walkthroughInSetupWindow(services.settings.walkthrough)) openSetup()
+      else openShell()
     },
     relaunch: () => app.relaunch()
   })

@@ -148,17 +148,17 @@ impl ProcessEnder for FakeEnder {
 /// keeper, and a session in the keeper.
 fn desktop_with_its_host() -> Vec<ProcessRow> {
     vec![
-        row(100, 1, "Helm.exe"),
-        row(101, 100, "Helm.exe"),
-        row(102, 100, "Helm.exe"),
+        row(100, 1, "Floti.exe"),
+        row(101, 100, "Floti.exe"),
+        row(102, 100, "Floti.exe"),
         row(200, 100, "floti.exe"),
         row(300, 200, "floti.exe"),
         row(400, 300, "claude.exe"),
     ]
 }
 
-fn is_helm(row: &ProcessRow) -> bool {
-    row.name == "Helm.exe"
+fn is_floti(row: &ProcessRow) -> bool {
+    row.name == "Floti.exe"
 }
 
 #[test]
@@ -167,7 +167,7 @@ fn the_app_is_closed_process_by_process_and_the_host_it_started_is_left_to_stop(
     let ender = FakeEnder::of(&rows, &[], &[]);
     let mut paused = Vec::new();
 
-    let closed = close_processes(&rows, &is_helm, &ender, CLOSE_WAIT, &mut |pause| {
+    let closed = close_processes(&rows, &is_floti, &ender, CLOSE_WAIT, &mut |pause| {
         paused.push(pause);
     })
     .unwrap();
@@ -189,10 +189,10 @@ fn the_app_is_closed_process_by_process_and_the_host_it_started_is_left_to_stop(
 #[test]
 fn another_users_app_is_left_and_counted_and_one_already_gone_is_not() {
     let mut rows = desktop_with_its_host();
-    rows.push(row(900, 1, "Helm.exe"));
+    rows.push(row(900, 1, "Floti.exe"));
     let ender = FakeEnder::of(&rows, &[900], &[102]);
 
-    let closed = close_processes(&rows, &is_helm, &ender, CLOSE_WAIT, &mut |_| {}).unwrap();
+    let closed = close_processes(&rows, &is_floti, &ender, CLOSE_WAIT, &mut |_| {}).unwrap();
     assert_eq!(
         closed,
         Closed {
@@ -208,7 +208,7 @@ fn another_users_app_is_left_and_counted_and_one_already_gone_is_not() {
 fn no_app_running_ends_nothing() {
     let rows = vec![row(200, 1, "floti.exe")];
     let ender = FakeEnder::of(&rows, &[], &[]);
-    let closed = close_processes(&rows, &is_helm, &ender, CLOSE_WAIT, &mut |_| {}).unwrap();
+    let closed = close_processes(&rows, &is_floti, &ender, CLOSE_WAIT, &mut |_| {}).unwrap();
     assert_eq!(closed, Closed::default());
     assert!(ender.ended.borrow().is_empty());
 }
@@ -224,9 +224,9 @@ fn an_app_that_does_not_go_fails_after_the_patience_in_stepped_time() {
             true
         }
     }
-    let rows = vec![row(100, 1, "Helm.exe")];
+    let rows = vec![row(100, 1, "Floti.exe")];
     let mut waited = Duration::ZERO;
-    let failed = close_processes(&rows, &is_helm, &Stubborn, CLOSE_WAIT, &mut |pause| {
+    let failed = close_processes(&rows, &is_floti, &Stubborn, CLOSE_WAIT, &mut |pause| {
         waited += pause;
     })
     .unwrap_err();

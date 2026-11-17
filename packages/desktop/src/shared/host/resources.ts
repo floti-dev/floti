@@ -1,4 +1,4 @@
-import type { SessionResources } from '@helm/core'
+import type { SessionResources } from '@floti/core'
 import type { HostConnection, HostSubscription } from './client'
 import type * as P from './protocol'
 import { resourcesFromHost } from './records'

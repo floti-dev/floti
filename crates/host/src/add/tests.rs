@@ -758,8 +758,9 @@ fn the_menu_entry_is_named_and_a_failure_to_write_it_says_the_app_is_installed()
     world.publish(&Published::new(RUNNING));
     let run = world.run();
     assert!(
-        run.out
-            .contains("Its menu entry is /home/me/.local/share/applications/dev.floti.desktop.desktop."),
+        run.out.contains(
+            "Its menu entry is /home/me/.local/share/applications/dev.floti.desktop.desktop."
+        ),
         "{}",
         run.out
     );

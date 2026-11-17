@@ -1,4 +1,4 @@
-import { isSplit, type PaneAxis, type PaneEdge, type PaneNode } from '@helm/core/types'
+import { isSplit, type PaneAxis, type PaneEdge, type PaneNode } from '@floti/core/types'
 
 /**
  * Pixels for the pane tree: where each pane and each divider goes, how far a
@@ -23,7 +23,7 @@ export const PANE_MIN_HEIGHT = 140
  * hears about size, so anything drawn natively over a pane (the browser's
  * view) listens for this as well.
  */
-export const PANES_MOVED_EVENT = 'helm:panes-moved'
+export const PANES_MOVED_EVENT = 'floti:panes-moved'
 
 export interface Box {
   left: number

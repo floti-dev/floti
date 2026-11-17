@@ -1,13 +1,13 @@
 import { join } from 'node:path'
-import { openStore, readArchiveStats, readHistorySessions } from '@helm/core'
+import { openStore, readArchiveStats, readHistorySessions } from '@floti/core'
 import { fakeClaudeLogs, type FakeClaudeLog } from '../test/world'
-import { claudeRunIn, expect, openHistory, sessionIdOf, startSession, terminalText, test, typeLine } from './helm'
+import { claudeRunIn, expect, openHistory, sessionIdOf, startSession, terminalText, test, typeLine } from './desktop'
 
 test('a session ended in Floti is in History without a refresh, its archive opens, it is found by what was said, and it resumes in the folder it ran in', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
   await typeLine(pane, 'plan the release')

@@ -22,7 +22,7 @@ import { LOCAL_HOST_KEY, type RemoteHost } from './hosts'
 /**
  * The browser pane's URL rules, re-exported here rather than from the package
  * root: the address bar and the settings pane are *renderer* code, and a value import
- * from `@helm/core` reaches the filesystem through `launch/` and `store/`,
+ * from `@floti/core` reaches the filesystem through `launch/` and `store/`,
  * which fails at rollup rather than at typecheck. These are pure by
  * construction - they decide about a string and touch nothing.
  */
@@ -588,7 +588,7 @@ export interface RestoreOffer {
  * "is anybody working in this tree" wrongly in exactly the case somebody gets
  * hurt by it. So every record is listed, and the fields below are the whole of
  * what a record carries. Everything richer - branch, profile, overlays, argv,
- * the process tree, the ports - hangs off `helmSessionId`, because Helm has
+ * the process tree, the ports - hangs off `hostSessionId`, because Helm has
  * none of it for a session it did not spawn. That degradation needs no special
  * case: it is simply what is knowable.
  *
@@ -602,7 +602,7 @@ export interface LiveSession {
    * The whole of the hosted/not distinction, and it is a join key rather than a
    * flag: everything Helm knows beyond the record is reached through it.
    */
-  helmSessionId: number | null
+  hostSessionId: number | null
   /**
    * The pid the session is registered under, or the pty's pid for a hosted
    * session that has no record yet.
@@ -785,7 +785,7 @@ export interface SessionResources {
  * cost is whatever the session had not finished saying.
  *
  * In `types.ts` because the renderer imports it, and a value import into the
- * browser bundle comes from `@helm/core/types` and not the package root
+ * browser bundle comes from `@floti/core/types` and not the package root
  * (CLAUDE.md "Boundaries").
  */
 export function sessionLabel(session: Pick<SessionRecord, 'name' | 'label'>): string {
@@ -1654,6 +1654,17 @@ export interface AppSettings {
    */
   firstRunCompletedAt: string | null
   /**
+   * Where the guided first run stands on this device, or null while it is not
+   * showing: done, skipped, or never due. A `desktop.db` this start created is a
+   * first start and gets step 1 as it opens (`settleWalkthrough`); one that
+   * was there before stays null and opens the shell.
+   * Steps 1 to 4 run in the setup window, before the shell exists, and 5 and
+   * 6 in the shell's main area, so closing either window resumes at the step
+   * written here. Settings > General sets it to step 1 again. Kept on this
+   * device, never on the host.
+   */
+  walkthrough: Walkthrough | null
+  /**
    * A `claude` executable the user picked by hand, for the machine where it is
    * not on PATH and not in the usual install directory. Null means "find it".
    *
@@ -1963,6 +1974,38 @@ export interface AppSettings {
   noticesSeen: Readonly<Record<string, string>>
 }
 
+/** A step of the guided first run: 1 Welcome to 6 Your first session. */
+export type WalkthroughStep = 1 | 2 | 3 | 4 | 5 | 6
+
+export const WALKTHROUGH_STEPS: readonly WalkthroughStep[] = [1, 2, 3, 4, 5, 6]
+
+/** The last step the setup window shows; the shell shows the ones after it. */
+export const WALKTHROUGH_SETUP_LAST: WalkthroughStep = 4
+
+/** Where the guided first run stands (`AppSettings.walkthrough`). */
+export interface Walkthrough {
+  step: WalkthroughStep
+  /**
+   * The workspace step 4 made or chose, which the shell opens with selected
+   * and step 6 starts its session in; null when it added scan folders, was
+   * skipped, or has not been reached.
+   */
+  workspace: string | null
+}
+
+/** The walkthrough as a first start begins it. */
+export const WALKTHROUGH_START: Walkthrough = { step: 1, workspace: null }
+
+/** Whether the walkthrough is at a step the setup window shows (1 to 4). */
+export function walkthroughInSetupWindow(walkthrough: Walkthrough | null): boolean {
+  return walkthrough !== null && walkthrough.step <= WALKTHROUGH_SETUP_LAST
+}
+
+/** Whether the walkthrough is at a step the shell shows (5 or 6). */
+export function walkthroughInShell(walkthrough: Walkthrough | null): boolean {
+  return walkthrough !== null && walkthrough.step > WALKTHROUGH_SETUP_LAST
+}
+
 /** What quitting Helm does to the sessions it started on a host. */
 export type QuitSessions = 'end' | 'keep'
 
@@ -2008,6 +2051,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   windowBounds: null,
   paneLayout: null,
   firstRunCompletedAt: null,
+  // Null: a device is not in a walkthrough unless its first start put it in one.
+  walkthrough: null,
   claudePath: null,
   // The four defaults below are the values Spike C measured and `terminal.ts`
   // was built around. They are the documented baseline, not a starting point

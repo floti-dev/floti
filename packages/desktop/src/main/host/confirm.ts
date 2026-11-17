@@ -1,5 +1,5 @@
 import { type BrowserWindow, dialog, ipcMain, Notification } from 'electron'
-import { sessionLabel, type SessionRecord } from '@helm/core'
+import { sessionLabel, type SessionRecord } from '@floti/core'
 import type { NeedsYouNotification, QuitAnswer } from '../../shared/ipc'
 import { emit } from '../ipc'
 import type { Confirm, ConfirmRequest, QuitConfirm } from './session-host'

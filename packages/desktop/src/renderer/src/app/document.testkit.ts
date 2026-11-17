@@ -1,4 +1,4 @@
-import type { ContentDocument, ContentFile, RenderedMarkdown } from '@helm/core'
+import type { ContentDocument, ContentFile, RenderedMarkdown } from '@floti/core'
 
 /**
  * What `content:document` answers, built by hand for the window's tests: the

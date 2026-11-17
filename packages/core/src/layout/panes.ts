@@ -28,7 +28,7 @@ import { pluginPagesId, pluginTabId } from '../plugins/tabs'
  * tree, so left to right and top to bottom within each split - which is the
  * order the keyboard walks and the panes are named in.
  *
- * Pure and browser-safe, so the renderer imports it through `@helm/core/types`
+ * Pure and browser-safe, so the renderer imports it through `@floti/core/types`
  * and every rule about where a tab lands is tested here rather than discovered
  * in a window. Every operation takes a layout and returns one, normalised: no
  * empty group survives beside a group with tabs in it, no split holds fewer

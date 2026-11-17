@@ -1,6 +1,6 @@
 import type { JSX, MouseEvent } from 'react'
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import type { RenderedMarkdown } from '@helm/core'
+import type { RenderedMarkdown } from '@floti/core'
 import { cn } from '../lib/cn'
 import { tagHue } from '../lib/hues'
 import { ListIcon } from './icons'

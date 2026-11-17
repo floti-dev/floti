@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_INVENTORY, type Project } from '@helm/core/types'
+import { EMPTY_INVENTORY, type Project } from '@floti/core/types'
 import { ProjectPane } from './ProjectPane'
 
 const API: Project = {

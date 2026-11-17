@@ -1,4 +1,4 @@
-import { AgentCardIcon, LayersIcon, RAIL_ICON, TerminalIcon, type RailItem } from '@helm/ui'
+import { AgentCardIcon, LayersIcon, RAIL_ICON, TerminalIcon, type RailItem } from '@floti/ui'
 import type { SidebarView } from './sidebarFor'
 
 /**

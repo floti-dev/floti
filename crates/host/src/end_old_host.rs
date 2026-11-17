@@ -242,7 +242,9 @@ mod tests {
     fn it_takes_one_client_folder() {
         assert_eq!(
             parse(&args(&["C:\\Users\\a user\\Floti\\desktop\\host-client"])),
-            Some(PathBuf::from("C:\\Users\\a user\\Floti\\desktop\\host-client"))
+            Some(PathBuf::from(
+                "C:\\Users\\a user\\Floti\\desktop\\host-client"
+            ))
         );
         assert_eq!(parse(&args(&[])), None);
         assert_eq!(parse(&args(&[""])), None);

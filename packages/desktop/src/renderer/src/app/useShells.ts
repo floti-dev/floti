@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { DetectedShell } from '@helm/core'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import type { DetectedShell } from '@floti/core'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { bridgeFor } from './bridge'
 
 /**

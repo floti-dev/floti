@@ -1,6 +1,6 @@
 import type { KeyboardEvent, MenuItem, MenuItemConstructorOptions } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
-import { resolveTheme } from '@helm/core'
+import { resolveTheme } from '@floti/core'
 import { browserKeyCommand } from '../shared/browserKeys'
 import { applicationMenuTemplate, TITLEBAR_HEIGHT, TRAFFIC_LIGHTS, windowChromeFor } from './chrome'
 

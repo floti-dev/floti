@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useState } from 'react'
-import type { FolderTemplateKind, FolderTemplatePreview } from '@helm/core'
+import type { FolderTemplateKind, FolderTemplatePreview } from '@floti/core'
 import { cn } from '../lib/cn'
 import { formatBytes } from '../lib/time'
 import { Checkbox } from './Checkbox'

@@ -9,7 +9,7 @@ import {
   type SessionRecord,
   type SessionsOverview,
   type UrgentState
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { CLAUDE_CODE_BACKEND } from '../../../../shared/host/backend'
 import { launchRequestToHost } from '../../../../shared/host/launch'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
@@ -26,7 +26,7 @@ import {
 } from '../../../../shared/host/records'
 import { createHostResources } from '../../../../shared/host/resources'
 import { createTerminalStreams } from '../../../../shared/host/streams'
-import type { HelmBridge, SessionConfirmRequest, StartSessionRequest } from '../../../../shared/ipc'
+import type { DesktopBridge, SessionConfirmRequest, StartSessionRequest } from '../../../../shared/ipc'
 import { createLocalEvents } from './events'
 import { forAction, type HostReach } from './history'
 import type { HostAdapter } from './router'
@@ -81,7 +81,7 @@ export interface WindowFront {
 export interface SessionsAdapterDeps {
   link: HostReach
   /** The preload's bridge, for what main keeps: the quit question, notifications, the last run's layout. */
-  own: Pick<HelmBridge, 'invoke' | 'send' | 'on'>
+  own: Pick<DesktopBridge, 'invoke' | 'send' | 'on'>
   front: WindowFront
   shelf: ShellShelf | null
   /** What the window calls the host these sessions run on, read when asked; this PC's (`LOCAL_HOST_NAME`) by default. */

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, type AppSettings } from '@helm/core/types'
+import { DEFAULT_SETTINGS, type AppSettings } from '@floti/core/types'
 import { FakeConnection, fakeReach, unusableReach } from '../../../../../test/fake-connection'
 import type * as P from '../../../../shared/host/protocol'
 import type {
   EventChannel,
   EventPayload,
-  HelmBridge,
+  DesktopBridge,
   OwnAppInfo,
   RequestChannel,
   RequestPayload,
@@ -127,7 +127,7 @@ function ownBridge(patch: Partial<AppSettings> = {}) {
     }
   }
   return {
-    bridge: bridge as unknown as Pick<HelmBridge, 'invoke' | 'on'>,
+    bridge: bridge as unknown as Pick<DesktopBridge, 'invoke' | 'on'>,
     writes,
     picks,
     /** Main changed Helm's own settings, as the browser pane's history does. */

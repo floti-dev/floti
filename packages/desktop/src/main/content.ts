@@ -21,7 +21,7 @@ import { relative } from 'node:path'
  * passes the console panel no evaluator for exactly that reason.
  */
 
-export const CONTENT_SCHEME = 'helm-content'
+export const CONTENT_SCHEME = 'floti-content'
 
 /**
  * What an artifact frame is allowed to do.

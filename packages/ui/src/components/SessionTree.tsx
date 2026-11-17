@@ -1,7 +1,7 @@
 import type { JSX, MouseEvent, ReactNode } from 'react'
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import type { DiscoveryResult, Workspace, HostFlotiVerdict, Project } from '@helm/core'
-import { isProjectPinned, mostPressingState } from '@helm/core/types'
+import type { DiscoveryResult, Workspace, HostFlotiVerdict, Project } from '@floti/core'
+import { isProjectPinned, mostPressingState } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { shortcutLabel } from '../lib/platform'
 import type { SessionState } from '../lib/sessionstate'
@@ -443,10 +443,17 @@ export function SessionTree({
 
   // The row in front - a session's or a project's page - is the tree's one
   // `aria-current`, so the scroll needs no second way of finding it.
+  // A row not drawn yet (the scan or the session list still arriving) leaves the
+  // request pending: the scroll is carried out once the row is there, once per
+  // request.
+  const scrolledSeq = useRef<number | null>(null)
   useEffect(() => {
-    if (reveal === null) return
-    navRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' })
-  }, [reveal])
+    if (reveal === null || scrolledSeq.current === reveal.seq) return
+    const row = navRef.current?.querySelector<HTMLElement>('[aria-current="true"]')
+    if (row === null || row === undefined) return
+    scrolledSeq.current = reveal.seq
+    row.scrollIntoView({ block: 'nearest' })
+  }, [reveal, discovery, sessionsByPath, selectedPath, pinnedPaths])
 
   const localPhase: TreeHostPhase = sessionsListed
     ? LIVE
@@ -1064,34 +1071,41 @@ function HostTree({
    */
   const [revealedSeq, setRevealedSeq] = useState<number | null>(null)
   if (reveal !== null && reveal.seq !== revealedSeq) {
-    setRevealedSeq(reveal.seq)
     const key =
       reveal.kind === 'project'
         ? reveal.path.toLowerCase()
         : ([...sessionsByPath].find(([, rows]) => withNested(rows).some((row) => row.id === reveal.id))?.[0] ??
           null)
-    const unfold = (current: ReadonlySet<string>, item: string): ReadonlySet<string> => {
-      if (!current.has(item)) return current
-      const next = new Set(current)
-      next.delete(item)
-      return next
-    }
-    if (reveal.kind === 'session') {
-      // A session folded away under the one that started it opens that one too.
-      const above = ancestorsOf([...sessionsByPath.values(), elsewhere], reveal.id) ?? []
-      if (above.some((parent) => foldedFamilies.has(parent))) {
-        setFoldedFamilies((current) => above.reduce(unfold, current))
+    const group =
+      key === null
+        ? undefined
+        : groups.find(
+            (each) =>
+              each.root?.path.toLowerCase() === key ||
+              each.members.some((member) => member.path.toLowerCase() === key)
+          )
+    const pinned = key !== null && pins.some((pin) => pin.path.toLowerCase() === key)
+    // A row not listed yet (a window just opened, its scan still running) keeps
+    // the request pending: it is carried out on the render that lists it, and a
+    // newer request replaces it.
+    if (key !== null && (group !== undefined || pinned)) {
+      setRevealedSeq(reveal.seq)
+      const unfold = (current: ReadonlySet<string>, item: string): ReadonlySet<string> => {
+        if (!current.has(item)) return current
+        const next = new Set(current)
+        next.delete(item)
+        return next
       }
-    }
-    if (key !== null) {
+      if (reveal.kind === 'session') {
+        // A session folded away under the one that started it opens that one too.
+        const above = ancestorsOf([...sessionsByPath.values(), elsewhere], reveal.id) ?? []
+        if (above.some((parent) => foldedFamilies.has(parent))) {
+          setFoldedFamilies((current) => above.reduce(unfold, current))
+        }
+      }
       setFoldedProjects((current) => unfold(current, key))
-      const group = groups.find(
-        (each) =>
-          each.root?.path.toLowerCase() === key ||
-          each.members.some((member) => member.path.toLowerCase() === key)
-      )
       if (group !== undefined) setFoldedGroups((current) => unfold(current, group.key))
-      if (pins.some((pin) => pin.path.toLowerCase() === key)) setPinsFolded(false)
+      if (pinned) setPinsFolded(false)
     }
   }
 

@@ -122,7 +122,7 @@ struct SessionStreamOpenV20 {
 fn session_v20() -> SessionRecordV20 {
     SessionRecordV20 {
         id: 12,
-        name: "helm-3".into(),
+        name: "floti-3".into(),
         label: Some("PR review".into()),
         cwd: "C:\\work\\a repo".into(),
         branch: Some("main".into()),
@@ -248,7 +248,7 @@ fn s31_a_2_0_record_read_by_a_later_client_has_no_parent_and_no_agent() {
         (read.parent_id, read.parent_name, read.agent),
         (None, None, None)
     );
-    assert_eq!(read.name, "helm-3");
+    assert_eq!(read.name, "floti-3");
     assert_eq!(read.profile_id, Some(4));
 }
 

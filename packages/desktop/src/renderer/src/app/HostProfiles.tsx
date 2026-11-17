@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { useCallback, useState } from 'react'
-import type { Profile, ProfileDraft, Project, SessionRecord } from '@helm/core/types'
-import { DeleteProfileDialog, ProfileEditor, ProfileList, type ProfilePrediction } from '@helm/ui'
+import type { Profile, ProfileDraft, Project, SessionRecord } from '@floti/core/types'
+import { DeleteProfileDialog, ProfileEditor, ProfileList, type ProfilePrediction } from '@floti/ui'
 import { bridgeFor } from './bridge'
 import { useProfiles } from './useProfiles'
 

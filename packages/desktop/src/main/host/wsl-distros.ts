@@ -1,4 +1,4 @@
-import type { RemoteHost, RemoteHostConnection, WslDistroList } from '@helm/core/types'
+import type { RemoteHost, RemoteHostConnection, WslDistroList } from '@floti/core/types'
 import { lastLineOf, type RunTransport } from './remote-install'
 import { transportArgv, type TransportPrograms } from './remote-launcher'
 

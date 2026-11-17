@@ -198,13 +198,13 @@ fn noise(seed: u64, len: usize) -> String {
 }
 
 /// A conversation as Helm's database holds it.
-struct Helms {
+struct DesktopConversation {
     id: &'static str,
     state: ArchiveSessionState,
     messages: Vec<ArchiveMessage>,
 }
 
-impl Helms {
+impl DesktopConversation {
     fn row(&self) -> CarriedConversation {
         CarriedConversation {
             session_id: self.id.to_owned(),
@@ -249,16 +249,22 @@ impl Helms {
 }
 
 /// What Helm's database holds.
-fn helm_db(world: &World) -> (Vec<Helms>, CarriedSessionNames, CarriedUsageRows) {
+fn desktop_db(
+    world: &World,
+) -> (
+    Vec<DesktopConversation>,
+    CarriedSessionNames,
+    CarriedUsageRows,
+) {
     let conversations = vec![
         // The host archived ONE itself; Helm's copy says something else.
-        Helms {
+        DesktopConversation {
             id: ONE,
             state: ArchiveSessionState::Archived,
-            messages: vec![message("helm-1", T0 + 500, "helm's own words")],
+            messages: vec![message("floti-1", T0 + 500, "the desktop's own words")],
         },
         // Larger than one batch: three messages in two parts.
-        Helms {
+        DesktopConversation {
             id: TWO,
             state: ArchiveSessionState::Archived,
             messages: vec![
@@ -268,13 +274,13 @@ fn helm_db(world: &World) -> (Vec<Helms>, CarriedSessionNames, CarriedUsageRows)
             ],
         },
         // The oldest: past the host's limit once copied.
-        Helms {
+        DesktopConversation {
             id: THREE,
             state: ArchiveSessionState::Archived,
             messages: vec![message("three-1", T0, &noise(3, 2000))],
         },
         // Already dropped in Helm.
-        Helms {
+        DesktopConversation {
             id: FOUR,
             state: ArchiveSessionState::Evicted,
             messages: Vec::new(),
@@ -344,10 +350,10 @@ fn listed<'a>(sessions: &'a [HistorySession], id: &str) -> &'a HistorySession {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn helms_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and_survives_a_stopped_copy()
+async fn the_desktops_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and_survives_a_stopped_copy()
  {
     let world = World::new();
-    let (conversations, names, usage) = helm_db(&world);
+    let (conversations, names, usage) = desktop_db(&world);
     let [one, two, three, four] = &conversations[..] else {
         unreachable!()
     };
@@ -451,9 +457,9 @@ async fn helms_data_is_merged_into_a_host_that_already_holds_some_of_it_once_and
     let dropped = conversation(&mut client, THREE).await.unwrap();
     assert_eq!(dropped.state, ArchiveSessionState::Evicted);
     assert!(dropped.messages.is_empty());
-    let helms_dropped = conversation(&mut client, FOUR).await.unwrap();
+    let desktops_dropped = conversation(&mut client, FOUR).await.unwrap();
     assert_eq!(
-        (helms_dropped.state, helms_dropped.message_count),
+        (desktops_dropped.state, desktops_dropped.message_count),
         (ArchiveSessionState::Evicted, 4)
     );
     let stats = client.request::<ReadArchiveStats>(&()).await.unwrap();

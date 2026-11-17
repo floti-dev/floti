@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import type { TemplateChoice, TemplatePreview } from '@helm/core'
+import type { TemplateChoice, TemplatePreview } from '@floti/core'
 import { cn } from '../lib/cn'
 import { ROW_SELECTED } from '../lib/rows'
 import { SEGMENT_ON } from '../lib/segmented'
@@ -186,7 +186,7 @@ export function NewWorkspaceDialog({
                   : 'text-fg-muted hover:text-fg'
               )}
             >
-              {candidate === 'new' ? 'A new folder' : 'A folder I already have'}
+              {candidate === 'new' ? 'New' : 'Use a folder I have'}
             </button>
           ))}
         </div>

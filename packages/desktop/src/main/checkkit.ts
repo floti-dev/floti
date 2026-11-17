@@ -1,5 +1,5 @@
 import { type BrowserWindow } from 'electron'
-import type { SessionRecord } from '@helm/core'
+import type { SessionRecord } from '@floti/core'
 import { squash } from './bridge'
 import type { BrowserHost } from './browser'
 import type { BrowserMcpHost } from './browser-mcp'

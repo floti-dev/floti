@@ -1,8 +1,8 @@
-import type { Profile } from '@helm/core/types'
+import type { Profile } from '@floti/core/types'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
 import { profileFromHost } from '../../../../shared/host/records'
-import type { HelmBridge } from '../../../../shared/ipc'
+import type { DesktopBridge } from '../../../../shared/ipc'
 import { forAction, type HostReach } from './history'
 import type { HostAdapter } from './router'
 
@@ -29,7 +29,7 @@ import type { HostAdapter } from './router'
 export interface ProfilesAdapterDeps {
   link: HostReach
   /** The preload's bridge, for Helm's own dialogs. */
-  own: Pick<HelmBridge, 'invoke'>
+  own: Pick<DesktopBridge, 'invoke'>
   log?: (line: string) => void
 }
 

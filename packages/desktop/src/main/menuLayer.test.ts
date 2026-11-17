@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, WebContentsView } from 'electron'
-import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings } from '@helm/core'
+import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings } from '@floti/core'
 import { FakeBrowserWindow, FakeWebContentsView, type FakeWebContents } from '../../test/browser-electron'
 import { createBrowserHost } from './browser'
 import { TITLEBAR_HEIGHT } from './chrome'

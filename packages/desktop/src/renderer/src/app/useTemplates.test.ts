@@ -1,12 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ConfigScope, ConfigTree, FolderTemplatePreview, TemplateChoice, TemplateDetail } from '@helm/core'
+import type { ConfigScope, ConfigTree, FolderTemplatePreview, TemplateChoice, TemplateDetail } from '@floti/core'
 import { bridge } from './bridge.testkit'
 import { useTemplates } from './useTemplates'
 
 vi.mock('./bridge', () => import('./bridge.testkit'))
 
-const DIR = 'C:\\Users\\me\\.config\\helm\\templates'
+const DIR = 'C:\\Users\\me\\.config\\floti\\templates'
 const MINIMAL: TemplateChoice = { id: 'minimal', label: 'Minimal', description: null, order: null, builtIn: true }
 const USER: ConfigScope = { kind: 'user', path: 'C:\\Users\\me\\.claude', claudeDir: 'C:\\Users\\me\\.claude', label: 'User', exists: true }
 const HUB: ConfigScope = { kind: 'workspace', path: 'C:\\work\\hub', claudeDir: 'C:\\work\\hub\\.claude', label: 'hub', exists: true }

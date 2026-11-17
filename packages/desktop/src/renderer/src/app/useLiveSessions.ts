@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { LiveSession, SessionResources, SessionsOverview } from '@helm/core'
-import { helm } from './bridge'
+import type { LiveSession, SessionResources, SessionsOverview } from '@floti/core'
+import { desktop } from './bridge'
 import { readable } from './errors'
 
 /**
@@ -56,7 +56,7 @@ export function useLiveSessions(): LiveSessionsState {
    * list: the last answer, if there was one, stays, and a push clears it.
    */
   const readOverview = useCallback(() => {
-    void helm.invoke('sessions:overview').then(
+    void desktop.invoke('sessions:overview').then(
       (next) => {
         setOverview(next)
         setError(null)
@@ -67,14 +67,14 @@ export function useLiveSessions(): LiveSessionsState {
 
   useEffect(() => {
     const offs = [
-      helm.on('sessions:overview', (next) => {
+      desktop.on('sessions:overview', (next) => {
         setOverview(next)
         setError(null)
       }),
       // The whole set every time, for the reason `session:activity` sends the
       // whole set: a window that missed one push - mounted late, or reloaded -
       // is corrected by the next one rather than carrying a stale tree.
-      helm.on('sessions:resources', (next) => {
+      desktop.on('sessions:resources', (next) => {
         setResources(new Map(next.map((snapshot) => [snapshot.id, snapshot])))
       })
     ]
@@ -85,7 +85,7 @@ export function useLiveSessions(): LiveSessionsState {
     readOverview()
     // A read that failed (the local host could not be reached) keeps the map
     // empty, so every hosted row paints Unknown rather than "nothing there".
-    void helm
+    void desktop
       .invoke('sessions:resources')
       .then((next) => setResources(new Map(next.map((snapshot) => [snapshot.id, snapshot]))))
       .catch(() => undefined)
@@ -98,7 +98,7 @@ export function useLiveSessions(): LiveSessionsState {
   const retry = useCallback(() => readOverview(), [readOverview])
 
   const watch = useCallback((on: boolean) => {
-    helm.send('sessions:watch', { watching: on })
+    desktop.send('sessions:watch', { watching: on })
   }, [])
 
   return {

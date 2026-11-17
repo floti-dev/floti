@@ -1,6 +1,6 @@
 import type { JSX, RefObject } from 'react'
 import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react'
-import type { BrowserSuggestion, BrowserSuggestions as Suggestions } from '@helm/core/types'
+import type { BrowserSuggestion, BrowserSuggestions as Suggestions } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { PANES_MOVED_EVENT } from '../lib/paneGeometry'
 import { isMac, shortcutLabel } from '../lib/platform'

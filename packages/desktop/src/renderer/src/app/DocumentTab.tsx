@@ -1,7 +1,7 @@
 import type { JSX, ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
-import type { EditorHighlight } from '@helm/core'
-import { ContentDocumentPane, cn, EyeIcon, PencilIcon, CodeIcon } from '@helm/ui'
+import type { EditorHighlight } from '@floti/core'
+import { ContentDocumentPane, cn, EyeIcon, PencilIcon, CodeIcon } from '@floti/ui'
 import { drafts } from './drafts'
 import { useDocument } from './useDocument'
 

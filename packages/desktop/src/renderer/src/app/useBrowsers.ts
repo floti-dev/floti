@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { BrowserSuggestions } from '@helm/core/types'
-import { subscribeOverlay, overlayOpen, type ConsoleEntry, type MenuLayerPort } from '@helm/ui'
+import type { BrowserSuggestions } from '@floti/core/types'
+import { subscribeOverlay, overlayOpen, type ConsoleEntry, type MenuLayerPort } from '@floti/ui'
 import type {
   BrowserAvailability,
   BrowserLayerClosed,
@@ -9,7 +9,7 @@ import type {
   BrowserShare,
   BrowserState
 } from '../../../shared/ipc'
-import { helm } from './bridge'
+import { desktop } from './bridge'
 import { lookOfDocument } from './theme'
 import {
   activatePage,
@@ -271,7 +271,7 @@ export function useBrowsers(): BrowserPanesState {
   const push = useCallback((id: number): void => {
     const rect = rects.current.get(id)
     if (rect === undefined) return
-    helm.send('browser:bounds', {
+    desktop.send('browser:bounds', {
       id,
       x: rect.x,
       y: rect.y,
@@ -322,7 +322,7 @@ export function useBrowsers(): BrowserPanesState {
     later(standDown, STILL_WAIT_MS)
     void Promise.all(
       onScreen.map((id) =>
-        helm.invoke('browser:snapshot', { id }).then(
+        desktop.invoke('browser:snapshot', { id }).then(
           (url) => [id, url] as const,
           () => [id, null] as const
         )
@@ -349,14 +349,14 @@ export function useBrowsers(): BrowserPanesState {
 
   // Decided once in main, at start, so asked once.
   useEffect(() => {
-    void helm.invoke('browser:availability').then(setAvailability, () => undefined)
+    void desktop.invoke('browser:availability').then(setAvailability, () => undefined)
   }, [])
 
   // Adopt whatever main is already holding. A renderer reload - dev HMR, or a
   // render process that died - leaves views with no tab, exactly as it leaves
   // sessions with no tab, and the same answer applies.
   useEffect(() => {
-    void helm
+    void desktop
       .invoke('browser:state', {})
       .then((states) => {
         if (states.length === 0) return
@@ -367,14 +367,14 @@ export function useBrowsers(): BrowserPanesState {
   }, [])
 
   useEffect(() => {
-    const offChanged = helm.on('browser:changed', (state) => {
+    const offChanged = desktop.on('browser:changed', (state) => {
       setViews((current) => new Map(current).set(state.id, state))
     })
-    const offOpened = helm.on('browser:opened', ({ state, after, background }) => {
+    const offOpened = desktop.on('browser:opened', ({ state, after, background }) => {
       setViews((current) => new Map(current).set(state.id, state))
       setStrip((current) => addPage(current, state.id, { after, background }))
     })
-    const offClosed = helm.on('browser:closed', ({ id }) => {
+    const offClosed = desktop.on('browser:closed', ({ id }) => {
       setViews((current) => {
         const next = new Map(current)
         next.delete(id)
@@ -384,10 +384,10 @@ export function useBrowsers(): BrowserPanesState {
       setIcons((current) => withIcon(current, id, null))
       rects.current.delete(id)
     })
-    const offFavicon = helm.on('browser:favicon', ({ id, icon }) => {
+    const offFavicon = desktop.on('browser:favicon', ({ id, icon }) => {
       setIcons((current) => withIcon(current, id, icon))
     })
-    const offLogged = helm.on('browser:logged', ({ id, entry }) => {
+    const offLogged = desktop.on('browser:logged', ({ id, entry }) => {
       setEntries((current) => {
         const next = new Map(current)
         // The window keeps the tail. Main holds the whole ring (1000 per view)
@@ -411,7 +411,7 @@ export function useBrowsers(): BrowserPanesState {
     async (request: { url?: string; project?: string | null }, at?: number): Promise<BrowserState | null> => {
       let answer: { state: BrowserState | null; problem: string | null }
       try {
-        answer = await helm.invoke('browser:open', request)
+        answer = await desktop.invoke('browser:open', request)
       } catch (err) {
         // No tab was made, so there is no problem line to write on: this is the
         // one browser failure that has to go somewhere else, and `error` is
@@ -427,7 +427,7 @@ export function useBrowsers(): BrowserPanesState {
         )
         // Whatever main already has for this view - a `window.open` tab, or one
         // adopted after a reload - rather than an empty panel.
-        void helm
+        void desktop
           .invoke('browser:console', { id: answer.state.id })
           .then((lines) => {
             setEntries((current) => new Map(current).set(answer.state!.id, lines))
@@ -495,7 +495,7 @@ export function useBrowsers(): BrowserPanesState {
       closedPages.current.push({ url: page.url, project: page.project, at: latest.current.order.indexOf(id) })
       if (closedPages.current.length > CLOSED_PAGES_MAX) closedPages.current.shift()
     }
-    void helm.invoke('browser:close', { id }).catch(() => undefined) // the tab is gone from this map either way
+    void desktop.invoke('browser:close', { id }).catch(() => undefined) // the tab is gone from this map either way
     setViews((current) => {
       const next = new Map(current)
       next.delete(id)
@@ -530,7 +530,7 @@ export function useBrowsers(): BrowserPanesState {
 
   const navigate = useCallback(
     (id: number, input: string): Promise<void> =>
-      helm
+      desktop
         .invoke('browser:navigate', { id, input })
         .then(remember)
         .catch(failed(id, 'navigate')),
@@ -539,13 +539,13 @@ export function useBrowsers(): BrowserPanesState {
 
   const back = useCallback(
     (id: number) => {
-      void helm.invoke('browser:back', { id }).then(remember).catch(failed(id, 'go back in'))
+      void desktop.invoke('browser:back', { id }).then(remember).catch(failed(id, 'go back in'))
     },
     [remember, failed]
   )
   const forward = useCallback(
     (id: number) => {
-      void helm
+      void desktop
         .invoke('browser:forward', { id })
         .then(remember)
         .catch(failed(id, 'go forward in'))
@@ -554,14 +554,14 @@ export function useBrowsers(): BrowserPanesState {
   )
   const reload = useCallback(
     (id: number, hard: boolean) => {
-      void helm.invoke('browser:reload', { id, hard }).then(remember).catch(failed(id, 'reload'))
+      void desktop.invoke('browser:reload', { id, hard }).then(remember).catch(failed(id, 'reload'))
     },
     [remember, failed]
   )
-  const stop = useCallback((id: number) => helm.send('browser:stop', { id }), [])
+  const stop = useCallback((id: number) => desktop.send('browser:stop', { id }), [])
   const devtools = useCallback(
     (id: number) => {
-      void helm
+      void desktop
         .invoke('browser:devtools', { id })
         .then(remember)
         .catch(failed(id, 'open DevTools for'))
@@ -570,43 +570,43 @@ export function useBrowsers(): BrowserPanesState {
   )
   const find = useCallback(
     (id: number, query: string, forward: boolean) => {
-      void helm.invoke('browser:find', { id, query, forward }).catch(failed(id, 'search'))
+      void desktop.invoke('browser:find', { id, query, forward }).catch(failed(id, 'search'))
     },
     [failed]
   )
   const stopFind = useCallback(
     (id: number) => {
-      void helm.invoke('browser:stopFind', { id }).catch(failed(id, 'stop searching'))
+      void desktop.invoke('browser:stopFind', { id }).catch(failed(id, 'stop searching'))
     },
     [failed]
   )
   const zoom = useCallback(
     (id: number, level: number) => {
-      void helm.invoke('browser:zoom', { id, level }).then(remember).catch(failed(id, 'zoom'))
+      void desktop.invoke('browser:zoom', { id, level }).then(remember).catch(failed(id, 'zoom'))
     },
     [remember, failed]
   )
   const clearStorage = useCallback(
     (id: number) => {
-      void helm
+      void desktop
         .invoke('browser:clearStorage', { id })
         .then(remember)
         .catch(failed(id, 'clear the browsing data of'))
     },
     [remember, failed]
   )
-  const shareTargets = useCallback(() => helm.invoke('browser:shareTargets'), [])
-  const suggest = useCallback((text: string) => helm.invoke('browser:suggest', { text }), [])
-  const forget = useCallback((url: string) => helm.send('browser:forget', { url }), [])
-  const clearHistory = useCallback(() => helm.send('browser:clearHistory'), [])
+  const shareTargets = useCallback(() => desktop.invoke('browser:shareTargets'), [])
+  const suggest = useCallback((text: string) => desktop.invoke('browser:suggest', { text }), [])
+  const forget = useCallback((url: string) => desktop.send('browser:forget', { url }), [])
+  const clearHistory = useCallback(() => desktop.send('browser:clearHistory'), [])
   const share = useCallback(
     (id: number, session: number | null) => {
-      void helm.invoke('browser:share', { id, session }).then(remember).catch(failed(id, 'share'))
+      void desktop.invoke('browser:share', { id, session }).then(remember).catch(failed(id, 'share'))
     },
     [remember, failed]
   )
   const evaluate = useCallback(
-    (id: number, source: string) => helm.invoke('browser:eval', { id, source }),
+    (id: number, source: string) => desktop.invoke('browser:eval', { id, source }),
     []
   )
 
@@ -641,7 +641,7 @@ export function useBrowsers(): BrowserPanesState {
   const layerOpen = useRef<{ turn: number; on: LayerHandlers } | null>(null)
   useEffect(
     () =>
-      helm.on('browser:layer-event', (event) => {
+      desktop.on('browser:layer-event', (event) => {
         const open = layerOpen.current
         if (open === null || open.turn !== event.turn) return
         if ('pick' in event) open.on.pick?.(event.pick)
@@ -661,7 +661,7 @@ export function useBrowsers(): BrowserPanesState {
       layerOpen.current = { turn, on }
       const send = (next: C, at: BrowserLayerRect): void => {
         // The look on each send: a theme changed while a menu is open repaints it too.
-        helm.send('browser:layer', { open: { turn, rect: at, content: next, look: lookOfDocument() } })
+        desktop.send('browser:layer', { open: { turn, rect: at, content: next, look: lookOfDocument() } })
       }
       send(content, rect)
       const current = (): boolean => layerOpen.current?.turn === turn
@@ -673,7 +673,7 @@ export function useBrowsers(): BrowserPanesState {
         close: (): void => {
           if (!current()) return
           layerOpen.current = null
-          helm.send('browser:layer', { close: { turn } })
+          desktop.send('browser:layer', { close: { turn } })
         },
         current
       }
@@ -693,7 +693,7 @@ export function useBrowsers(): BrowserPanesState {
           update,
           close,
           blurred: () => {
-            if (current()) helm.send('browser:layer', { blurred: { turn } })
+            if (current()) desktop.send('browser:layer', { blurred: { turn } })
           }
         }
       }

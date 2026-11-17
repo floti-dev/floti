@@ -1,6 +1,6 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SessionRecord } from '@helm/core/types'
+import type { SessionRecord } from '@floti/core/types'
 import { SessionCrumb } from './SessionCrumb'
 
 const NOW = Date.parse('2026-10-02T12:00:00.000Z')

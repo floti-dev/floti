@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, BrowserWindowConstructorOptions, WebContents } from 'electron'
-import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings, type BrowserHistory, type Store } from '@helm/core'
+import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings, type BrowserHistory, type Store } from '@floti/core'
 import {
   FakeBrowserWindow,
   FakeIncomingMessage,
@@ -256,8 +256,8 @@ describe('browser host - navigation and the address bar', () => {
     expect(wc.loads.at(-1)).toBe('http://localhost:3000/')
 
     h.patch({ browserSearch: 'duckduckgo' })
-    h.host.navigate(id, 'helm')
-    expect(wc.loads.at(-1)).toBe('https://duckduckgo.com/?q=helm')
+    h.host.navigate(id, 'floti')
+    expect(wc.loads.at(-1)).toBe('https://duckduckgo.com/?q=floti')
 
     h.patch({ browserSearch: 'off' })
     const loaded = wc.loads.length
@@ -269,7 +269,7 @@ describe('browser host - navigation and the address bar', () => {
   it('holds a search to the reach rule: on "This machine only" the results page is refused', () => {
     const h = workspace({ browserReach: 'local' })
     const { id, wc } = openTab(h)
-    const state = h.host.navigate(id, 'helm desktop')
+    const state = h.host.navigate(id, 'floti desktop')
     expect(state?.problem).toContain('This machine only')
     expect(wc.loads).toEqual([])
   })

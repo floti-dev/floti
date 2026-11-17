@@ -1,8 +1,10 @@
 //! A client on 4.1 still reads what a host on 4.2 sends: protocol 4.2 adds a
 //! project inventory's optional `agentsMd` and `agentsDir` (a workspace
 //! written in the shared shape, `AGENTS.md` and `.agents/`) and a config
-//! file's `agents-md` kind, and changes nothing else. A 4.2 inventory is a
-//! 4.1 inventory with fields the older reader ignores.
+//! file's `agents-md` kind, and a launch's optional `openingPrompt` (the
+//! session's first message, which the guided first run sends), and changes
+//! nothing else. A 4.2 inventory is a 4.1 inventory with fields the older
+//! reader ignores, and a 4.1 launch is a 4.2 one with no first message.
 
 use floti_protocol::channel::{from_payload, to_payload};
 use floti_protocol::channels::workspace::ClaudeInventory;
@@ -28,7 +30,8 @@ fn record_of(version: ProtocolVersion) -> Value {
 }
 
 #[test]
-fn protocol_4_2_adds_only_the_inventorys_optional_shared_shape_fields_and_the_agents_md_kind() {
+fn protocol_4_2_adds_only_the_inventorys_shared_shape_fields_the_agents_md_kind_and_a_launchs_first_message()
+ {
     assert!(PROTOCOL_VERSION >= V4_2);
     let found = differences(&record_text(V4_1), &record_text(V4_2)).unwrap();
     assert_eq!(
@@ -42,6 +45,11 @@ fn protocol_4_2_adds_only_the_inventorys_optional_shared_shape_fields_and_the_ag
             Difference {
                 part: Part::Type,
                 name: "ConfigFileKind".to_owned(),
+                change: Change::Changed,
+            },
+            Difference {
+                part: Part::Type,
+                name: "LaunchSessionRequest".to_owned(),
                 change: Change::Changed,
             },
         ]
@@ -65,6 +73,16 @@ fn protocol_4_2_adds_only_the_inventorys_optional_shared_shape_fields_and_the_ag
     assert_eq!(
         kinds, before["types"]["ConfigFileKind"],
         "ConfigFileKind changes only by its added value"
+    );
+    let mut launch = after["types"]["LaunchSessionRequest"].clone();
+    launch["properties"]
+        .as_object_mut()
+        .unwrap()
+        .remove("openingPrompt")
+        .expect("4.2 adds LaunchSessionRequest.openingPrompt");
+    assert_eq!(
+        launch, before["types"]["LaunchSessionRequest"],
+        "LaunchSessionRequest changes only by its optional first message"
     );
 }
 

@@ -192,7 +192,11 @@ mod tests {
         assert_eq!(holder.caller.session, Some(SessionId(7)));
         assert!(holder.holds("floti-browser"));
         assert!(holder.holds("floti-plugin-notes"));
-        for family in ["floti-sessions", "floti-agents", "floti-plugin-retired-family"] {
+        for family in [
+            "floti-sessions",
+            "floti-agents",
+            "floti-plugin-retired-family",
+        ] {
             assert!(!holder.holds(family), "{family}");
         }
         // What the host keeps for the next one is what it was given.

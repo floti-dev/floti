@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import type { ConfigSnapshotMeta, ContentDocument, ContentFile, EditorHighlight, RenderedMarkdown } from '@helm/core'
+import type { ConfigSnapshotMeta, ContentDocument, ContentFile, EditorHighlight, RenderedMarkdown } from '@floti/core'
 import { cn } from '../lib/cn'
 import { CodeEditor, type EditorStatus } from './CodeEditor'
 import { ConsolePanel, consoleCounts, plural } from './ConsolePanel'
@@ -452,7 +452,7 @@ function Header({
  *     gets an opaque origin, so it cannot read this window, its storage, or
  *     anything Helm has. Scripts are allowed because a generated report is
  *     usually a chart.
- *   - The source is a `helm-content://` URL bound to a token the main process
+ *   - The source is a `floti-content://` URL bound to a token the main process
  *     minted for this file. The frame cannot name a path; it can only ask for
  *     something under the directory that token pinned.
  *   - The response carries a Content Security Policy with `default-src 'none'`
@@ -496,8 +496,8 @@ function ArtifactFrame({
       if (frameRef.current === null || event.source !== frameRef.current.contentWindow) return
       const data: unknown = event.data
       if (typeof data !== 'object' || data === null) return
-      const message = data as { helm?: unknown; target?: unknown; heading?: unknown }
-      if (message.helm !== 'wikilink' || typeof message.target !== 'string') return
+      const message = data as { floti?: unknown; target?: unknown; heading?: unknown }
+      if (message.floti !== 'wikilink' || typeof message.target !== 'string') return
       onOpenWikilink(
         message.target,
         typeof message.heading === 'string' ? message.heading : null

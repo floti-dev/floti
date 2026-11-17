@@ -14,7 +14,7 @@ import type {
   SessionResources,
   SessionsOverview,
   WriteConfigResult
-} from '@helm/core'
+} from '@floti/core'
 import type {
   ClaudeAuth,
   ClaudeStatus,
@@ -39,7 +39,7 @@ export { deliveryFromHost, logFromHost, pluginFromHost, uiFromHost } from './plu
  *
  * The protocol is backend-neutral: Claude Code's session id is a
  * `conversationId` and a session names its backend. The window still speaks
- * the words it was written in (`claudeSessionId`, `helmSessionId`), so this
+ * the words it was written in (`claudeSessionId`, `hostSessionId`), so this
  * is where one becomes the other, field by field, and nowhere else.
  */
 
@@ -158,7 +158,7 @@ export function activityFromHost(states: readonly P.SessionActivityState[]): Ses
 
 function liveFromHost(session: P.LiveSession): LiveSession {
   return {
-    helmSessionId: session.hostSessionId,
+    hostSessionId: session.hostSessionId,
     pid: session.pid,
     registered: session.registered,
     cwd: session.cwd,

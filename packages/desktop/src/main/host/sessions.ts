@@ -6,7 +6,7 @@ import {
   type SessionActivityState,
   type SessionRecord,
   type SessionsOverview
-} from '@helm/core'
+} from '@floti/core'
 import type {
   ActivityService,
   Confirm,

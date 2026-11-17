@@ -2,12 +2,13 @@ import {
   openStore,
   readSettings,
   reconcileRunningSessions,
+  settleWalkthrough,
   writeSettings,
   type AppSettings,
   type LostSession,
   type SavedPaneLayout,
   type Store
-} from '@helm/core'
+} from '@floti/core'
 import { dbFile } from './paths'
 
 /**
@@ -34,6 +35,8 @@ export interface Services {
 
 export function createServices(): Services {
   const store = openStore({ file: dbFile })
+  // The open that made the database is a first start: the walkthrough begins.
+  settleWalkthrough(store)
   const settings = readSettings(store)
   return {
     store,

@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { inlineScript } from './inline-script'
 
 /**
- * `@helm/core` and `@helm/ui` are excluded from externalisation on purpose.
+ * `@floti/core` and `@floti/ui` are excluded from externalisation on purpose.
  *
  * Both export TypeScript source rather than a build output, so the bundler
  * compiles them in. That keeps one build step instead of three, gives the
@@ -19,7 +19,7 @@ import { inlineScript } from './inline-script'
  * manifests with the SDK's own validator, so the two can never disagree, and
  * a workspace package is not something the packaged app should carry loose.
  */
-const BUNDLED_WORKSPACE_PACKAGES = ['@helm/core', '@helm/ui', '@floti-dev/plugin-sdk']
+const BUNDLED_WORKSPACE_PACKAGES = ['@floti/core', '@floti/ui', '@floti-dev/plugin-sdk']
 
 /**
  * `cborg`, the local host's framing, ships ESM only, with no `require` export,

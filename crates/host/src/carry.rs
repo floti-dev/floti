@@ -75,7 +75,7 @@ pub fn status(conn: &Connection) -> Result<CarryStatus> {
             |row| row.get(0),
         )
         .optional()
-        .map_err(sql("read whether Helm's data was copied"))?;
+        .map_err(sql("read whether the desktop's data was copied"))?;
     Ok(CarryStatus {
         // Written as a JSON string, as every setting is; anything else still
         // says it finished.
@@ -91,7 +91,7 @@ pub fn finish(conn: &Connection) -> Result<CarryStatus> {
          ON CONFLICT(key) DO NOTHING",
         [FINISHED_SETTING],
     )
-    .map_err(sql("record that Helm's data was copied"))?;
+    .map_err(sql("record that the desktop's data was copied"))?;
     status(conn)
 }
 

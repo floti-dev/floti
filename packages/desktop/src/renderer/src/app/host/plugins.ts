@@ -1,9 +1,9 @@
 import type { SurfaceKind } from '@floti-dev/plugin-sdk'
-import { LOCAL_HOST_KEY, type SessionRecord } from '@helm/core/types'
+import { LOCAL_HOST_KEY, type SessionRecord } from '@floti/core/types'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
 import { deliveryFromHost, logFromHost, pluginFromHost, uiFromHost } from '../../../../shared/host/records'
-import type { HelmBridge, PluginCallOutcome, PluginCallRequest, PluginInfo, PluginUiRequest } from '../../../../shared/ipc'
+import type { DesktopBridge, PluginCallOutcome, PluginCallRequest, PluginInfo, PluginUiRequest } from '../../../../shared/ipc'
 import { CLIENT_METHODS, createClientCalls } from '../../../../shared/plugins/client-calls'
 import { failure, PluginCallError } from '../../../../shared/plugins/errors'
 import { createLocalEvents, type LocalEvents } from './events'
@@ -40,7 +40,7 @@ const SURFACES: readonly SurfaceKind[] = ['panel', 'tab']
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
-type Own = Pick<HelmBridge, 'invoke'>
+type Own = Pick<DesktopBridge, 'invoke'>
 
 interface CoreDeps {
   link: HostReach

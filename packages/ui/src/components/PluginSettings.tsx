@@ -6,7 +6,7 @@ import type {
   PluginMetrics,
   SecretInput,
   SecretsState
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { formatBytes } from '../lib/time'
 import { Checkbox } from './Checkbox'

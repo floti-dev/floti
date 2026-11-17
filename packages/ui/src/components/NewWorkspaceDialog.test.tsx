@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { TemplateChoice, TemplatePreview } from '@helm/core'
+import type { TemplateChoice, TemplatePreview } from '@floti/core'
 import { NewWorkspaceDialog, type NewWorkspaceDialogProps } from './NewWorkspaceDialog'
 
 const TEMPLATES: TemplateChoice[] = [
@@ -40,7 +40,7 @@ function renderDialog(overrides: Partial<NewWorkspaceDialogProps> = {}) {
     templates: TEMPLATES,
     template: 'starter',
     onTemplateChange: vi.fn(),
-    templatesDir: 'C:\\Users\\me\\.config\\helm\\templates',
+    templatesDir: 'C:\\Users\\me\\.config\\floti\\templates',
     onManageTemplates: vi.fn(),
     onCreate: vi.fn(),
     onCancel: vi.fn(),
@@ -75,6 +75,12 @@ describe('NewWorkspaceDialog', () => {
     ])
     await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }))
     expect(props.onCreate).toHaveBeenCalledWith({ mode: 'new', dir: 'C:\\work', name: 'my-work', template: 'starter' })
+  })
+
+  it('names its two ways in as the onboarding design does: New, and Use a folder I have', () => {
+    renderDialog({ preview: STARTER_PREVIEW })
+    const modes = screen.getByRole('radiogroup', { name: 'What to create' })
+    expect(within(modes).getAllByRole('radio').map((mode) => mode.textContent)).toEqual(['New', 'Use a folder I have'])
   })
 
   it('shows no picker when using a folder I have', () => {

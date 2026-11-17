@@ -8,8 +8,8 @@ import type {
   SessionProcess,
   SessionRecord,
   SessionResources,
-} from "@helm/core";
-import { sessionLabel } from "@helm/core/types";
+} from "@floti/core";
+import { sessionLabel } from "@floti/core/types";
 import { cn } from "../lib/cn";
 import { shortcutLabel } from "../lib/platform";
 import { ROW_SELECTED } from "../lib/rows";
@@ -288,11 +288,11 @@ export function SessionsPane({
 
   // A session not open here is listed once, under its own heading.
   const elsewhere = new Set(notOpenHere.map((record) => record.id));
-  const hosted = sessions.filter((session) => session.helmSessionId !== null);
+  const hosted = sessions.filter((session) => session.hostSessionId !== null);
   const hostedHere = hosted.filter(
-    (session) => !elsewhere.has(session.helmSessionId!),
+    (session) => !elsewhere.has(session.hostSessionId!),
   );
-  const foreign = sessions.filter((session) => session.helmSessionId === null);
+  const foreign = sessions.filter((session) => session.hostSessionId === null);
 
   /*
    * Directories with more than one live session in them.
@@ -394,7 +394,7 @@ export function SessionsPane({
                   record={record}
                   live={
                     hosted.find(
-                      (session) => session.helmSessionId === record.id,
+                      (session) => session.hostSessionId === record.id,
                     ) ?? null
                   }
                   onOpen={onOpenSession}
@@ -410,23 +410,23 @@ export function SessionsPane({
                 key={session.pid}
                 session={session}
                 title={
-                  session.helmSessionId === null
+                  session.hostSessionId === null
                     ? undefined
-                    : records.get(session.helmSessionId)?.title
+                    : records.get(session.hostSessionId)?.title
                 }
                 agent={
-                  session.helmSessionId === null
+                  session.hostSessionId === null
                     ? undefined
-                    : agentOf(records.get(session.helmSessionId))
+                    : agentOf(records.get(session.hostSessionId))
                 }
                 selected={session.pid === selectedPid}
                 crowded={
                   session.cwd !== null && crowded.has(session.cwd.toLowerCase())
                 }
                 resources={
-                  session.helmSessionId === null
+                  session.hostSessionId === null
                     ? undefined
-                    : resources.get(session.helmSessionId)
+                    : resources.get(session.hostSessionId)
                 }
                 onSelect={onSelect}
               />
@@ -589,14 +589,14 @@ export function SessionsPane({
                   session={selected}
                   profileNames={profileNames}
                   record={
-                    selected.helmSessionId === null
+                    selected.hostSessionId === null
                       ? null
-                      : (records.get(selected.helmSessionId) ?? null)
+                      : (records.get(selected.hostSessionId) ?? null)
                   }
                   resources={
-                    selected.helmSessionId === null
+                    selected.hostSessionId === null
                       ? null
-                      : (resources.get(selected.helmSessionId) ?? null)
+                      : (resources.get(selected.hostSessionId) ?? null)
                   }
                   {...(onOpenSession ? { onOpenSession } : {})}
                   onReveal={onReveal}
@@ -899,7 +899,7 @@ function Row({
       aria-current={selected}
       data-session-pid={session.pid}
       data-session-state={state}
-      data-session-hosted={session.helmSessionId !== null}
+      data-session-hosted={session.hostSessionId !== null}
       onClick={() => onSelect(session)}
       title={`${nameLine(name, title)} - ${SESSION_STATE_LABEL[state]}\n${session.cwd ?? "working directory not recorded"}`}
       className={cn(
@@ -1099,7 +1099,7 @@ function Detail({
   const state = stateOf(session);
   const name = record === null ? nameOf(session) : sessionLabel(record);
   const agent = agentOf(record);
-  const helmSessionId = session.helmSessionId;
+  const hostSessionId = session.hostSessionId;
   const cwd = session.cwd;
 
   return (
@@ -1124,17 +1124,17 @@ function Detail({
           waitingFor={session.waitingFor}
           message={session.activity === "error" ? session.message : null}
         />
-        {helmSessionId === null && (
+        {hostSessionId === null && (
           <span className="shrink-0 rounded-full border border-border-strong px-2.5 py-0.5 text-[10px] text-fg-muted">
             outside Floti
           </span>
         )}
         <span className="flex-1" />
-        {helmSessionId !== null && onOpenSession && (
+        {hostSessionId !== null && onOpenSession && (
           <button
             type="button"
             data-open-session-tab
-            onClick={() => onOpenSession(helmSessionId)}
+            onClick={() => onOpenSession(hostSessionId)}
             className={cn(
               "flex shrink-0 items-center gap-2 rounded-well border border-border-strong px-3 py-1",
               "text-[12px] text-fg transition-colors hover:bg-hover",
@@ -1248,7 +1248,7 @@ function Detail({
         </Group>
       )}
 
-      {helmSessionId === null ? (
+      {hostSessionId === null ? (
         <Group label="What Floti knows">
           <p className="text-[11.5px] leading-[1.6] text-fg-subtle">
             Floti did not start this session, so it has no branch, no profile, no

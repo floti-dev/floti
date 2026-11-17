@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
-import type { AppSettings } from '@helm/core'
-import { expect, test, typeLine } from './helm'
+import type { AppSettings } from '@floti/core'
+import { expect, test, typeLine } from './desktop'
 
 /**
  * A terminal tab: a plain shell in a folder, with no `claude` in it, opened
@@ -18,7 +18,7 @@ interface ShellReport {
 
 async function shells(window: Page): Promise<ShellReport[]> {
   return window.evaluate(
-    () => (window as unknown as { __helmTerminals: () => { shells: ShellReport[] } }).__helmTerminals().shells
+    () => (window as unknown as { __flotiTerminals: () => { shells: ShellReport[] } }).__flotiTerminals().shells
   )
 }
 
@@ -26,18 +26,18 @@ const tabShells = async (window: Page): Promise<ShellReport[]> =>
   (await shells(window)).filter((shell) => shell.path.startsWith('terminal:'))
 
 /** The window's routed bridge (`inspect.ts`): host features over the window's own connection. */
-type Bridge = { __helmRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
+type Bridge = { __flotiRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
 const invoke = <T>(window: Page, channel: string): Promise<T> =>
-  window.evaluate((name) => (window as unknown as Bridge).__helmRouted.invoke(name), channel) as Promise<T>
+  window.evaluate((name) => (window as unknown as Bridge).__flotiRouted.invoke(name), channel) as Promise<T>
 
 /** How many times `text` is in `screen`. */
 const count = (screen: string, text: string): number => screen.split(text).length - 1
 
 test('a terminal tab runs a plain shell in the chosen folder, one per tab, ending with its tab, and a project’s own terminal is drawn again after a reload', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const pane = window.getByRole('region', { name: 'First pane' })
 
   // From the launcher: Alt+Enter on a folder opens a terminal there, not a session.

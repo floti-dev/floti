@@ -1,8 +1,8 @@
 import type { JSX } from 'react'
 import { useEffect, useRef } from 'react'
-import type { SessionRecord } from '@helm/core'
-import { LOCAL_HOST_KEY, stoppedText } from '@helm/core/types'
-import { cn, HostLostBanner, SessionEndedBar, type SessionLost } from '@helm/ui'
+import type { SessionRecord } from '@floti/core'
+import { LOCAL_HOST_KEY, stoppedText } from '@floti/core/types'
+import { cn, HostLostBanner, SessionEndedBar, type SessionLost } from '@floti/ui'
 import { getTerminal, mountTerminal } from './terminals'
 import { terminalPrefs } from './termprefs'
 

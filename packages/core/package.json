@@ -1,5 +1,5 @@
 {
-  "name": "@helm/core",
+  "name": "@floti/core",
   "version": "0.0.1",
   "description": "Headless Floti logic: discovery, store, launch. Never imports Electron.",
   "license": "Apache-2.0",

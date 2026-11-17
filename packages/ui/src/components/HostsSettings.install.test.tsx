@@ -1,4 +1,4 @@
-import type { HostCheck, HostSystem, InstallOffer, InstallOutcome } from '@helm/core/types'
+import type { HostCheck, HostSystem, InstallOffer, InstallOutcome } from '@floti/core/types'
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'

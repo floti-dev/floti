@@ -1,6 +1,6 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { hasPrimaryModifier } from '@helm/ui'
+import { hasPrimaryModifier } from '@floti/ui'
 import './terminalLinks.css'
 
 /**

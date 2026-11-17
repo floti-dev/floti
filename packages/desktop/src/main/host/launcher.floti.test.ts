@@ -149,7 +149,7 @@ describe.runIf(flotiAvailable)('this PC’s host and this Floti on either versio
   })
 
   it('S7: a Floti newer than its host is refused, naming both versions, and told to update the host', async () => {
-    const world = await hostWorld('newer helm')
+    const world = await hostWorld('newer floti')
     await startFlotiHost(world.env)
     const newer = { major: PROTOCOL_VERSION.major, minor: PROTOCOL_VERSION.minor + 1 }
     const error = await refusedWith(startLocalHost(world.places, world.deps(newer)))
@@ -163,7 +163,7 @@ describe.runIf(flotiAvailable)('this PC’s host and this Floti on either versio
   })
 
   it('S8: a Floti more than one minor behind, or on an older major, is refused and told to update itself', async () => {
-    const world = await hostWorld('older helm', `${PROTOCOL_VERSION.major}.${PROTOCOL_VERSION.minor + 2}`)
+    const world = await hostWorld('older floti', `${PROTOCOL_VERSION.major}.${PROTOCOL_VERSION.minor + 2}`)
     await startFlotiHost(world.env)
     const behind = await refusedWith(startLocalHost(world.places, world.deps()))
     expect(behind.refused.update).toBe('client')

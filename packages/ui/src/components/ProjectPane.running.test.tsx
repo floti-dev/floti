@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_INVENTORY, type LiveSession, type Project } from '@helm/core/types'
+import { EMPTY_INVENTORY, type LiveSession, type Project } from '@floti/core/types'
 import { ProjectPane } from './ProjectPane'
 
 /**
@@ -20,7 +20,7 @@ const PROJECT: Project = {
 
 function live(over: Partial<LiveSession> & Pick<LiveSession, 'pid'>): LiveSession {
   return {
-    helmSessionId: null,
+    hostSessionId: null,
     registered: true,
     cwd: PROJECT.path,
     name: null,
@@ -36,7 +36,7 @@ function live(over: Partial<LiveSession> & Pick<LiveSession, 'pid'>): LiveSessio
   }
 }
 
-const HOSTED = live({ pid: 4100, helmSessionId: 1, name: 'shop' })
+const HOSTED = live({ pid: 4100, hostSessionId: 1, name: 'shop' })
 const OUTSIDE = live({ pid: 5100, name: 'terminal session' })
 
 function renderPane(liveHere?: readonly LiveSession[]): { onLaunch: ReturnType<typeof vi.fn> } {

@@ -9,10 +9,10 @@ import {
   useRef,
   useState
 } from 'react'
-import type { EditAction, EditorHighlight } from '@helm/core'
-// Values, not types, so they come from `@helm/core/types` - the one entry point
+import type { EditAction, EditorHighlight } from '@floti/core'
+// Values, not types, so they come from `@floti/core/types` - the one entry point
 // with no `node:` imports behind it (CLAUDE.md, hard rules).
-import { caretAt, editorKeyAction, findMatchesIn, lineStarts, syntaxFor } from '@helm/core/types'
+import { caretAt, editorKeyAction, findMatchesIn, lineStarts, syntaxFor } from '@floti/core/types'
 import { CaretIcon, CloseIcon, SearchIcon } from './icons'
 
 /**

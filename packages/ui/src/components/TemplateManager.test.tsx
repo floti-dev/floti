@@ -1,10 +1,10 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { ConfigFile, ConfigScope, ConfigTree, TemplateChoice, TemplateDetail } from '@helm/core'
+import type { ConfigFile, ConfigScope, ConfigTree, TemplateChoice, TemplateDetail } from '@floti/core'
 import { TemplateManager, type TemplateManagerProps } from './TemplateManager'
 
-const DIR = 'C:\\Users\\me\\.config\\helm\\templates'
+const DIR = 'C:\\Users\\me\\.config\\floti\\templates'
 
 const TEMPLATES: TemplateChoice[] = [
   { id: 'minimal', label: 'Minimal', description: 'The built-in.', order: null, builtIn: true },

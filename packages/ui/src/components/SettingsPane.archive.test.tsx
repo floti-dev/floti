@@ -1,8 +1,8 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { ArchiveStats } from '@helm/core'
-import { DEFAULT_SETTINGS } from '@helm/core/types'
+import type { ArchiveStats } from '@floti/core'
+import { DEFAULT_SETTINGS } from '@floti/core/types'
 import { SettingsPane, type SettingsPaneProps } from './SettingsPane'
 
 /**
@@ -36,6 +36,7 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     onRecheck: vi.fn(),
     onLocateClaude: vi.fn(),
     onClearClaudeOverride: vi.fn(),
+    onShowWalkthrough: vi.fn(),
     roots: [],
     projectCount: 0,
     scanning: false,

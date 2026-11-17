@@ -23,7 +23,7 @@ import {
   type RemoteSystem,
   type SshConfigHosts,
   type WslDistroList
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { Chip, type ChipTone } from './Chip'
 import {
@@ -282,7 +282,7 @@ export function AddHostDialog({
         who,
         {
           lastLine: `floti ${check.found.version}${check.found.protocol === null ? '' : ` protocol ${check.found.protocol}`}`,
-          cause: { kind: 'newer', host: check.found.version, ours: check.helm, by: 'version' },
+          cause: { kind: 'newer', host: check.found.version, ours: check.desktop, by: 'version' },
           step: 'check'
         },
         retry

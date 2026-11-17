@@ -21,7 +21,7 @@ import {
   olderHostSentence,
   transportFix,
   type LocalHostVersions
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { Chip, type ChipTone } from './Chip'
 import { PlusIcon } from './icons'
 import { Action, Divider, Group, Select } from './SettingsKit'

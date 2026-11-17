@@ -20,7 +20,7 @@ copyright: Apache License 2.0 - see LICENSE
 
 # The package name the packaged copy carries, which electron-builder names the
 # default install directory after (`sanitizeFileName(metadata.name)` for a
-# one-click per-user install): the workspace name `@helm/desktop` would leak an
+# one-click per-user install): the workspace name `@floti/desktop` would leak an
 # internal package name into a path the user sees. build/installer.nsh then
 # puts the install in %LOCALAPPDATA%\Programs\Floti\desktop, beside floti's
 # own Programs\Floti\bin. `app.getName()` still resolves through productName.

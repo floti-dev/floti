@@ -398,7 +398,7 @@ pub fn with_wikilinks(html: &str, links: &[ArtifactWikilink]) -> String {
 }
 
 const BOOTSTRAP: &str = r#"
-<script type="application/json" data-helm-wikilinks>{table}</script>
+<script type="application/json" data-floti-wikilinks>{table}</script>
 <script>
 (function () {
   var node = document.currentScript && document.currentScript.previousElementSibling
@@ -408,8 +408,8 @@ const BOOTSTRAP: &str = r#"
   var RE = /\[\[([^\]\[\n|#][^\]\[\n]*?)((?:#[^\]\[\n|]*)?)((?:\|[^\]\[\n]*)?)\]\]/g
   var SKIP = { A: 1, SCRIPT: 1, STYLE: 1, TEXTAREA: 1, CODE: 1, PRE: 1 }
   var style = document.createElement('style')
-  style.textContent = '.helm-wikilink{color:#5A4DA8;text-decoration:underline;text-underline-offset:2px;cursor:pointer}'
-    + '.helm-wikilink-broken{color:#9A6B12;text-decoration:underline dotted;cursor:default}'
+  style.textContent = '.floti-wikilink{color:#5A4DA8;text-decoration:underline;text-underline-offset:2px;cursor:pointer}'
+    + '.floti-wikilink-broken{color:#9A6B12;text-decoration:underline dotted;cursor:default}'
   document.head && document.head.appendChild(style)
 
   function walk(root) {
@@ -442,10 +442,10 @@ const BOOTSTRAP: &str = r#"
       var alias = (m[3] || '').replace('|', '').trim()
       var ok = known[target.toLowerCase()] === true
       var a = document.createElement('a')
-      a.className = ok ? 'helm-wikilink' : 'helm-wikilink helm-wikilink-broken'
+      a.className = ok ? 'floti-wikilink' : 'floti-wikilink floti-wikilink-broken'
       a.textContent = alias || (heading ? target + ' \u00a7 ' + heading : target)
-      a.setAttribute('data-helm-wikilink', target)
-      if (heading) a.setAttribute('data-helm-heading', heading)
+      a.setAttribute('data-floti-wikilink', target)
+      if (heading) a.setAttribute('data-floti-heading', heading)
       if (!ok) a.title = 'No note in this scope answers to that name yet'
       frag.appendChild(a)
       at = m.index + m[0].length
@@ -457,17 +457,17 @@ const BOOTSTRAP: &str = r#"
 
   document.addEventListener('click', function (event) {
     var el = event.target
-    while (el && el !== document.body && !(el.getAttribute && el.getAttribute('data-helm-wikilink'))) {
+    while (el && el !== document.body && !(el.getAttribute && el.getAttribute('data-floti-wikilink'))) {
       el = el.parentElement
     }
     if (!el || !el.getAttribute) return
-    var target = el.getAttribute('data-helm-wikilink')
+    var target = el.getAttribute('data-floti-wikilink')
     if (!target) return
     event.preventDefault()
-    if (el.className.indexOf('helm-wikilink-broken') >= 0) return
+    if (el.className.indexOf('floti-wikilink-broken') >= 0) return
     try {
       parent.postMessage(
-        { helm: 'wikilink', target: target, heading: el.getAttribute('data-helm-heading') || null },
+        { floti: 'wikilink', target: target, heading: el.getAttribute('data-floti-heading') || null },
         '*'
       )
     } catch (e) { /* No parent to tell. Nothing else to do. */ }

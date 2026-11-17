@@ -1,5 +1,5 @@
 import { useId, useState, type JSX } from 'react'
-import type { RestorableSession, RestoreOffer } from '@helm/core/types'
+import type { RestorableSession, RestoreOffer } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import { folderName } from '../lib/launcher'
 import { formatMoment } from '../lib/time'

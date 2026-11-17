@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { PluginInfo, PluginLogLine, PluginMetrics } from '@helm/core/types'
+import type { PluginInfo, PluginLogLine, PluginMetrics } from '@floti/core/types'
 import { PluginPage, PluginsPage, type PluginPageProps } from './PluginSettings'
 
 /**

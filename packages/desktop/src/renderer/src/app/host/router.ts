@@ -1,7 +1,7 @@
 import type {
   EventChannel,
   EventPayload,
-  HelmBridge,
+  DesktopBridge,
   RequestChannel,
   RequestPayload,
   RequestResult,
@@ -32,7 +32,7 @@ export interface HostAdapter {
 
 export interface RouterDeps {
   /** The preload's bridge. */
-  own: HelmBridge
+  own: DesktopBridge
   adapters: readonly HostAdapter[]
   /** Whether `boundary.rs` lists a channel as client-only. */
   clientOnly: (channel: string) => boolean
@@ -77,7 +77,7 @@ export function routedChannels(adapters: readonly HostAdapter[], clientOnly: (ch
   return new Set([...routes.requests.keys(), ...routes.sends.keys(), ...routes.events.keys()])
 }
 
-export function createRouter({ own, adapters, clientOnly, log }: RouterDeps): HelmBridge {
+export function createRouter({ own, adapters, clientOnly, log }: RouterDeps): DesktopBridge {
   const routes = merge(adapters, clientOnly)
   /** A channel that stays on the preload's bridge. */
   const ownAlways = (channel: string): boolean => clientOnly(channel)
@@ -109,8 +109,8 @@ export function createRouter({ own, adapters, clientOnly, log }: RouterDeps): He
   }
 
   return {
-    invoke: invoke as HelmBridge['invoke'],
-    send: send as HelmBridge['send'],
-    on: on as HelmBridge['on']
+    invoke: invoke as DesktopBridge['invoke'],
+    send: send as DesktopBridge['send'],
+    on: on as DesktopBridge['on']
   }
 }

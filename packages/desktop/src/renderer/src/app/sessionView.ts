@@ -5,8 +5,8 @@ import {
   isCommandChild,
   type SessionActivityState,
   type SessionRecord
-} from '@helm/core/types'
-import type { CrumbParent, CrumbTag, CrumbTone, Tab, TabIndicator, TreeSession } from '@helm/ui'
+} from '@floti/core/types'
+import type { CrumbParent, CrumbTag, CrumbTone, Tab, TabIndicator, TreeSession } from '@floti/ui'
 import { commandWord } from './treeFamilies'
 
 /**

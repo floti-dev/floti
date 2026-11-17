@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SettingValue } from '@floti-dev/plugin-sdk'
-import type { PluginFolder } from '@helm/core'
+import type { PluginFolder } from '@floti/core'
 import { FakeConnection, fakeLink, reconnectingLink } from '../../../test/host-connection'
 import { HostRequestError } from './client'
 import type * as P from './protocol'

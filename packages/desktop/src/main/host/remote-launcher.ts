@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { formatProtocol, type HostTransport } from '@helm/core/types'
+import { formatProtocol, type HostTransport } from '@floti/core/types'
 import { HostRefusedError, connectHost, restartFrame, streamTransport, type HostConnection } from './client'
 import {
   BRIDGE_EXIT,

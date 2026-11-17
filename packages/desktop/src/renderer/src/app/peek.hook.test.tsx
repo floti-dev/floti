@@ -1,4 +1,4 @@
-import { LOCAL_HOST_KEY, type ChildPlace } from '@helm/core/types'
+import { LOCAL_HOST_KEY, type ChildPlace } from '@floti/core/types'
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { usePeek, type UsePeekDeps } from './peek'

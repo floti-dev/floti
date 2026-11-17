@@ -116,7 +116,9 @@ mod tests {
     fn inside_is_below_the_folder_in_any_case_and_never_beside_it() {
         let desktop = Path::new(r"C:\Users\Some One\AppData\Local\Programs\Floti\desktop");
         assert!(inside(
-            Path::new(r"c:/users/some one/appdata/local/programs/FLOTI/Desktop/resources/floti.exe"),
+            Path::new(
+                r"c:/users/some one/appdata/local/programs/FLOTI/Desktop/resources/floti.exe"
+            ),
             desktop
         ));
         assert!(!inside(desktop, desktop));

@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import { profileDraft, type Profile } from '@helm/core'
+import { profileDraft, type Profile } from '@floti/core'
 import type { EmitToWindow, ProfileDialogs, ProfileService } from '../profiles'
 import type { HostConnection, HostSubscription } from './client'
 import type { HostLink } from './link'

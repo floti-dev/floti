@@ -1,10 +1,10 @@
 import type { JSX, Ref } from 'react'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { DetectedShell } from '@helm/core'
-import { CaretIcon, cn, ShellLostBar, WarnIcon } from '@helm/ui'
+import type { DetectedShell } from '@floti/core'
+import { CaretIcon, cn, ShellLostBar, WarnIcon } from '@floti/ui'
 import { estimateGrid } from './terminals'
 import { getShell, mountShell, onShellsChange, reopenShell, shellLost, type MountedShell } from './pterms'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { LOCAL_HOST_NAME } from './host/sessions'
 
 /**

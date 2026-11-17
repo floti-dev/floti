@@ -1,4 +1,4 @@
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { PLUGIN_SCHEME } from '../ipc'
 
 /**

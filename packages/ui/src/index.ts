@@ -99,11 +99,27 @@ export {
   type ConfirmSessionDialogProps
 } from './components/ConfirmSessionDialog'
 export { DeleteProfileDialog, type DeleteProfileDialogProps } from './components/DeleteProfileDialog'
+export type { SetupClaudeStatus } from './lib/claudeStatus'
 export {
-  SetupPane,
-  type SetupClaudeStatus,
-  type SetupPaneProps
-} from './components/SetupPane'
+  AgentsStep,
+  FirstSessionStep,
+  FIRST_MESSAGE_PLACEHOLDER,
+  HostStep,
+  TourStep,
+  WelcomeStep,
+  WorkspaceStep,
+  WALKTHROUGH_STEP_COUNT,
+  workspaceStepReady,
+  type AgentsStepProps,
+  type FirstSessionStepProps,
+  type HostStepProps,
+  type TourStepProps,
+  type WalkthroughAgent,
+  type WalkthroughQuit,
+  type WelcomeStepProps,
+  type WorkspaceChoice,
+  type WorkspaceStepProps
+} from './components/Walkthrough'
 export {
   SettingsPane,
   updateOutcome,

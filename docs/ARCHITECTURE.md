@@ -14,7 +14,8 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   exposes three generic functions; a feature adds a channel, not a bridge
   method. `term:*` (the spike page's single pty) and `session:*` (the host's
   sessions) never mix.
-- The window reaches the host over its own protocol connection, which main
+- Each Floti page (the window, and the guided first run's setup window while
+  it is open) reaches the host over its own protocol connection, which main
   pipes to a bridge unread (`hostLink:*`); the bridge holds the device key,
   never a window. Electron IPC carries only what `channels/boundary.rs` lists
   as client-only: `registerIpc` registers nothing else, and a page's router (`app/host/router.ts`) refuses
@@ -61,7 +62,7 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   floti the desktop runs, with no question, inside main's connect
   (`connectUpdatingLocalHost` in `main/host/launcher.ts`), once `floti
   version` there says it speaks a protocol the `hello` is accepted by
-  (`hostUpdatePlan` in `@helm/core`); the keeper hands its sessions to the
+  (`hostUpdatePlan` in `@floti/core`); the keeper hands its sessions to the
   new host. A host that is ending stops answering on its socket before it
   lets go of its data folder, so the desktop waits for that too (`floti
   wait-host-exit`), after a restart and whenever a host it starts finds the
@@ -151,6 +152,40 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   runs in a non-interactive window station and may get no `WM_ENDSESSION`;
   there it is simply ended, as before, and whether a session is offered for
   restore depends on the order Windows ends things in.
+
+## First run
+
+A first start is one with no data folder: the open that creates `desktop.db`
+(`settleWalkthrough` in core) writes the `walkthrough` setting at step 1. A
+database that was there before has its migrations applied already, so it
+opens the shell. `walkthrough` is the step (1 to 6) and the workspace step 4 chose, kept in `desktop.db` on this device; null
+means it is not showing.
+
+- Steps 1 to 4 run in a setup window of their own, before the shell exists:
+  main opens it instead of the shell whenever the step is 1 to 4
+  (`openSetup` in `main/index.ts`). It is the shell's page with
+  `?window=setup` (`app/main.tsx` renders `setup/SetupWindow.tsx`), so it has
+  the same preload, navigation guards and IPC boundary, and its own
+  connection to the host (`isFlotiPage` names it).
+- The setup window writes the step on every move. Once step 4 makes or
+  chooses a workspace, is skipped, or setup is skipped on step 1, it stamps
+  `setup:complete` on the host and asks main for `walkthrough:openShell`:
+  main opens the shell (or brings the open one forward with the settings the
+  setup window wrote) and only then closes the setup window, so the app is
+  never left with no window.
+- Steps 5 and 6 run in the shell's main area (`setup/ShellWalkthrough.tsx`),
+  with the workspace selected in the sidebar. Step 6 starts the session with
+  its first message as the launch's `openingPrompt` (protocol 4.2), passed to
+  the agent as its opening prompt and never typed; starting it or skipping
+  sets `walkthrough` to null.
+- Closing either window leaves the step where it was, so the next start
+  resumes there. Settings > General's Show the walkthrough sends
+  `walkthrough:open`: main writes step 1 and opens the setup window beside
+  the shell.
+- The agents step reads each backend's own check (`setup:status`), which
+  decides a sign-in from its artefacts existing and never opens one; Unknown
+  stays Unknown. The host step writes this PC's `quitSessions` and opens the
+  add-a-host dialog as Settings does.
 
 ## Hosts on other computers
 
@@ -382,7 +417,7 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   records a visit when a page the user has commits (http or https, a real
   response, or a move within the page), and `page-title-updated` keeps its
   title. A page an agent opened is never recorded. `browser:suggest` ranks in
-  main (`suggestBrowserAddresses` in `@helm/core`): the address exactly as
+  main (`suggestBrowserAddresses` in `@floti/core`): the address exactly as
   typed, then an address starting with the text (after the scheme and
   `www.`), then a word start in the host or title, then a substring; ties by
   visits, then recency; at most 8 rows. With nothing typed it lists the pages

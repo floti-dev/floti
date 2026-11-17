@@ -1,4 +1,4 @@
-import type { AppSettings, Project } from '@helm/core/types'
+import type { AppSettings, Project } from '@floti/core/types'
 import { CLAUDE_CODE_BACKEND } from '../../../../shared/host/backend'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
@@ -12,7 +12,7 @@ import {
   settingsWithHost,
   splitSettingsPatch
 } from '../../../../shared/host/records'
-import type { ClaudeStatus, EventPayload, HelmBridge } from '../../../../shared/ipc'
+import type { ClaudeStatus, EventPayload, DesktopBridge } from '../../../../shared/ipc'
 import { forAction, type HostReach } from './history'
 import type { HostAdapter } from './router'
 
@@ -53,7 +53,7 @@ type Pushed = 'settings:changed' | 'discovery:updated' | 'scan:status' | 'git:up
 export interface WorkspaceAdapterDeps {
   link: HostReach
   /** The preload's bridge, for Helm's own settings, build and pickers. */
-  own: Pick<HelmBridge, 'invoke' | 'on'>
+  own: Pick<DesktopBridge, 'invoke' | 'on'>
   /** Calls `listener` whenever the window comes to the front. */
   onFocus?: (listener: () => void) => void
   /**

@@ -383,26 +383,26 @@ describe('which of this PC’s host and this Floti is behind', () => {
   it('S7: a refusal saying to update the host marks this PC’s host older, naming both protocols', () => {
     expect(
       localHostVersions({ refused: { host: { major: 2, minor: 0 }, client: { major: 2, minor: 1 }, update: 'host' } }, '2.5.0')
-    ).toEqual({ older: 'host', host: 'protocol 2.0', helm: 'protocol 2.1', beforeRestart: false })
+    ).toEqual({ older: 'host', host: 'protocol 2.0', desktop: 'protocol 2.1', beforeRestart: false })
   })
 
   it('S8: a refusal saying to update the client says this Floti is the one behind', () => {
     expect(
       localHostVersions({ refused: { host: { major: 2, minor: 2 }, client: { major: 2, minor: 0 }, update: 'client' } }, '2.4.1')
-    ).toEqual({ older: 'helm', host: 'protocol 2.2', helm: 'protocol 2.0' })
+    ).toEqual({ older: 'desktop', host: 'protocol 2.2', desktop: 'protocol 2.0' })
   })
 
   it('S17: a host on protocol 1.x is older and from before the restart could be asked for', () => {
     expect(
       localHostVersions({ refused: { host: { major: 1, minor: 4 }, client: { major: 2, minor: 0 }, update: 'host' } }, '2.4.1')
-    ).toEqual({ older: 'host', host: 'protocol 1.4', helm: 'protocol 2.0', beforeRestart: true })
+    ).toEqual({ older: 'host', host: 'protocol 1.4', desktop: 'protocol 2.0', beforeRestart: true })
   })
 
   it('S9: a welcome naming an earlier floti marks the host older; S10: the same floti, nothing', () => {
     expect(localHostVersions({ hostVersion: '2.4.1-preview.6' }, '2.4.1-preview.7')).toEqual({
       older: 'host',
       host: '2.4.1-preview.6',
-      helm: '2.4.1-preview.7',
+      desktop: '2.4.1-preview.7',
       beforeRestart: false
     })
     expect(localHostVersions({ hostVersion: '2.4.1-preview.7' }, '2.4.1-preview.7')).toBeNull()
@@ -411,13 +411,13 @@ describe('which of this PC’s host and this Floti is behind', () => {
 
 describe('what is said of this PC’s host’s version', () => {
   it('S9: an older host names both flotis and offers the restart', () => {
-    expect(localHostVersionsSentence({ older: 'host', host: '2.4.0', helm: '2.4.1', beforeRestart: false })).toBe(
+    expect(localHostVersionsSentence({ older: 'host', host: '2.4.0', desktop: '2.4.1', beforeRestart: false })).toBe(
       'This PC’s host runs floti 2.4.0, older than the floti 2.4.1 this Floti carries. Restart host to update says first what it ends.'
     )
   })
 
   it('S8: a Floti behind its host is told to update Floti on this PC', () => {
-    expect(localHostVersionsSentence({ older: 'helm', host: 'protocol 2.2', helm: 'protocol 2.0' })).toContain(
+    expect(localHostVersionsSentence({ older: 'desktop', host: 'protocol 2.2', desktop: 'protocol 2.0' })).toContain(
       'runs Floti protocol 2.2, newer than the Floti protocol 2.0 this Floti speaks, so Floti cannot connect to it. Update Floti on this PC.'
     )
   })
@@ -426,7 +426,7 @@ describe('what is said of this PC’s host’s version', () => {
     const sentence = localHostVersionsSentence({
       older: 'host',
       host: 'protocol 1.4',
-      helm: 'protocol 2.0',
+      desktop: 'protocol 2.0',
       beforeRestart: true
     })
     expect(sentence).toBe(

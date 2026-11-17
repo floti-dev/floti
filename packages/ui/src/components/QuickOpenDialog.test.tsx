@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ContentSearchResult, FileListing } from '@helm/core'
+import type { ContentSearchResult, FileListing } from '@floti/core'
 import { QuickOpenDialog, type QuickOpenDialogProps } from './QuickOpenDialog'
 
 const LISTING: FileListing = {

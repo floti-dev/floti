@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
-import type { HelmBridge, PluginInfo } from '../../../shared/ipc'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
+import type { DesktopBridge, PluginInfo } from '../../../shared/ipc'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 
@@ -36,7 +36,7 @@ export function livePlugins(list: readonly PluginInfo[] | null): ReadonlyMap<str
  * failed before any list came. Returns the stop.
  */
 export function watchPlugins(
-  helm: HelmBridge,
+  desktop: DesktopBridge,
   onList: (list: PluginInfo[]) => void,
   onError: (reason: string) => void
 ): () => void {
@@ -44,11 +44,11 @@ export function watchPlugins(
   let live = true
   // Subscribed first, so a change landing during the read is not lost; the
   // read only fills in when no change has arrived yet.
-  const off = helm.on('plugins:changed', (next) => {
+  const off = desktop.on('plugins:changed', (next) => {
     takeRead = false
     if (live) onList(next)
   })
-  helm.invoke('plugins:list').then(
+  desktop.invoke('plugins:list').then(
     (first) => {
       if (live && takeRead) onList(first)
     },
