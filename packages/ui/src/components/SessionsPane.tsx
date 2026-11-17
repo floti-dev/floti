@@ -28,6 +28,7 @@ import {
   GlobeIcon,
   PlugIcon,
   TerminalIcon,
+  RefreshIcon,
   WarnIcon,
 } from "./icons";
 import { PAGE_BAR, PAGE_LIST_BESIDE } from "../lib/page";
@@ -109,8 +110,15 @@ export interface SessionsPaneProps {
   /** Ends a session, after the confirmation naming its host. */
   onEndSession?: ((id: number) => void) | undefined;
   onReveal: (path: string) => void;
-  /** The empty state's New session: the launcher, as Ctrl+N opens it. */
+  /** The empty state's New session: this PC's launcher. */
   onNewSession?: (() => void) | undefined;
+  /**
+   * Why this PC's sessions could not be read, while no answer has come since.
+   * With nothing listed it says Unknown and this, never that nothing runs.
+   */
+  listError?: string | null | undefined;
+  /** That Unknown's Try again: reads this PC's sessions again. */
+  onRetry?: (() => void) | undefined;
   /** Docked beside a session split: list *or* detail, never both. */
   compact?: boolean | undefined;
   /**
@@ -268,6 +276,8 @@ export function SessionsPane({
   onEndSession,
   onReveal,
   onNewSession,
+  listError = null,
+  onRetry,
   compact = false,
   remoteHosts = [],
 }: SessionsPaneProps): JSX.Element {
@@ -307,10 +317,56 @@ export function SessionsPane({
     notOpenHere.length === 0 &&
     remoteHosts.length === 0;
 
+  /*
+   * This PC with nothing listed: could it look? Until the first answer
+   * nothing has been read, and a read that failed says Unknown and why -
+   * "No sessions yet" is only ever the registry's own answer.
+   */
+  const thisPcUnread =
+    sessions.length === 0 && notOpenHere.length === 0
+      ? listError !== null
+        ? "unknown"
+        : readAtMs === null
+          ? "reading"
+          : null
+      : null;
+  const unknown = (
+    <EmptyState
+      size="list"
+      name="sessions-unknown"
+      icon={<TerminalIcon width={18} height={18} />}
+      title="Unknown"
+      action={
+        onRetry === undefined
+          ? undefined
+          : {
+              label: "Try again",
+              icon: <RefreshIcon width={12} height={12} />,
+              secondary: true,
+              onClick: onRetry,
+            }
+      }
+    >
+      {`Floti could not list the sessions on this machine. ${listError ?? ""}`}
+    </EmptyState>
+  );
+  const reading = (
+    <p
+      data-sessions-reading
+      className="px-2.5 py-2 text-[11px] text-fg-subtle"
+    >
+      Reading the sessions…
+    </p>
+  );
+
   // This PC's list: every session on this machine, as it has always been drawn.
   const thisPc = (
     <>
-      {sessions.length === 0 && notOpenHere.length === 0 ? (
+      {thisPcUnread === "unknown" ? (
+        unknown
+      ) : thisPcUnread === "reading" ? (
+        reading
+      ) : sessions.length === 0 && notOpenHere.length === 0 ? (
         <EmptyState
           size="list"
           name="sessions-list"
@@ -423,7 +479,11 @@ export function SessionsPane({
         className={cn(PAGE_BAR, "@container/head")}
       >
         <p className="hidden min-w-0 truncate text-[11px] text-fg-subtle @[300px]/head:block">
-          {sessions.length === 0
+          {thisPcUnread === "unknown"
+            ? "Unknown: the sessions could not be listed"
+            : thisPcUnread === "reading"
+              ? "Reading the sessions…"
+              : sessions.length === 0
             ? "No Claude Code session is running on this machine"
             : `${describeCount(hosted.length, "in Floti")} · ${describeCount(foreign.length, "outside Floti")}`}
         </p>
@@ -462,7 +522,11 @@ export function SessionsPane({
               ) : (
                 <>
                   <HostSection id="local" name={THIS_PC} connected>
-                    {sessions.length === 0 && notOpenHere.length === 0 ? (
+                    {thisPcUnread === "unknown" ? (
+                      unknown
+                    ) : thisPcUnread === "reading" ? (
+                      reading
+                    ) : sessions.length === 0 && notOpenHere.length === 0 ? (
                       <p className="px-2.5 py-2 text-[11px] text-fg-subtle">
                         Nothing is running on this PC.
                       </p>
@@ -514,7 +578,7 @@ export function SessionsPane({
             )}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {selected === null ? (
-                nothing ? null : (
+                nothing || thisPcUnread !== null ? null : (
                   <NothingSelected count={sessions.length} />
                 )
               ) : (

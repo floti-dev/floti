@@ -339,6 +339,7 @@ import { useArchiveStats } from "./useArchiveStats";
 import { ConversationPane } from "./ConversationPane";
 import { useLauncher } from "./useLauncher";
 import { useProfiles } from "./useProfiles";
+import { launchTarget } from "./launchTarget";
 import { useLiveSessions } from "./useLiveSessions";
 import { useNewSession } from "./useNewSession";
 import {
@@ -3085,6 +3086,14 @@ export function App(): JSX.Element {
     const ref = group === undefined ? null : activeRef(group);
     return ref === null ? LOCAL_HOST_KEY : hostOf(ref);
   }, [open]);
+  /** This PC's empty states' New session: this PC's launcher, whatever host is in front. */
+  const openLocalLauncher = useCallback(() => {
+    const { folder, host } = launchTarget(LOCAL_HOST_KEY, {
+      host: frontRefHost,
+      folder: frontFolder,
+    });
+    showLauncher(folder, host);
+  }, [showLauncher, frontRefHost, frontFolder]);
   const files = useFiles({
     host: filesHost,
     active: sidebarShown && sidebarView === "files",
@@ -5364,7 +5373,9 @@ export function App(): JSX.Element {
             notOpenHere={notOpen}
             onEndSession={closeSession}
             onReveal={launcher.reveal}
-            onNewSession={openLauncher}
+            onNewSession={openLocalLauncher}
+            listError={machineSessions.error}
+            onRetry={machineSessions.retry}
             compact={compact}
             remoteHosts={sessionsPaneHosts}
           />
@@ -6212,7 +6223,7 @@ export function App(): JSX.Element {
             onLaunch={(project) => void launch(project)}
             launchingPath={launchingPath}
             onOpenSession={openTreeSession}
-            onNewSession={openLauncher}
+            onNewSession={openLocalLauncher}
             reveal={treeReveal}
             hostActions={treeHostActions}
             localName={LOCAL_HOST_LABEL}
