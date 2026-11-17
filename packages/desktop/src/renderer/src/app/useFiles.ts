@@ -38,6 +38,11 @@ export interface FilesState {
    * rather than shown as an empty picker, which would read as no folders known.
    */
   rootsError: string | null
+  /**
+   * Whether this host has answered with its folders at all. Until it has,
+   * `roots` being empty says nothing: the view never says there are none.
+   */
+  rootsListed: boolean
   dirs: ReadonlyMap<string, ContentDirListing>
   expanded: ReadonlySet<string>
   loadingDirs: ReadonlySet<string>
@@ -117,6 +122,7 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
   const [root, setRootState] = useState<string | null>(null)
   const [roots, setRoots] = useState<readonly ContentScope[]>([])
   const [rootsError, setRootsError] = useState<string | null>(null)
+  const [rootsListed, setRootsListed] = useState(false)
   const [dirs, setDirs] = useState<ReadonlyMap<string, ContentDirListing>>(new Map())
   const [expandedByRoot, setExpandedByRoot] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map())
   const [status, setStatus] = useState<FilesStatus | null>(null)
@@ -137,6 +143,7 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
     setRootState(null)
     setRoots([])
     setRootsError(null)
+    setRootsListed(false)
     setDirs(new Map())
     setExpandedByRoot(new Map())
     setStatus(null)
@@ -210,6 +217,7 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
         if (!live) return
         setRoots(list)
         setRootsError(null)
+        setRootsListed(true)
         const first = list[0]
         if (active && rootRef.current === null && first !== undefined) setRoot(first.path)
       })
@@ -490,6 +498,7 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
     setRoot,
     roots,
     rootsError,
+    rootsListed,
     dirs,
     expanded,
     loadingDirs,
