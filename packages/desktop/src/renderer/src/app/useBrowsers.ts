@@ -197,7 +197,7 @@ export interface BrowserPanesState {
   error: string | null
   dismissError: () => void
   /**
-   * Whether the pane runs in this Helm, asked once: off without Chromium's
+   * Whether the pane runs in this desktop, asked once: off without Chromium's
    * sandbox, when the Browser tab shows how to turn it on instead of a page.
    * Available until main has answered.
    */

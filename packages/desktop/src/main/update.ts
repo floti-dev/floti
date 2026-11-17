@@ -2,10 +2,10 @@ import type { HostConnection } from '../shared/host/client'
 import type * as P from '../shared/host/protocol'
 
 /**
- * Updates, from Helm's main process: the addresses releases live at, and
+ * Updates, from the desktop's main process: the addresses releases live at, and
  * quitting when this PC's host is updating the app.
  *
- * Helm's own process contacts nothing about updates. This PC's host checks
+ * The desktop's own process contacts nothing about updates. This PC's host checks
  * floti.dev's signed `update.json` (`crates/host/src/update/background.rs`)
  * and tells its clients on `update:state`; the window shows that, asks the
  * host to check now (`update:check`) and to update (`update:install`) over
@@ -23,7 +23,7 @@ import type * as P from '../shared/host/protocol'
 export const RELEASES_PAGE = 'https://github.com/floti-dev/floti/releases/latest'
 /**
  * Where each release's files are, under `v<version>`. This PC never fetches
- * from it: a host's computer Helm installs floti on downloads its own build
+ * from it: a host's computer the desktop installs floti on downloads its own build
  * from there, after the user's yes (`host/remote-install.ts`).
  */
 export const RELEASES_DOWNLOAD = 'https://github.com/floti-dev/floti/releases/download'

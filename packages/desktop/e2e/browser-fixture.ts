@@ -11,7 +11,7 @@ import { selfSignedCertificate } from '../test/self-signed'
  *   - `httpsLoopback`, HTTPS on 127.0.0.1 with a certificate minted at start,
  *     which the loopback exception must accept;
  *   - `httpsNamed`, the same certificate, reached as `named.localhost`,
- *     which is still this machine but is **not** loopback by Helm's rule, so
+ *     which is still this machine but is **not** loopback by the desktop's rule, so
  *     the exception must not apply;
  *   - `httpNamed`, plain HTTP reached as `named.localhost`: reachable, and
  *     refused by "This machine only". A test that proved the refusal by trying
@@ -19,12 +19,12 @@ import { selfSignedCertificate } from '../test/self-signed'
  *     ran.
  *
  * Chromium resolves a name under `localhost` to this machine itself, on every
- * OS and without asking DNS, and Helm's rule counts only the spellings a dev
+ * OS and without asking DNS, and the desktop's rule counts only the spellings a dev
  * server prints (`isLoopbackUrl`). An address such as 127.0.0.2 would do as
  * well on Windows and Linux, but macOS has only 127.0.0.1 on its loopback
  * interface, so nothing can listen there.
  */
-/** A name for this machine that Helm's loopback rule does not count. */
+/** A name for this machine that the desktop's loopback rule does not count. */
 const NAMED_HOST = 'named.localhost'
 
 export interface BrowserFixture {
@@ -104,7 +104,7 @@ function respond(path: string, elsewhere: string): { headers: Record<string, str
      * a live window, the popup must reach `window.opener` to hand back a code,
      * and then it closes itself. Both halves have to hold whether the page
      * opens as a window (`Sign in`) or as a tab (`Sign in in a tab`): a tab
-     * Helm loaded fresh had neither, which is what left a sign-in opening tab
+     * the desktop loaded fresh had neither, which is what left a sign-in opening tab
      * after tab.
      */
     case '/posture':

@@ -10,12 +10,12 @@ import { carriedFloti, standaloneFloti, type HostPlaces, type LauncherDeps } fro
  * The Windows installer puts it there (`build/installer.nsh`). The dmg and
  * the AppImage have no installer, so the app does it when it starts, on
  * every OS, before it reaches the local host: when the floti there is
- * missing, does not say its version, or is older than this Helm, the app
+ * missing, does not say its version, or is older than this desktop, the app
  * runs `floti install-self` from the floti it carries, which puts that one
  * and its Node there, puts the folder on the user's PATH where the OS keeps
  * it (Windows), and runs `floti setup` from there; a host already running
  * keeps running, and the link restarts it onto the new floti by itself when
- * it refuses this Helm as older (`connectUpdatingLocalHost`). A floti there
+ * it refuses this desktop as older (`connectUpdatingLocalHost`). A floti there
  * that is as new or newer, such as one `floti update` replaced, is left as
  * it is. Then the app uses it for everything it runs (`useStandalone`).
  * When it cannot be put there, the app says so in its log and runs the floti
@@ -34,7 +34,7 @@ export interface Ran {
 }
 
 export interface LocalFlotiDeps extends Pick<LauncherDeps, 'platform' | 'env' | 'exists' | 'log'> {
-  /** This Helm's version, which the floti it carries shares. */
+  /** This desktop's version, which the floti it carries shares. */
   appVersion: string
   /** Runs `command` with `args`, windowless, and answers how it ended; rejects when it cannot be run. */
   run: (command: string, args: string[]) => Promise<Ran>
@@ -42,7 +42,7 @@ export interface LocalFlotiDeps extends Pick<LauncherDeps, 'platform' | 'env' | 
 
 /**
  * Makes sure the installed app's floti installed on its own is there and no
- * older than this Helm, and answers whether this run uses it.
+ * older than this desktop, and answers whether this run uses it.
  */
 export async function ensureLocalFloti(places: HostPlaces, deps: LocalFlotiDeps): Promise<boolean> {
   if (places.appMode !== 'installed') return false
@@ -71,7 +71,7 @@ export async function ensureLocalFloti(places: HostPlaces, deps: LocalFlotiDeps)
   return false
 }
 
-/** Whether the floti at `path` is there and says a version no older than this Helm's. */
+/** Whether the floti at `path` is there and says a version no older than this desktop's. */
 async function current(path: string, deps: LocalFlotiDeps): Promise<boolean> {
   if (!deps.exists(path)) return false
   try {

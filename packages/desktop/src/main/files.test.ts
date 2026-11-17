@@ -7,7 +7,7 @@ import type { DiscoveryResult, Profile, Project } from '@floti/core'
 import { createFilesService, filesRoots, vscodeUrl, type FilesService, type KnownFolders } from './files'
 
 /**
- * The Files view's hand-off to VS Code: only a file in a folder Helm knows,
+ * The Files view's hand-off to VS Code: only a file in a folder the desktop knows,
  * reached through VS Code's own URL handler and nothing else.
  */
 
@@ -99,7 +99,7 @@ describe('filesRoots', () => {
       expect(await service.openInEditor(join(stranger, 'a.ts'), 1)).toEqual({ opened: false })
       expect(opened).toHaveLength(4)
 
-      // Before the host has answered, nothing is a folder Helm knows.
+      // Before the host has answered, nothing is a folder the desktop knows.
       known = filesRoots({ scan: null, profiles: [], sessions: [] })
       expect(await service.openInEditor(join(root, 'src', 'a.ts'), 1)).toEqual({ opened: false })
     } finally {

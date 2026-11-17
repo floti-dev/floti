@@ -655,8 +655,8 @@ const GRACE = 15_000
 
 /**
  * An added host's Update floti, with its connection, its login and the clock
- * faked: a floti older than this Helm's is offered an update even while this
- * Helm can talk to it, and one with `floti update` runs that, over the
+ * faked: a floti older than this desktop's is offered an update even while this
+ * desktop can talk to it, and one with `floti update` runs that, over the
  * host's connection when its channel has a newer floti and over its login
  * otherwise.
  */

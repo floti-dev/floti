@@ -1,7 +1,7 @@
 /**
  * The browser's keyboard, as one table both processes read.
  *
- * A key can reach the Browser tab two ways. With the caret in Helm's own
+ * A key can reach the Browser tab two ways. With the caret in the desktop's own
  * chrome - the address bar, the strip - it is a DOM event in the window, and
  * `App.tsx` reads it. With the caret in the page, it goes to that page's own
  * process and the window never sees it; main reads it there, in
@@ -50,7 +50,7 @@ export interface BrowserKey {
 }
 
 /**
- * The commands whose answer is drawn in Helm's chrome rather than in the page:
+ * The commands whose answer is drawn in the desktop's chrome rather than in the page:
  * a new page's address bar, the find field, a page closed or brought back.
  * Pressed inside the page, keyboard focus has to come back to the window
  * first, or the caret those draw would be in a window that is not receiving

@@ -51,7 +51,7 @@ export interface RestoreState {
 export interface RestoreOptions {
   /** Nobody was asked (`restoreWithoutAsking`), so the report says it happened. */
   unasked?: boolean
-  /** The host the sessions went with, as the window names it; absent when they went with Helm. */
+  /** The host the sessions went with, as the window names it; absent when they went with the desktop. */
   lostWith?: string
 }
 

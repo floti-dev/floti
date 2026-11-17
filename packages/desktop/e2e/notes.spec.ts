@@ -133,7 +133,7 @@ test('an HTML artifact renders in a frame that can reach nothing, and its wikili
   await expect(frame.locator('#probe')).toHaveAttribute('data-ran', 'yes')
   await expect(frameElement).toHaveAttribute('sandbox', 'allow-scripts')
 
-  // Its own script and Helm's bootstrap both ran without a word to the console.
+  // Its own script and the desktop's bootstrap both ran without a word to the console.
   await expect(window.getByRole('button', { name: 'console clean', exact: true })).toBeVisible()
 
   // A server of the test's own, to see whether anything in the frame reaches it.

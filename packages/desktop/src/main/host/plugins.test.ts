@@ -51,7 +51,7 @@ const folder = (path: string, patch: Partial<PluginFolder> = {}): PluginFolder =
 interface Options {
   /** The host's plugins to begin with. */
   hosted?: P.PluginInfo[]
-  /** Helm's own folders and setting values, by plugin id. */
+  /** The desktop's own folders and setting values, by plugin id. */
   own?: PluginFolder[]
   ownSettings?: Record<string, Record<string, SettingValue>>
   copied?: boolean

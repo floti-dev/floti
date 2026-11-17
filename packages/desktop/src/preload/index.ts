@@ -21,7 +21,7 @@ import {
  *
  * Channel names are validated against the contract's lists before anything
  * crosses. A renderer compromised badly enough to call `invoke` with an
- * arbitrary string still cannot reach a channel Helm did not declare.
+ * arbitrary string still cannot reach a channel the desktop did not declare.
  */
 
 const requests = new Set<string>(REQUEST_CHANNELS)

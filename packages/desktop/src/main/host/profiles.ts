@@ -7,31 +7,31 @@ import type * as P from './protocol'
 import { profileFromHost } from './records'
 
 /**
- * Helm's saved profiles: they live in the local host, which composes a launch from them, and this is the `ProfileService`
+ * The desktop's saved profiles: they live in the local host, which composes a launch from them, and this is the `ProfileService`
  * the window and main's other readers use.
  *
  * On every connect it subscribes to the host's `profiles:changed`, keeps the
  * list it carries and hands it to the window, so whichever client wrote, every
- * place that lists profiles shows the change. The dialogs stay Helm's: it asks
+ * place that lists profiles shows the change. The dialogs stay the desktop's: it asks
  * before `profile:delete`, saves the document `profile:export` answers where
  * its save dialog says, and hands `profile:import` the file its open dialog
  * chose.
  *
- * The first time Helm ever connects to a host, it copies its own saved
+ * The first time the desktop ever connects to a host, it copies its own saved
  * profiles into it, in their pin order, skipping a name the host already has.
  * A profile the host refuses is logged with the host's problems and stays only
- * in Helm's database. That it ran is recorded, so a profile deleted in the
- * host later is not copied back, and Helm's own database is never written by
- * it: with the setting off again, Helm's profiles are as they were.
+ * in the desktop's database. That it ran is recorded, so a profile deleted in the
+ * host later is not copied back, and the desktop's own database is never written by
+ * it: with the setting off again, the desktop's profiles are as they were.
  */
 
 export interface HostProfilesDeps {
   link: HostLink
   dialogs: ProfileDialogs
   emit: EmitToWindow
-  /** Helm's own saved profiles, in their pin order: what the first connect copies. */
+  /** The desktop's own saved profiles, in their pin order: what the first connect copies. */
   ownProfiles: () => Profile[]
-  /** Whether Helm's profiles have been copied into a host before. */
+  /** Whether the desktop's profiles have been copied into a host before. */
   copied: () => boolean
   /** Records that they have, so no later start copies them again. */
   markCopied: () => void
@@ -57,7 +57,7 @@ export function createHostProfiles(deps: HostProfilesDeps): HostProfiles {
     return known
   }
 
-  /** Helm's own profiles into a host that has never been given them. */
+  /** The desktop's own profiles into a host that has never been given them. */
   const copyOwnProfiles = async (connection: HostConnection): Promise<void> => {
     if (deps.copied()) return
     const taken = new Set((await connection.request('profile:list', null)).map((p) => p.name.toLowerCase()))
@@ -91,7 +91,7 @@ export function createHostProfiles(deps: HostProfilesDeps): HostProfiles {
 
   return {
     // Through the connection, which joins the first connect while it is in
-    // flight: a list asked for before Helm reached the host is the host's,
+    // flight: a list asked for before the desktop reached the host is the host's,
     // and with no host it rejects with the sentence saying why, never an
     // empty list standing in for "could not look".
     async list() {

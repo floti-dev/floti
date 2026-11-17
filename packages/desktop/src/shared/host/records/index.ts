@@ -215,7 +215,7 @@ export function resourcesFromHost(sets: readonly P.SessionResources[]): SessionR
 
 /**
  * A config write's answer: a write with no conflict or no other refusal has
- * neither at all, as Helm's own writer answers.
+ * neither at all, as the desktop's own writer answers.
  */
 export function writeConfigResultFromHost(result: P.WriteConfigResult): WriteConfigResult {
   return {
@@ -239,7 +239,7 @@ export function effectiveRequestForHost(request: EffectiveViewRequest): P.Effect
 
 /**
  * The host's offer, with the pane layout this window last saved: the layout is
- * per device (it stays in Helm's database), and it names each session by the
+ * per device (it stays in the desktop's database), and it names each session by the
  * host's row id, which is the id the window's tabs carry.
  */
 export function offerFromHost(offer: P.RestoreOffer, layout: SavedPaneLayout | null): RestoreOffer {
@@ -273,15 +273,15 @@ export function offerFromHost(offer: P.RestoreOffer, layout: SavedPaneLayout | n
 /**
  * The settings the host keeps for every client: the folders it scans, the
  * projects pinned out of their workspace, whether setup was finished, and
- * whether it looks for updates by itself. Every other setting is Helm's own,
- * the window's, or one Helm tells the host on every connect
+ * whether it looks for updates by itself. Every other setting is the desktop's own,
+ * the window's, or one the desktop tells the host on every connect
  * (`hostSettingsFor`).
  */
 export const HOST_WORKSPACE_KEYS = ['scanRoots', 'pinnedProjects', 'firstRunCompletedAt', 'updateCheck'] as const
 
 export type HostWorkspaceKey = (typeof HOST_WORKSPACE_KEYS)[number]
 
-/** Helm's settings with the host's workspace keys laid over, or Helm's own while there are none. */
+/** The desktop's settings with the host's workspace keys laid over, or the desktop's own while there are none. */
 export function settingsWithHost(own: AppSettings, host: P.HostSettings | null): AppSettings {
   if (host === null) return own
   return {
@@ -293,7 +293,7 @@ export function settingsWithHost(own: AppSettings, host: P.HostSettings | null):
   }
 }
 
-/** A window's settings patch, split into what the host keeps and what Helm keeps. */
+/** A window's settings patch, split into what the host keeps and what the desktop keeps. */
 export function splitSettingsPatch(patch: Partial<AppSettings>): {
   host: P.HostSettingsPatch
   own: Partial<AppSettings>
@@ -308,7 +308,7 @@ export function splitSettingsPatch(patch: Partial<AppSettings>): {
   return { host, own }
 }
 
-/** A repository's state: one git answered has no `error` at all, as Helm's own discovery says. */
+/** A repository's state: one git answered has no `error` at all, as the desktop's own discovery says. */
 export function gitStateFromHost(state: P.GitState | null | undefined): GitState | null {
   if (state === null || state === undefined) return null
   const { error, ...rest } = state
@@ -338,7 +338,7 @@ export function filesStatusFromHost(status: P.FilesStatus): FilesStatus {
   return { ...status, files }
 }
 
-/** A scan's state: a scan that did not fail has no `error` at all, as Helm's own scan says. */
+/** A scan's state: a scan that did not fail has no `error` at all, as the desktop's own scan says. */
 export function scanStatusFromHost(status: P.ScanStatus): ScanStatus {
   return status.error === null ? { running: status.running } : { running: status.running, error: status.error }
 }
@@ -352,7 +352,7 @@ export const NO_CLAUDE_BACKEND = 'The local host has no Claude Code backend, so 
  * What the host found of Claude Code, in the setup pane's words. A host with
  * no Claude Code backend did not look, so there is no status: null, which is
  * Unknown - never "not installed" - and has no tested range to give either:
- * the range is the host's backend's (`TESTED_VERSIONS`), and Helm keeps none
+ * the range is the host's backend's (`TESTED_VERSIONS`), and the desktop keeps none
  * of its own. Callers turn null into a failed read carrying `NO_CLAUDE_BACKEND`.
  */
 export function claudeStatusFromHost(status: P.BackendStatus): ClaudeStatus

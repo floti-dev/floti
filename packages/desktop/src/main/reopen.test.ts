@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createReopen, type QuitPhase } from './reopen'
 
 /**
- * Helm's reopen as index.ts wires it: `phase` is `hostStop`, `windows` the
+ * The desktop's reopen as index.ts wires it: `phase` is `hostStop`, `windows` the
  * open windows, and `finish()` the held `before-quit` ending, which calls
  * `quitFinished()` before `app.quit()`.
  */

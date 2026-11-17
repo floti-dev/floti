@@ -30,7 +30,7 @@ test('a session ended in Floti is in History without a refresh, its archive open
   await expect(window.getByRole('tab', { name: 'plan the release', exact: true })).toBeVisible()
   await expect(window.locator('[data-transcript]')).toContainText('You said: plan the release')
 
-  // The host indexed and archived it; Helm's own database holds none of it.
+  // The host indexed and archived it; the desktop's own database holds none of it.
   const store = openStore({ file: join(world.dataDir, 'desktop.db') })
   try {
     expect(readHistorySessions(store, {}).total).toBe(0)

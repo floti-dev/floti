@@ -35,12 +35,12 @@ const profile = (id: number, name: string, patch: Partial<P.Profile> = {}): P.Pr
 
 interface Options {
   hosted?: P.Profile[]
-  /** Where Helm's save dialog says, or null when cancelled. */
+  /** Where the desktop's save dialog says, or null when cancelled. */
   exportTo?: string | null
   chosen?: ProfileFileChosen
 }
 
-/** The host's profiles, and Helm's own dialogs on the user's machine. */
+/** The host's profiles, and the desktop's own dialogs on the user's machine. */
 function world(options: Options = {}, connection: FakeConnection | null = new FakeConnection()) {
   const hosted = [...(options.hosted ?? [])]
   let nextId = 100

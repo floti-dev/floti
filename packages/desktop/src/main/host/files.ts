@@ -13,7 +13,7 @@ import type { Emit } from './sessions'
  * a sentence when it cannot, and refuses a note changed since it was read.
  * Every request names a root, and the host refuses one it does not know with
  * a sentence naming it; it also scopes a note to the deepest folder it knows
- * that holds it. Helm checks neither again: both are the host's.
+ * that holds it. The desktop checks neither again: both are the host's.
  *
  * `files:watch` replaces this client's whole set of watched roots each time,
  * and a watch belongs to a connection, so the last set the window said is told
@@ -27,7 +27,7 @@ import type { Emit } from './sessions'
  * whole (`artifactBytes`).
  *
  * Every request goes through `link.connection()`, which joins the first
- * connect while it is in flight, so a window that asks before Helm has reached
+ * connect while it is in flight, so a window that asks before the desktop has reached
  * the host gets the host's answer, never an empty one first. When the host
  * cannot be reached, each rejects with the link's sentence; none answers an
  * empty folder, file list or version list in its place.

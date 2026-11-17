@@ -12,7 +12,7 @@ import {
 
 /**
  * Whether the browser pane runs (main/browser-sandbox.ts): never in a Linux
- * Helm started without Chromium's sandbox, and the command that gives an
+ * desktop started without Chromium's sandbox, and the command that gives an
  * AppImage the sandbox back.
  */
 

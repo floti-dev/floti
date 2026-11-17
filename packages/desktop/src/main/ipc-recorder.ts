@@ -1,7 +1,7 @@
 import { app, ipcMain, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 
 /**
- * Records every Electron IPC channel Helm uses, and which page used it, for
+ * Records every Electron IPC channel the desktop uses, and which page used it, for
  * the end-to-end test that holds Electron IPC to what `boundary.rs` lists as
  * client-only. It hooks Electron's own entry points: each `ipcMain` handler as
  * it is called, each listener's message as it arrives, and each web

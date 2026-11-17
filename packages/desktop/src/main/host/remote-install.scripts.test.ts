@@ -10,7 +10,7 @@ import { RUN_ROOT } from '../../../../../test/run-root'
 import { createRemoteInstaller, spawnTransportRun, type RemoteInstallDeps } from './remote-install'
 
 /**
- * The install scripts Helm sends a host's computer, run for real on this one:
+ * The install scripts the desktop sends a host's computer, run for real on this one:
  * test/fake-ssh's custom-command transport (`carry.mjs`) stands for the login,
  * and HOME or LOCALAPPDATA is this test's own folder, so the install lands
  * there. `<floti> setup` is played by the fake, never run.
@@ -32,7 +32,7 @@ const SYSTEM_SAYS: Record<string, string> = {
 }
 
 /**
- * A computer this Helm's own build does not fit but whose install script runs
+ * A computer this desktop's own build does not fit but whose install script runs
  * here: this OS with the other CPU, or, where the release carries no other CPU
  * for this OS (macOS is Apple Silicon only), the other POSIX OS with this CPU.
  */

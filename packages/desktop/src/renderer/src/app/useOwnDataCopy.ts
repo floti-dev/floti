@@ -3,14 +3,14 @@ import type { OwnDataCopyState } from '../../../shared/ipc'
 import { desktop } from './bridge'
 
 export interface OwnDataNotice {
-  /** Set while a copy of Helm's own data into the local host stopped part way and was not dismissed. */
+  /** Set while a copy of the desktop's own data into the local host stopped part way and was not dismissed. */
   unfinished: string | null
   dismiss: () => void
 }
 
 /**
- * Where main's copy of Helm's own database into the local host stands, for
- * the notice that it did not finish. Always `idle` with sessions in Helm.
+ * Where main's copy of the desktop's own database into the local host stands, for
+ * the notice that it did not finish.
  * Dismissed for the session; a later attempt that finishes takes it away.
  */
 export function useOwnDataCopy(): OwnDataNotice {

@@ -106,7 +106,7 @@ import type { ProbeOp, TermCreateOptions } from './protocol'
 
 /**
  * `dev-live` is the unpackaged run with **no data directory of its own**, which
- * shares `%APPDATA%\Helm` with the installed app. It is a mode rather than the
+ * shares `%LOCALAPPDATA%\Floti\desktop` with the installed app. It is a mode rather than the
  * absence of one because the status bar has to be able to name it: everything
  * that makes it dangerous is invisible from inside the window.
  */
@@ -126,15 +126,14 @@ export interface AppInfo {
   }
   /**
    * The log file this PC's host writes its standard error and panics to,
-   * from the host's own `app:info`; null with sessions in Helm itself, or
-   * when the host could not be asked.
+   * from the host's own `app:info`; null when the host could not be asked.
    */
   hostLogFile: string | null
   /** Windows build number; xterm uses it to pick ConPTY quirk handling. */
   windowsBuild: number | null
   /**
    * The home directory, so a path with no room for the rest of itself can be
-   * written from `~`. Used for showing, never for resolving: every path Helm
+   * written from `~`. Used for showing, never for resolving: every path the desktop
    * acts on stays absolute.
    */
   home: string
@@ -150,12 +149,12 @@ export interface AppInfo {
 /**
  * Whether this machine has signed in to Claude Code. `unknown` is a real
  * answer, not a placeholder: on macOS and Linux the credential legitimately
- * lives in a store Helm has no business opening.
+ * lives in a store the desktop has no business opening.
  */
 export type ClaudeAuth = 'authenticated' | 'unauthenticated' | 'unknown'
 
 /**
- * What Helm found out about the CLI, for the setup pane and the version banner.
+ * What the desktop found out about the CLI, for the setup pane and the version banner.
  *
  * Carries no credential and never will. `auth` is decided from the *existence*
  * of a login artefact, and the remedy for `unauthenticated` is a sentence
@@ -164,7 +163,7 @@ export type ClaudeAuth = 'authenticated' | 'unauthenticated' | 'unknown'
 export interface ClaudeStatus {
   /** The executable, or null when there is not one. */
   path: string | null
-  /** `setting` when the user picked it, `discovered` when Helm found it. */
+  /** `setting` when the user picked it, `discovered` when the desktop found it. */
   source: 'setting' | 'discovered' | null
   /** Raw `claude --version` output. */
   version: string | null
@@ -458,7 +457,7 @@ export interface EffectiveViewRequest {
 /**
  * A live session is about to be ended, and the user has to agree first.
  *
- * Main asks and the *renderer* answers, so the question is a Helm island
+ * Main asks and the *renderer* answers, so the question is a desktop island
  * rather than a Win32 message box - see `IpcEvents['session:confirm']` for why
  * the direction is what it is.
  */
@@ -521,11 +520,11 @@ export type QuitAnswer = 'end' | 'keep' | 'cancel'
  * page is doing.
  */
 /**
- * Whether the browser pane runs in this Helm. It runs only inside Chromium's
- * OS sandbox: a Linux Helm started with `--no-sandbox` (which an AppImage's
+ * Whether the browser pane runs in this desktop. It runs only inside Chromium's
+ * OS sandbox: a Linux desktop started with `--no-sandbox` (which an AppImage's
  * AppRun adds when user namespaces are refused) opens no web page and serves
  * no browser tools (`main/browser-sandbox.ts`). `command` is the one command
- * that gives this AppImage the sandbox, or null when Helm cannot write one.
+ * that gives this AppImage the sandbox, or null when the desktop cannot write one.
  */
 export type BrowserAvailability = { available: true } | { available: false; command: string | null }
 
@@ -826,7 +825,7 @@ export interface BrowserOpened {
 export const BROWSER_TABS_MAX = 10
 
 /**
- * What opening a Helm page's own connection to a host answered: main started
+ * What opening a desktop page's own connection to a host answered: main started
  * a bridge for the page, whose frames travel on `hostLink:*` under this
  * connection number; or the host could not be reached, saying why.
  * `deviceName` is the computer's name, which the page's `hello` gives as this
@@ -840,7 +839,7 @@ export type HostLinkOpened =
     }
   | {
       unreachable: string
-      /** The host refused this Helm's `hello`: the versions it named, and the side to update. */
+      /** The host refused this desktop's `hello`: the versions it named, and the side to update. */
       refused?: RefusedVersions
     }
 
@@ -898,10 +897,10 @@ export interface ForwardedPort {
   local: number
 }
 
-/** What Helm's own build says of itself; `app:info` adds the host's log file. */
+/** What the desktop's own build says of itself; `app:info` adds the host's log file. */
 export type OwnAppInfo = Omit<AppInfo, 'hostLogFile'>
 
-/** How many rows of each kind a copy of Helm's own data added to the local host. */
+/** How many rows of each kind a copy of the desktop's own data added to the local host. */
 export interface OwnDataCopied {
   conversations: number
   messages: number
@@ -910,10 +909,9 @@ export interface OwnDataCopied {
 }
 
 /**
- * Where the copy of what only Helm's own database holds (archived
+ * Where the copy of what only the desktop's own database holds (archived
  * conversations, their usage, History's names) into the
- * local host stands. `idle` until Helm has reached the host, and always with
- * sessions in Helm; `finished` once the host says it holds them, whichever
+ * local host stands. `idle` until the desktop has reached the host; `finished` once the host says it holds them, whichever
  * start copied them; `unfinished` when a copy stopped part way, which the
  * next start tries again.
  */
@@ -939,7 +937,7 @@ export interface IpcRequests {
   /**
    * Opens the asking page's own protocol connection to a host, ending any it
    * had to that host: this PC's when no host is named, or a host on another
-   * computer by its id. Main takes it only from Helm's own pages, and pipes
+   * computer by its id. Main takes it only from the desktop's own pages, and pipes
    * the frames to a bridge without reading them; the device key never leaves
    * the bridge. A remote host's connection opens only while main's own link
    * to it is connected.
@@ -1036,23 +1034,23 @@ export interface IpcRequests {
   'settings:write': { request: Partial<AppSettings>; response: AppSettings }
 
   /**
-   * The settings Helm keeps for itself: everything but the host's scan
+   * The settings the desktop keeps for itself: everything but the host's scan
    * roots, pins and setup stamp. A write applies the theme, tells the host
-   * what it is told of them, and answers Helm's own settings after.
+   * what it is told of them, and answers the desktop's own settings after.
    */
   'ownSettings:read': { request: void; response: AppSettings }
   'ownSettings:write': { request: Partial<AppSettings>; response: AppSettings }
-  /** Helm's own build, data folder and runtime versions. */
+  /** The desktop's own build, data folder and runtime versions. */
   'ownApp:info': { request: void; response: OwnAppInfo }
   /**
-   * Where the copy of Helm's own database into the local host stands, which
+   * Where the copy of the desktop's own database into the local host stands, which
    * main runs and keeps; changes arrive on `ownData:changed`.
    */
   'ownData:state': { request: void; response: OwnDataCopyState }
 
-  /** Helm's save dialog, then the profile's YAML written where it says. */
+  /** The desktop's save dialog, then the profile's YAML written where it says. */
   'profileDialog:export': { request: { fileName: string; yaml: string }; response: ExportProfileResult }
-  /** Helm's open dialog, then the chosen file read. */
+  /** The desktop's open dialog, then the chosen file read. */
   'profileDialog:import': { request: void; response: ProfileFileChosen }
 
   /**
@@ -1067,24 +1065,24 @@ export interface IpcRequests {
   'windowSessions:hostSessionCount': { request: void; response: number }
   /**
    * Stops this PC's host once the user has agreed: every session in it ends and is recorded as ended, and none is
-   * offered back. Helm connects again on its next request, which starts a
+   * offered back. The desktop connects again on its next request, which starts a
    * fresh host. Main holds the host link, so main sends the stop.
    */
   'windowSessions:stopHost': { request: void; response: void }
   /**
    * What Restart host to update would do to this PC's host, asked through a
    * bridge of main's own in place of a `hello`, so it reaches a host that
-   * refuses this Helm: the floti there, its sessions, and how many the restart
+   * refuses this desktop: the floti there, its sessions, and how many the restart
    * ends. Changes nothing. Rejects with the sentence saying why when no host
    * answered.
    */
   'windowSessions:restartAsk': { request: void; response: LocalHostRestartOffer }
   /**
-   * Restarts this PC's host on the floti this Helm carries, once the user has
+   * Restarts this PC's host on the floti this desktop carries, once the user has
    * agreed to what `windowSessions:restartAsk` said it ends: the host leaves
    * its sessions in its keeper and exits, main starts the carried floti and
    * connects, and every page connects again with nothing marked lost. Only
-   * ever on the user's click; Helm never restarts the host on its own.
+   * ever on the user's click; the desktop never restarts the host on its own.
    */
   'windowSessions:restartHost': { request: void; response: void }
 
@@ -1374,12 +1372,12 @@ export interface IpcRequests {
    */
   'session:activity': { request: void; response: SessionActivityState[] }
   /**
-   * Every live Claude Code session on this machine, Helm's own marked.
+   * Every live Claude Code session on this machine, the desktop's own marked.
    *
    * **Machine-wide on purpose**, and the reason is the one the whole surface
    * exists for: a `claude` started in Windows Terminal collides with a working
    * tree exactly as hard as a tab does. It is read out of the registry the CLI
-   * keeps for its own purposes and joined to Helm's rows here in main, where
+   * keeps for its own purposes and joined to the desktop's rows here in main, where
    * the pty pids live.
    *
    * A request as well as an event, for the reason `session:list` is one: a
@@ -1389,8 +1387,8 @@ export interface IpcRequests {
   /**
    * What each hosted session is holding: its process tree and its ports.
    *
-   * Hosted only, and that is not a limitation to be fixed. Helm spawned the
-   * pty, so the tree under it is Helm's own process tree; for a session it did
+   * Hosted only, and that is not a limitation to be fixed. The desktop spawned the
+   * pty, so the tree under it is the desktop's own process tree; for a session it did
    * not spawn there is no such claim to make, and asking the machine about
    * somebody else's process tree would be a different thing entirely.
    *
@@ -1399,7 +1397,7 @@ export interface IpcRequests {
    * stale before the first one.
    *
    * The host runs the pass over its sessions and this answers the host's
-   * last set: it waits for Helm's first
+   * last set: it waits for the desktop's first
    * connect rather than answering empty, and rejects with the sentence saying
    * the host could not be reached, so the pane paints Unknown, never
    * "nothing there".
@@ -1425,7 +1423,7 @@ export interface IpcRequests {
       rows: number
       /**
        * Open this pane under a specific executable. Absent means the
-       * `terminalShell` setting, and failing that whatever Helm detects.
+       * `terminalShell` setting, and failing that whatever the desktop detects.
        */
       shell?: string
       /** A shell of its own, for a terminal tab, rather than the project's one. */
@@ -1445,7 +1443,7 @@ export interface IpcRequests {
   /**
    * Shells this machine has, for the settings pane's default picker and the
    * per-pane one in a project shell's header. Probed once per process - the
-   * answer is a property of the installation, not of Helm's state.
+   * answer is a property of the installation, not of the desktop's state.
    */
   'pterm:shells': { request: void; response: DetectedShell[] }
   /**
@@ -1476,7 +1474,7 @@ export interface IpcRequests {
   'profile:launch': { request: LaunchProfileRequest; response: LaunchedProfile }
 
   /**
-   * The session index over `~/.claude/history.jsonl`. Read-only: Helm
+   * The session index over `~/.claude/history.jsonl`. Read-only: the desktop
    * mirrors that file and never writes to it.
    */
   'history:summary': { request: void; response: HistorySummary }
@@ -1489,7 +1487,7 @@ export interface IpcRequests {
    * Names one session by hand, or clears the name it was given.
    *
    * The one write on this family of channels, and it goes nowhere near
-   * `history.jsonl` - it lands in `history_names`, a table of Helm's own that
+   * `history.jsonl` - it lands in `history_names`, a table of the desktop's own that
    * the index never rebuilds. Null, or whitespace, clears it and the row goes
    * back to the title derived from its prompts. Resolves null for a session id
    * the index does not have, rather than writing a name nothing joins to.
@@ -1506,17 +1504,17 @@ export interface IpcRequests {
   'history:resume': { request: ResumeSessionRequest; response: ResumedSession }
 
   /**
-   * The transcript archive: the conversations Helm kept after Claude Code
+   * The transcript archive: the conversations the desktop kept after Claude Code
    * deleted them.
    *
-   * Read-only in both directions, and in two senses. Helm never writes to
+   * Read-only in both directions, and in two senses. The desktop never writes to
    * `~/.claude` to build this - `main/archive.ts` only ever reads - and the
    * window can only read it back: there is no channel here that captures,
    * deletes or re-runs anything, because none of those is the window's to
    * decide. What the window may change is the ceiling, and that is an ordinary
    * `settings:write`.
    *
-   * This is what CLAUDE.md's Scope paragraph was amended for. Helm still
+   * This is what CLAUDE.md's Scope paragraph was amended for. The desktop still
    * renders nothing for a **live** session; an archived transcript is a record
    * on disk that Claude Code is about to remove, and nothing on this channel is
    * ever in the path of a running session.
@@ -1695,8 +1693,8 @@ export interface IpcRequests {
   'files:editor': { request: void; response: { name: string | null } }
   /**
    * Opens a file in VS Code, at a line when there is one, through its own
-   * `vscode://` handler - no process spawned by Helm, no `code` on the PATH
-   * needed. A path outside every folder Helm knows is refused.
+   * `vscode://` handler - no process spawned by the desktop, no `code` on the PATH
+   * needed. A path outside every folder the desktop knows is refused.
    */
   'files:openInEditor': {
     request: { path: string; line: number | null }
@@ -1773,7 +1771,7 @@ export interface IpcRequests {
     response: { ok: boolean; value: string; error: string | null }
   }
   /**
-   * The first DevTools in Helm, scoped to one view's own web contents and
+   * The first DevTools in the desktop, scoped to one view's own web contents and
    * opened detached - docked would put a second, Chromium-owned rectangle
    * inside the window and join the bounds problem this pane already has.
    */
@@ -1800,7 +1798,7 @@ export interface IpcRequests {
    */
   'browser:snapshot': { request: { id: number }; response: string | null }
   /**
-   * The sessions a page can be shared with: running, and given Helm's browser
+   * The sessions a page can be shared with: running, and given the desktop's browser
    * tools when they started. Empty while the tools are switched off.
    */
   'browser:shareTargets': { request: void; response: BrowserShare[] }
@@ -1840,7 +1838,7 @@ export interface IpcRequests {
   'plugins:remove': { request: { path: string; deleteSecrets: string[] }; response: PluginInfo[] }
   'plugins:setEnabled': { request: { path: string; enabled: boolean }; response: PluginInfo[] }
   /**
-   * Whether the sessions Helm starts are offered the plugin's tools. Off takes
+   * Whether the sessions the desktop starts are offered the plugin's tools. Off takes
    * them from running sessions too; on reaches the sessions started after it.
    */
   'plugins:setTools': { request: { path: string; enabled: boolean }; response: PluginInfo[] }
@@ -1849,7 +1847,7 @@ export interface IpcRequests {
   /** One value on a plugin's settings page, or null to go back to the manifest's default. */
   'plugins:setSetting': { request: { plugin: string; key: string; value: SettingValue }; response: PluginInfo[] }
   /**
-   * A bridge call from a plugin page, relayed by the Helm page framing it.
+   * A bridge call from a plugin page, relayed by the desktop page framing it.
    * `plugin` is what that page established from the message's origin and
    * source (`pluginFrames.ts`); nothing the plugin wrote decides it.
    */
@@ -1866,7 +1864,7 @@ export interface IpcRequests {
   'plugins:command': { request: { plugin: string; id: string }; response: void }
   /** Memory and CPU per plugin. Asked while a plugin's settings page is open, never polled otherwise. */
   'plugins:metrics': { request: void; response: PluginMetrics[] }
-  /** What the plugin's service printed and what Helm noted about it, oldest first. */
+  /** What the plugin's service printed and what the desktop noted about it, oldest first. */
   'plugins:log': { request: { path: string }; response: PluginLogLine[] }
   /** The stored keys no other plugin may use - what removing this one offers to delete. */
   'plugins:ownSecrets': { request: { path: string }; response: string[] }
@@ -2099,7 +2097,7 @@ export interface IpcSends {
   /** The secret dialog a plugin asked for has closed; main answers the plugin's call. */
   'plugins:answer': { requestId: string }
 
-  /** A Helm page's protocol bytes, for its bridge to the host. One-way: frames have their own replies. */
+  /** A desktop page's protocol bytes, for its bridge to the host. One-way: frames have their own replies. */
   'hostLink:send': { connection: number; bytes: Uint8Array }
   /** The page closes its connection; main ends the bridge. */
   'hostLink:close': { connection: number }
@@ -2120,10 +2118,10 @@ export interface IpcEvents {
   'git:updated': Record<string, GitState | null>
   'scan:status': ScanStatus
   'settings:changed': AppSettings
-  /** Helm's own settings after any change to them. */
+  /** The desktop's own settings after any change to them. */
   'ownSettings:changed': AppSettings
   /**
-   * Main's question before Helm quits with sessions running, asked in the window; answered on `windowSessions:quitConfirmed`.
+   * Main's question before the desktop quits with sessions running, asked in the window; answered on `windowSessions:quitConfirmed`.
    */
   'windowSessions:quitConfirm': SessionConfirmRequest
   /** A click on a session's notification: bring its tab forward. */
@@ -2133,7 +2131,7 @@ export interface IpcEvents {
    * here, or in its peek, as a press on its row in the Sessions tree does.
    */
   'windowSessions:showChild': { host: string; id: number }
-  /** Where the copy of Helm's own database into the local host stands, after each change. */
+  /** Where the copy of the desktop's own database into the local host stands, after each change. */
   'ownData:changed': OwnDataCopyState
   /**
    * Where each host on another computer stands with this device, whole,
@@ -2156,14 +2154,14 @@ export interface IpcEvents {
   /**
    * The session index moved. Pushed rather than polled: the file is shared
    * with every `claude` on the machine, so the change that matters most is the
-   * one Helm did not cause.
+   * one the desktop did not cause.
    */
   'history:changed': HistorySummary
 
   /**
    * The transcript archive moved: a conversation was captured, or the ceiling
    * dropped one. Pushed for the reason `history:changed` is - the writes that
-   * matter are the ones Helm did not cause, and a settings pane that reported a
+   * matter are the ones the desktop did not cause, and a settings pane that reported a
    * figure only while somebody was looking at it would be reporting nothing.
    */
   'archive:changed': ArchiveStats
@@ -2178,7 +2176,7 @@ export interface IpcEvents {
    * ground, wrong everything - so the *asking* is delegated to the renderer and
    * main waits for the reply. `nativeConfirm` remains the fallback for when
    * there is no window to ask, which is the case this indirection has to keep
-   * working: a Helm that cannot be quit because its renderer is wedged is worse
+   * working: a desktop that cannot be quit because its renderer is wedged is worse
    * than an ugly dialog.
    */
   'session:confirm': SessionConfirmRequest
@@ -2242,14 +2240,14 @@ export interface IpcEvents {
    * A browser view moved, loaded, failed or finished finding.
    *
    * Pushed rather than polled because a page is the one thing in the app that
-   * changes without anybody in Helm having done something: a dev server
+   * changes without anybody in the desktop having done something: a dev server
    * restarts, a redirect lands somewhere else, a retry finally connects. The
    * tab's title and the address bar are both made of this.
    */
   'browser:changed': BrowserState
 
   /**
-   * A page Helm made that the window did not ask for: a page's `window.open`,
+   * A page the desktop made that the window did not ask for: a page's `window.open`,
    * `target="_blank"` or middle click, or one an agent opened. The Browser tab
    * puts it in its strip, and the cap is enforced in main - a page that opens
    * eleven windows gets ten tabs and a console line, not eleven.
@@ -2298,7 +2296,7 @@ export interface IpcEvents {
   'secrets:changed': SecretsState
   /**
    * The theme as plugin pages see it, after any change to the colours or the
-   * shape settings. To both Helm pages that frame plugins, which pass it on.
+   * shape settings. To both the desktop pages that frame plugins, which pass it on.
    */
   'plugins:theme': FlotiTheme
 
@@ -2309,7 +2307,7 @@ export interface IpcEvents {
   /**
    * A page's connection ended on the bridge's side: null when it closed, or
    * the sentence saying why. `planned` when main's link ended the host on
-   * purpose (Stop host, or a quit), which is no crash; `restarts` when Helm
+   * purpose (Stop host, or a quit), which is no crash; `restarts` when the desktop
    * starts a new host in place of one that is gone, rather than waiting for
    * it to answer again; `restarting` when the end is the user's Restart host
    * to update, after which the page connects again at once and nothing is

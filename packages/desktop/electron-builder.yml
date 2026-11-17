@@ -76,7 +76,7 @@ win:
   # The local host, built and staged by scripts/stage-floti.mjs. Lands at
   # `process.resourcesPath/floti.exe` (`carriedFloti`), which is only what
   # the installer lays down: `floti install-self` copies it, with the Node
-  # beside it, to %LOCALAPPDATA%\Programs\Floti\bin, and Helm runs floti
+  # beside it, to %LOCALAPPDATA%\Programs\Floti\bin, and the desktop runs floti
   # from there (`flotiBinary`). electron-builder adds these to the
   # top-level extraResources rather than replacing them. Beside it, the pinned
   # Node runtime it runs plugin services on (`node/node.exe`) and Node's LICENSE.
@@ -142,14 +142,14 @@ nsis:
   # resources\floti.exe: floti and its Node go to
   # %LOCALAPPDATA%\Programs\Floti\bin, that folder onto the user's PATH, and
   # `floti setup` runs from there. Stops no host: only a host still running
-  # from inside the install folder, from a Helm before this, is asked about
+  # from inside the install folder, from an earlier version, is asked about
   # and stopped first. Named rather than left to the `build/installer.nsh`
   # default, so a moved file fails the build. docs/PACKAGING.md has the rest.
   include: build/installer.nsh
 
 # Built by `pnpm dist:mac`, on a Mac or the macos-latest runner: electron-builder
 # makes a dmg only on macOS. Apple Silicon only - every Mac sold since 2023 is,
-# and an Intel build would double the release's size for machines Helm is not
+# and an Intel build would double the release's size for machines Floti is not
 # looked at on.
 mac:
   # The local host, as for `win`: `Contents/Resources/floti`, with the pinned
@@ -232,7 +232,7 @@ linux:
 appImage:
   # No arguments in the menu entry. electron-builder's default puts
   # `--no-sandbox` there, which starts every renderer without Chromium's OS
-  # sandbox for anybody who launches Helm from a desktop integration. AppRun
+  # sandbox for anybody who launches Floti from a desktop integration. AppRun
   # still adds it when user namespaces are refused; then the browser pane stays
   # off (main/browser-sandbox.ts).
   executableArgs: []

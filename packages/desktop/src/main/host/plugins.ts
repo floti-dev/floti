@@ -46,18 +46,18 @@ export interface HostPluginsDeps {
    * for each plugin.
    */
   host?: string
-  /** Helm's own plugins, copied into This PC's host on its first connect; never into a remote host. */
+  /** The desktop's own plugins, copied into This PC's host on its first connect; never into a remote host. */
   copyOwn?: OwnPluginsCopy
   log: (line: string) => void
 }
 
-/** What copying Helm's own plugins into This PC's host reads and records. */
+/** What copying the desktop's own plugins into This PC's host reads and records. */
 export interface OwnPluginsCopy {
-  /** Helm's own plugin folders, in the order they were added: what the first connect copies. */
+  /** The desktop's own plugin folders, in the order they were added: what the first connect copies. */
   folders: () => PluginFolder[]
-  /** Helm's own setting values for a plugin, by its id. */
+  /** The desktop's own setting values for a plugin, by its id. */
   settings: (plugin: string) => Record<string, SettingValue>
-  /** Whether Helm's plugins have been copied into a host before. */
+  /** Whether the desktop's plugins have been copied into a host before. */
   copied: () => boolean
   /** Records that they have, so no later start copies them again. */
   markCopied: () => void
@@ -114,7 +114,7 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
     if (cached !== undefined && cached.revision < revision) cache.delete(plugin)
   }
 
-  /** The host's list, now the one Helm has: a plugin's cached files go once the host has read it again. */
+  /** The host's list, now the one the desktop has: a plugin's cached files go once the host has read it again. */
   const take = (listed: readonly P.PluginInfo[]): void => {
     hosted = listed.map((plugin) => pluginFromHost(plugin, hostKey))
     for (const plugin of listed) if (plugin.id !== null) saw(plugin.id, plugin.revision)
@@ -124,7 +124,7 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
     }
   }
 
-  /** Helm's own plugins into a host that has never been given them. */
+  /** The desktop's own plugins into a host that has never been given them. */
   const copyOwnPlugins = async (connection: HostConnection, own: OwnPluginsCopy): Promise<void> => {
     if (own.copied()) return
     const registered = new Set((await connection.request('plugins:list', null)).map((plugin) => plugin.path))
@@ -179,7 +179,7 @@ export function createHostPlugins(deps: HostPluginsDeps): HostPlugins {
         error: (error) => deps.log(`host: plugins:changed ended (${error.message})`)
       })
     ]
-    // Only This PC's host is given Helm's own plugins: a remote host keeps its own.
+    // Only This PC's host is given the desktop's own plugins: a remote host keeps its own.
     if (deps.copyOwn === undefined) return
     try {
       await copyOwnPlugins(connection, deps.copyOwn)

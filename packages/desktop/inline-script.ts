@@ -6,7 +6,7 @@ import type { Plugin } from 'vite'
  * `import source from './file.ts?script'`: the file bundled into one classic
  * script, as a string.
  *
- * For code Helm serves to a page rather than runs itself - the plugin bridge,
+ * For code the desktop serves to a page rather than runs itself - the plugin bridge,
  * which every plugin page loads from the desktop under `/__floti/bridge.js`. It is
  * TypeScript checked against the SDK's types like the rest of the app, and it
  * has to arrive as one self-contained IIFE: a classic script in the page's

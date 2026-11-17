@@ -20,7 +20,7 @@ import type { HostConnection, HostStream, HostSubscription } from './client'
  * - When the session ends (the host's `session:exit`, or a reconnect that no
  *   longer lists it running), every connection carried for it closes, the
  *   listener closes, and the forward is gone: a new connection is refused.
- *   A host forgotten or a Helm quitting closes all of that host's.
+ *   A host forgotten or a desktop quitting closes all of that host's.
  */
 
 /** As much of main's link to a host as the forwards use. */

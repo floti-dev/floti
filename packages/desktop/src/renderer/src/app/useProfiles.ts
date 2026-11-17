@@ -61,7 +61,7 @@ export function useProfiles(host: string = LOCAL_HOST_KEY): ProfilesState {
   useEffect(() => {
     const off = desktop.on('profiles:changed', setProfiles)
     // A list that could not be read says why - with sessions in the local
-    // host, that Helm could not reach it - rather than showing no profiles.
+    // host, that the desktop could not reach it - rather than showing no profiles.
     void desktop
       .invoke('profile:list')
       .then(setProfiles)

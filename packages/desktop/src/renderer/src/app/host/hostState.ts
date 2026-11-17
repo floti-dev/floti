@@ -3,7 +3,7 @@ import type { PageLink } from './link'
 /**
  * Whether the window has its host, as the window shows it: from the moment
  * the host goes without a stop or a quit until the window is connected again,
- * `lost` says whether Helm is starting a new host or waiting for this one to
+ * `lost` says whether the desktop is starting a new host or waiting for this one to
  * answer. `restarting` is set from the moment a Restart host to update ends
  * the connection until the window has the new host: no loss, and nothing is
  * marked lost. `reconnects` counts the times the window got its host back

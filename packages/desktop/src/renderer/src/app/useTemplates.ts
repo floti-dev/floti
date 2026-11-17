@@ -19,7 +19,7 @@ import { desktop } from './bridge'
  * the other one writes.
  *
  * Everything here re-reads rather than patching what it has. A template is a
- * directory somebody can also change in Explorer while Helm is open - that is
+ * directory somebody can also change in Explorer while the desktop is open - that is
  * the whole point of the format - so the list after a write is fetched, never
  * assumed, and the same goes for the file list behind it.
  */
@@ -108,7 +108,7 @@ export function useTemplates(): TemplatesState {
    * The mount read is for the Settings group's count, which is on a pane
    * somebody scrolls past rather than a surface they opened. The read *on open*
    * is the one that matters: a template is a directory somebody can add in
-   * Explorer while Helm is running - that is the whole point of the format - so
+   * Explorer while the desktop is running - that is the whole point of the format - so
    * a list fetched once at startup would be stale for the rest of the session.
    */
   useEffect(() => {

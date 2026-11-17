@@ -23,7 +23,7 @@ let store: Store
 let seq = 0
 const uuid = (): string => `00000000-0000-4000-8000-${(++seq).toString(16).padStart(12, '0')}`
 
-/** A conversation archived in Helm's database, `count` messages long. */
+/** A conversation archived in the desktop's database, `count` messages long. */
 function archive(sessionId: string, count: number): void {
   archiveTranscriptFile(store, {
     file: `/gone/${sessionId}.jsonl`,
@@ -44,7 +44,7 @@ function archive(sessionId: string, count: number): void {
   })
 }
 
-/** Helm's database as the switch-off path left it: three conversations, names, usage and config versions, which stay. */
+/** The desktop's database as the switch-off path left it: three conversations, names, usage and config versions, which stay. */
 function fill(): void {
   archive('aaaa', 3)
   archive('bbbb', 5)
@@ -276,7 +276,7 @@ describe('copying Floti’s own data into the local host', () => {
       .run(Buffer.from(`${PRIVATE} ${'x'.repeat(MAX_FRAME_LEN + 1024)}`))
     const { connection } = host()
     const link = fakeLink(connection)
-    // Core's own budget, as Helm copies with it.
+    // Core's own budget, as the desktop copies with it.
     const logged: string[] = []
     const copy = createOwnDataCopy({ link, store, log: (line) => logged.push(line) })
 

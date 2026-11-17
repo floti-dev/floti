@@ -358,7 +358,7 @@ async function checkComposer(ctx: Ctx, h: PtyHandle): Promise<Check[]> {
 /**
  * Shift+Enter has no standard encoding, so a host has to pick one and the TUI
  * has to agree. Rather than guess, send each candidate to the real composer and
- * see which one grows a second line. Whatever wins here is what Helm's key
+ * see which one grows a second line. Whatever wins here is what the desktop's key
  * binding should emit.
  */
 const NEWLINE_CANDIDATES: { name: string; bytes: string }[] = [

@@ -91,13 +91,13 @@ const local = hostBridges.hostBridge(LOCAL_HOST_KEY)
 /** Whether the window has its host: lost from a crash until it is connected again (`host/hostState.ts`). */
 export const hostState: HostStateStore = createHostState(link)
 
-/** The floti version this PC's host last named, or the versions it refused this Helm with (`host/hostVersions.ts`). */
+/** The floti version this PC's host last named, or the versions it refused this desktop with (`host/hostVersions.ts`). */
 export const seenHostVersion: SeenHostVersionStore = createSeenHostVersion(link)
 
 /**
  * Each host on another computer this device added: where main's link to it
  * stands, and its running sessions over the window's connection to it, the
- * one its bridge holds (`host/remoteHosts.ts`). Empty with sessions in Helm.
+ * one its bridge holds (`host/remoteHosts.ts`).
  */
 export const remoteHosts: RemoteHostsStore = createRemoteHosts({
   bridge: window.desktop,
@@ -109,7 +109,7 @@ export const remoteHosts: RemoteHostsStore = createRemoteHosts({
 export const connectedHosts: ConnectedHosts = createConnectedHosts(remoteHosts)
 
 /**
- * The bridge to one host: `helm` for this PC's (`LOCAL_HOST_KEY`), and for a
+ * The bridge to one host: `desktop` for this PC's (`LOCAL_HOST_KEY`), and for a
  * host on another computer, by its id, the router to its own adapters over
  * the window's own connection to it.
  */

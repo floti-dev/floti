@@ -82,7 +82,7 @@ export interface FilesOptions {
   /** The file tabs in front of a pane - the ones worth reading and watching. */
   shown: readonly ShownFile[]
   /**
-   * Changes whenever the folders Helm knows may have - each scan's result. The
+   * Changes whenever the folders the desktop knows may have - each scan's result. The
    * picker's list is read again on it: the first scan lands a moment after the
    * window paints, and a list read before it would be empty until the sidebar
    * was closed and opened again.

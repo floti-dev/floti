@@ -14,7 +14,7 @@ import type {
  *
  * The profiles live in the local host (`host/profiles.ts`), and every reader
  * of profiles in main reads that `ProfileService`. The save and open pickers
- * are Helm's native dialogs; the question before a delete is the window's own
+ * are the desktop's native dialogs; the question before a delete is the window's own
  * (`DeleteProfileDialog`), asked before anything reaches main or the host.
  */
 

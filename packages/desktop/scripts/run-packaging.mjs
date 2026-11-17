@@ -2,7 +2,7 @@
 // three different things.
 //
 // Phase 1 is about this machine: the grep audit over the checkout, and whether
-// the CLI Helm would launch is the one that is actually installed here.
+// the CLI the desktop would launch is the one that is actually installed here.
 //
 // Phase 2 is about a machine that does not exist yet. "A fresh ~/.claude and no
 // workspace at all" is not a state the developer's own profile can enter, and
@@ -17,8 +17,8 @@
 // the portable exe to a path with spaces, and runs --selftest out of it.
 //
 // It does **not** install anything. Verifying the NSIS package means installing
-// it over the Helm on this machine and uninstalling it again, which ends the
-// Claude Code sessions Helm is hosting - so that is `scripts/verify-installer.mjs`,
+// it over the desktop on this machine and uninstalling it again, which ends the
+// Claude Code sessions the desktop is hosting - so that is `scripts/verify-installer.mjs`,
 // a tool run by name with --yes, and not a group this suite can reach. PKG-2
 // stands open in the report rather than passing, so "packaging-check green"
 // cannot come to mean "the installer works".
@@ -59,7 +59,7 @@ const groups = onlyArg ? onlyArg.slice('--only='.length).split(',') : null
  * Every group here is safe to run on the machine you work on.
  *
  * That is a property of this file now, not a list to keep. The one destructive
- * thing this repository has - installing the NSIS package over the Helm on this
+ * thing this repository has - installing the NSIS package over the desktop on this
  * machine and uninstalling it again - **is not a group of this suite and cannot
  * be reached from it**. It lives in `scripts/verify-installer.mjs` and is run by
  * name, deliberately, with `--yes`.
@@ -409,12 +409,12 @@ function portableChecks(exe) {
   cpSync(exe, copied)
 
   /*
-   * Whether `%APPDATA%\Helm` can be read as evidence at all.
+   * Whether `%LOCALAPPDATA%\Floti\desktop` can be read as evidence at all.
    *
    * "The portable exe wrote nothing beside the installed app" is measured by
    * listing that directory either side of the run - which is only a statement
    * about the portable exe while nothing *else* is writing there. The installed
-   * Helm writes there whenever it is open, so with one running this read is
+   * Floti writes there whenever it is open, so with one running this read is
    * about two processes and attributable to neither.
    *
    * It is asked rather than assumed because this phase is now in the default
@@ -491,7 +491,7 @@ function portableChecks(exe) {
  * Not a pass and not a failure - a record that this suite does not answer the
  * question, so "packaging-check green" cannot quietly come to mean "the
  * installer works". The suite has no way to answer it: installing the package
- * means removing the Helm somebody is using, which is why that lives in a tool
+ * means removing the desktop somebody is using, which is why that lives in a tool
  * and not here.
  */
 function installerNotVerifiedHere(setupExe) {

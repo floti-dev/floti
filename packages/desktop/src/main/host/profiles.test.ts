@@ -24,9 +24,9 @@ const profile = (id: number, name: string, patch: Partial<P.Profile> = {}): P.Pr
 })
 
 interface Options {
-  /** Helm's own profiles, in their pin order. */
+  /** The desktop's own profiles, in their pin order. */
   own?: Profile[]
-  /** Whether Helm's profiles were copied into a host before. */
+  /** Whether the desktop's profiles were copied into a host before. */
   copied?: boolean
   /** The host's profiles to begin with. */
   hosted?: P.Profile[]
@@ -85,7 +85,7 @@ function world(options: Options = {}) {
   return { connection, hosted, link, profiles, emitted, logged, asked, written, marks }
 }
 
-/** A profile of Helm's own, as its database lists it. */
+/** A profile of the desktop's own, as its database lists it. */
 const own = (id: number, name: string, pinnedOrder: number | null, patch: Partial<Profile> = {}): Profile => ({
   ...profile(id, name, { pinnedOrder }),
   ...patch

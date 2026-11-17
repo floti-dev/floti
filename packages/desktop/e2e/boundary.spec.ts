@@ -54,7 +54,7 @@ function strays(channels: readonly RecordedChannel[]): string[] {
     .sort()
 }
 
-/** Fails naming every stray channel, and any page but Helm's own that used a page's connection. */
+/** Fails naming every stray channel, and any page but the desktop's own that used a page's connection. */
 async function expectOnlyClientChannels(desktop: Desktop): Promise<void> {
   const channels = await recorded(desktop)
   expect(channels.length).toBeGreaterThan(0)

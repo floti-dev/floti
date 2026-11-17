@@ -108,7 +108,7 @@ export function emit<K extends EventChannel>(
 export interface IpcContext {
   services: Services
   window: () => BrowserWindow | null
-  /** Each Helm page's own connections to the local host and to each remote host; see `host/page-link.ts`. */
+  /** Each desktop page's own connections to the local host and to each remote host; see `host/page-link.ts`. */
   pageLinks: HostPageLinks
   /**
    * The links to the hosts on other computers this device added; see
@@ -148,7 +148,7 @@ export interface IpcContext {
   plugins: PluginHost
   /** This PC's host: how many sessions it runs, and stopping it once the user has agreed. */
   localHost: LocalHostControl
-  /** The copy of Helm's own database into the local host (`host/own-data.ts`): its state answers `ownData:state`. */
+  /** The copy of the desktop's own database into the local host (`host/own-data.ts`): its state answers `ownData:state`. */
   ownData: OwnDataCopy
   /** Called when the renderer reports it has mounted. */
   rendererReady: () => void
@@ -201,9 +201,9 @@ export interface LocalHostControl {
   sessionCount(): Promise<number>
   /** Stops it with the plain-stop reason: every session ends, and none is offered back. */
   stop(): Promise<void>
-  /** What restarting it on the floti this Helm carries would end, asked without changing anything. */
+  /** What restarting it on the floti this desktop carries would end, asked without changing anything. */
   restartAsk(): Promise<LocalHostRestartOffer>
-  /** Restarts it on the floti this Helm carries and connects to the new host, on the user's click. */
+  /** Restarts it on the floti this desktop carries and connects to the new host, on the user's click. */
   restart(): Promise<void>
   /** What main's link to it is doing now (`hostLink:currentStep`); null before its first connect began. */
   step(): LocalHostStep | null
@@ -237,7 +237,7 @@ export function registerIpc(ctx: IpcContext): void {
   })
 
   /**
-   * What follows any write to Helm's settings, from either half: the session
+   * What follows any write to the desktop's settings, from either half: the session
    * host reads the override, not the settings, so a picked CLI written here has
    * to reach it too - otherwise sessions launch from one path and
    * `claude mcp add` from another.
@@ -283,7 +283,7 @@ export function registerIpc(ctx: IpcContext): void {
   }
 
   const requests: RequestHandlers = {
-    // Only a Helm page's own frame: never a frame inside it, which is where
+    // Only a desktop page's own frame: never a frame inside it, which is where
     // an artifact or a plugin page would be.
     'hostLink:open': (payload, event) => {
       if (event.senderFrame !== event.sender.mainFrame) return Promise.reject(new Error(FOREIGN_PAGE))
@@ -369,7 +369,7 @@ export function registerIpc(ctx: IpcContext): void {
     'windowSessions:restartHost': () => ctx.localHost.restart(),
 
     // The window keeps the host's half of the settings over its own
-    // connection and Helm's half here.
+    // connection and the desktop's half here.
     'ownSettings:read': () => services.settings,
 
     'ownSettings:write': (patch, event) => {
@@ -474,7 +474,7 @@ export function registerIpc(ctx: IpcContext): void {
     'files:editor': () => ({ name: ctx.files.editor() }),
     'files:openInEditor': ({ path, line }) => ctx.files.openInEditor(path, line),
 
-    // A link in a note or a terminal is the user's, not Helm's, so it opens
+    // A link in a note or a terminal is the user's, not the desktop's, so it opens
     // where they expect links to open. The scheme check is the whole security
     // of this handler: `shell.openExternal` will happily hand a `file:` URL to
     // the shell, which on Windows is a way to run whatever it points at.

@@ -3,7 +3,7 @@ import type * as P from '../protocol'
 
 /**
  * The host's history and archive records in the window's vocabulary.
- * Both main and a Helm page's own connection read them, so they live where
+ * Both main and a desktop page's own connection read them, so they live where
  * both builds reach.
  */
 
@@ -24,7 +24,7 @@ export function historySummaryFromHost(summary: P.HistorySummary): HistorySummar
 /**
  * A conversation in the host's index. Every one the window lists is Claude
  * Code's, so the backend is not carried; a listing with no search has no
- * `match` at all, as Helm's own index answers.
+ * `match` at all, as the desktop's own index answers.
  */
 export function historySessionFromHost(session: P.HistorySession): HistorySession {
   return {

@@ -28,7 +28,7 @@ export function documentKind(path: string): 'markdown' | 'html' | null {
 export interface DocumentTabProps {
   /** The host the file is on, when it is not this PC: read, saved and snapshotted there only. */
   host?: string | undefined
-  /** The deepest folder Helm knows that holds the file - what it is saved and linked as part of. */
+  /** The deepest folder the desktop knows that holds the file - what it is saved and linked as part of. */
   scopePath: string
   path: string
   kind: 'markdown' | 'html'

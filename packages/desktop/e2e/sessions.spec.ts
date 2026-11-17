@@ -119,7 +119,7 @@ test('quitting asks first, and End and quit ends every session, everything a ses
 
   await startSession(window, 'beta')
   const pids = [run.pid, child, (await claudeRunIn(world, world.projects.beta)).pid]
-  // The host Helm started, the bridge main reaches it through and the window's own.
+  // The host the desktop started, the bridge main reaches it through and the window's own.
   await expect.poll(async () => flotiChildren(await mainPid(desktop)).length).toBe(3)
   const floti = flotiChildren(await mainPid(desktop))
   expect([...pids, ...floti].every(processAlive)).toBe(true)

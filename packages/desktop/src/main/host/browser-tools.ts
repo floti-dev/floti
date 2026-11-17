@@ -6,15 +6,15 @@ import type { HostLink } from './link'
 import type * as P from './protocol'
 
 /**
- * The browser tools for sessions in the local host, answered in Helm's window.
+ * The browser tools for sessions in the local host, answered in the desktop's window.
  *
  * The host serves `floti-browser` to the sessions it runs, but the browser
  * pane is here, so each call a session's agent makes reaches this side as an
  * event on `agentBrowser:call`, naming the host session it came from, and goes
  * back as the tool's answer on `agentBrowser:answer`. The tools that run are
- * Helm's own (`browser-mcp.ts`, `runBrowserTool`): the same tab rule, the same
+ * the desktop's own (`browser-mcp.ts`, `runBrowserTool`): the same tab rule, the same
  * reach rule with this machine's settings, and the same sentences as for a
- * session Helm runs itself.
+ * session the desktop runs itself.
  *
  * The session a call names is checked here and turned into the identity the
  * tabs are compared by (`opener`), which only main holds: the host never sees
@@ -27,7 +27,7 @@ export interface BrowserToolRelayDeps {
   link: Pick<HostLink, 'onConnected'>
   /** A running host session's identity at the browser tools, or null for one with none. */
   opener: (session: number) => BrowserOpener | null
-  /** Runs one tool for an identity, or null while Helm's browser tools are not there yet. */
+  /** Runs one tool for an identity, or null while the desktop's browser tools are not there yet. */
   run: (opener: BrowserOpener, tool: string, args: unknown) => Promise<BrowserToolResult> | null
   log: (line: string) => void
 }
@@ -41,7 +41,7 @@ export interface BrowserToolRelay {
 export const NOT_A_BROWSER_SESSION =
   "This session is not one Floti's browser tools answer for: it is not running in Floti's local host, or the browser tools are switched off in Settings > Browser."
 
-/** The answer while Helm is still starting and its browser tools are not ready. */
+/** The answer while the desktop is still starting and its browser tools are not ready. */
 export const BROWSER_TOOLS_STARTING = "Floti's browser tools are still starting. Try again in a moment."
 
 /** The answer in place of one too large for a single protocol frame. */

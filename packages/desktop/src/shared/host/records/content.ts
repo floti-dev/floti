@@ -31,7 +31,7 @@ export function scannedConfigScope(folder: Project, kind: 'workspace' | 'project
 }
 
 /**
- * The switcher's list, in the order Helm has always given it: the user scope,
+ * The switcher's list, in the order the desktop has always given it: the user scope,
  * then the scanned workspaces, then the scanned projects, then every other
  * folder the host lists (a saved profile's root and overlays), each once by
  * its path, ignoring case.

@@ -285,9 +285,9 @@ function snapshot(dir) {
  * Says whether the real directory moved while dev was up.
  *
  * Printed rather than thrown, and this is the honest form: acceptance asks for
- * dev to write nothing there, but the installed Helm is allowed to be running
+ * dev to write nothing there, but the installed Floti is allowed to be running
  * at the same time - that is the other half of what this change is for - and a
- * running Helm writes to its own directory constantly. So the comparison names
+ * running desktop writes to its own directory constantly. So the comparison names
  * what changed and leaves the reading to whoever is looking, rather than
  * failing a dev run over somebody else's write.
  */

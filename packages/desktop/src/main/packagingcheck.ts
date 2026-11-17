@@ -24,7 +24,7 @@ import type { Check } from './fidelity'
  * checks. A
  * hand-written `readdirSync` recursion beside the scaffolder, a hand-written
  * YAML line parser beside the manifest writer, a hand-written semver comparison
- * beside the version guard, a direct `execFileSync` of the CLI beside Helm's
+ * beside the version guard, a direct `execFileSync` of the CLI beside the desktop's
  * own detection.
  *
  * Two of the criteria cannot be settled that way and are handled differently:
@@ -35,7 +35,7 @@ import type { Check } from './fidelity'
  *   directory. That is not a test hook - it is the app's own portable-mode
  *   mechanism, which redirects `userData` beside the exe. The child therefore
  *   opens an empty database in a temp directory, is pointed away from the real
- *   `~/.claude` with `--claude-home=`, and the user's own `%APPDATA%\Helm` is
+ *   `~/.claude` with `--claude-home=`, and the user's own `%LOCALAPPDATA%\Floti\desktop` is
  *   never opened. Nothing is backed up because nothing is touched.
  *
  *   "The portable exe runs from any path" and "NSIS installs per-user" are
@@ -1134,12 +1134,12 @@ async function reachLauncher(
   const authShot = await screenshot(win, shotDir, 'packaging-firstrun-unauthenticated.png')
 
   // Independent: nothing that looks like a credential exists anywhere the app
-  // could have found one, and Helm wrote nothing into the config directory.
+  // could have found one, and the desktop wrote nothing into the config directory.
   const credentialsAbsent = !existsSync(join(fixtures.claudeHome, '.credentials.json'))
   const configDirStillAbsent = !existsSync(fixtures.claudeHome)
 
   /**
-   * Files *Helm* wrote, which is a smaller set than the data directory.
+   * Files *the desktop* wrote, which is a smaller set than the data directory.
    * Chromium keeps its own profile in there and one of its stores is called
    * "Trust Tokens" - a browser-platform feature with nothing to do with Claude,
    * and a false positive that would make this assertion meaningless in either

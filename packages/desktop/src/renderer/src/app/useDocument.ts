@@ -16,8 +16,8 @@ import { relativeTo } from './useFiles'
  * console and conflict.
  *
  * **Reads and writes go through `content:*` with `scopePath` the deepest folder
- * Helm knows that holds the file** - so a note under a workspace's `repos/helm`
- * is saved, snapshotted and wikilinked as part of `helm` rather than refused
+ * the desktop knows that holds the file** - so a note under a workspace's `repos/app`
+ * is saved, snapshotted and wikilinked as part of `app` rather than refused
  * as "not content" by the workspace's guard (`assertContentWritable`).
  *
  * A change on disk arrives through the Files view's own watch (`files:changed`)

@@ -20,9 +20,9 @@ import {
 } from './desktop'
 
 /**
- * The host's own lifetime around Helm's: sessions run in a `floti host` Helm
+ * The host's own lifetime around the desktop's: sessions run in a `floti host` the desktop
  * starts in its own data directory, reached through `floti bridge` from
- * Helm's client folder, and outlive a Helm that quits keeping them, one that
+ * the desktop's client folder, and outlive a desktop that quits keeping them, one that
  * is killed, and a host that dies. `pnpm test:e2e` builds both.
  */
 
@@ -79,7 +79,7 @@ test('closing the window asks first; Cancel changes nothing, and Keep running an
   await closeWindow(desktop.app)
   await answer(question.getByRole('button', { name: 'Keep running and quit' }))
   await expect.poll(() => processAlive(main)).toBe(false)
-  // Helm is gone; the host and the sessions it runs are not.
+  // The desktop is gone; the host and the sessions it runs are not.
   expect([host!, ...runs].every(processAlive)).toBe(true)
 
   const next = await launchDesktop(world)
@@ -165,7 +165,7 @@ test('after Floti is killed outright, its sessions run on in the host, and the n
   // Outright: on macOS and Linux a plain kill's SIGTERM is a request to quit,
   // which Electron honours as a clean quit.
   process.kill(await mainPid(desktop), 'SIGKILL')
-  // The bridges end with the Helm whose pipes they were; the host and the
+  // The bridges end with the desktop whose pipes they were; the host and the
   // session it runs do not.
   await expect.poll(() => bridges.filter(processAlive)).toEqual([])
   expect([host, run.pid].every(processAlive)).toBe(true)
@@ -177,7 +177,7 @@ test('after Floti is killed outright, its sessions run on in the host, and the n
   expect(await sessionIdOf(window, 'alpha, ready')).toBe(id)
   await expect.poll(() => terminalText(window, id)).toContain('You said: draft the schema')
 
-  // Reached through the host already running: this Helm started only its bridges.
+  // Reached through the host already running: this desktop started only its bridges.
   await expect.poll(async () => flotiChildren(await mainPid(desktop)).length).toBe(2)
   expect(flotiHostsAmong(flotiChildren(await mainPid(desktop)))).toEqual([])
   expect([host, run.pid].every(processAlive)).toBe(true)
@@ -214,7 +214,7 @@ test('when the host Floti started dies, Floti starts a new host and reconnects, 
   // Outright, as a crash would: this test's own host, never another.
   process.kill(host!, 'SIGKILL')
 
-  // Helm started the host that died, so it starts a new one and reconnects.
+  // The desktop started the host that died, so it starts a new one and reconnects.
   await expect
     .poll(async () => {
       const hosts = flotiHostsAmong(flotiChildren(await mainPid(desktop)))

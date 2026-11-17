@@ -5,14 +5,14 @@ import type { BrowserConsoleEntry, BrowserState } from '../shared/ipc'
 import browserToolTable from '../../../../crates/host/src/server/browser_tools.json'
 
 /**
- * Helm's browser tools, run for the sessions the local host runs.
+ * The desktop's browser tools, run for the sessions the local host runs.
  *
  * The host serves its sessions' agent tools on its own listener
  * (`crates/host/src/agent_tools`). It has no browser, so each browser call goes
  * over `agentBrowser:call` to the client that declared one, and this is that
  * client's answer (`host/browser-tools.ts`): the tool run against the browser
  * pane for the session's identity, under the same tab rule and reach rule the
- * host's route names. Helm itself binds no port, mints no token and writes no
+ * host's route names. The desktop itself binds no port, mints no token and writes no
  * `--mcp-config`.
  *
  * - **A session drives only its own tabs**, and a tab of the user's only once
@@ -838,13 +838,13 @@ const missingElement = (args: Args): string =>
  * lexical environment that outlives the call, so the second
  * `executeJavaScript` carrying the same declaration throws "Identifier
  * '__flotiTarget' has already been declared" - and the model would read that as
- * the page being broken rather than as Helm having declared a variable twice.
+ * the page being broken rather than as the desktop having declared a variable twice.
  *
  * A `ref` is an index path from `documentElement` - `"1.3.0"` is
  * `documentElement.children[1].children[3].children[0]` - resolved by walking,
  * at the moment of the click, rather than by anything left behind in the page.
  * Playwright's equivalent stamps an attribute on every element it lists; that
- * would mean Helm writing into somebody's page in order to read it, and this is
+ * would mean the desktop writing into somebody's page in order to read it, and this is
  * already the milestone that has to be careful about what it does to a page
  * nobody is looking at. A walk leaves nothing at all.
  *
@@ -1100,7 +1100,7 @@ const consoleLine = (entry: BrowserConsoleEntry): string =>
  * The page walk, as one expression.
  *
  * Kept as a string rather than a bundled module because it runs in *somebody
- * else's page*: there is no preload, nothing of Helm's is loaded in there, and
+ * else's page*: there is no preload, nothing of the desktop's is loaded in there, and
  * the only route in is the same `executeJavaScript` the console panel already
  * uses. So this is written to leave no trace - no attribute, no global, no
  * listener - and to answer with JSON that crosses the process boundary.

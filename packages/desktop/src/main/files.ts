@@ -6,7 +6,7 @@ import { isInsideRoot, type DiscoveryResult, type Profile } from '@floti/core'
  * Everything else the view does - its tree, its reads, its watch - is the
  * local host's (`host/files.ts`).
  *
- * **Scoped.** Only a file inside a folder Helm knows - a discovered project, a
+ * **Scoped.** Only a file inside a folder the desktop knows - a discovered project, a
  * profile's folder, a hosted session's working directory - is handed on: this
  * hands a path to another program, and "any path the window names" is not a
  * thing to hand on.

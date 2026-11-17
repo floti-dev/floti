@@ -1,6 +1,6 @@
 /**
- * How Helm says the local host could not be reached, wherever that is found
- * out: main's own link (`main/host/launcher.ts`) and a Helm page's own
+ * How the desktop says the local host could not be reached, wherever that is found
+ * out: main's own link (`main/host/launcher.ts`) and a desktop page's own
  * connection (`renderer/src/app/host/link.ts`) end the sentence the same way,
  * at its cause.
  */

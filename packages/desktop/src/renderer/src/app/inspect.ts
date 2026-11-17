@@ -8,7 +8,7 @@ import { terminalPrefs } from './termprefs'
  * A read-only window onto the terminals, for the end-to-end tests and the
  * diagnostic drivers.
  *
- * Every terminal in Helm lives outside React in a module registry, and xterm
+ * Every terminal in the desktop lives outside React in a module registry, and xterm
  * paints to a canvas, so a test holding the window has no other route to what a
  * terminal shows or how it is configured. Nothing in the app reads this, it
  * exposes nothing the renderer did not already have, and it cannot write.
@@ -49,7 +49,7 @@ export function installOverlayInspector(): void {
  * the window's own connection to the host, or over Electron IPC for what is
  * the window's own.
  *
- * Only on Helm's own top-level window. It is the same object the app imports
+ * Only on the desktop's own top-level window. It is the same object the app imports
  * and reaches nothing the page did not already have: a plugin page, an
  * artifact frame and a page in the Browser tab are other origins and never see
  * this window's globals.

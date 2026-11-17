@@ -22,7 +22,7 @@ import { createWorkspaceAdapter, type WorkspaceAdapter } from './workspace'
  * plugins) and a router of its own in front of them.
  *
  * This PC's host is keyed `LOCAL_HOST_KEY`, and its bridge is the window's
- * own (`helm` in `bridge.ts`). A host on another computer is keyed by its id
+ * own (`desktop` in `bridge.ts`). A host on another computer is keyed by its id
  * in the `hosts` setting.
  *
  * Every router sends what `boundary.rs` lists as client-only to the preload's

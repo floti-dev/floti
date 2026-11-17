@@ -94,7 +94,7 @@ export async function pluginFrame(ui: Page, path: string, origin = 'floti-plugin
  * Waits until a pointer over the page in `frame` reaches the page.
  *
  * A plugin page runs in a process of its own. For a moment after it is framed,
- * Chromium still routes a pointer over it to Helm's window, where it lands on
+ * Chromium still routes a pointer over it to the desktop's window, where it lands on
  * the `<iframe>` and the page never hears it, so a click made then is lost; on
  * a loaded machine the moment is long enough for a test to click in it. A move
  * the page itself hears is the sign that a click will reach it.

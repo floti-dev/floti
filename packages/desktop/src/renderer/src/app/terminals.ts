@@ -29,7 +29,7 @@ import { onTerminalPrefs, terminalPrefs } from './termprefs'
  * A session is its host and its row id there (this PC's host is
  * `LOCAL_HOST_KEY`, the default): each host numbers its own sessions, so a
  * terminal is kept by both, and its keys and size go to its own host's bridge.
- * The clipboard and links are this PC's, through `helm`.
+ * The clipboard and links are this PC's, through `desktop`.
  */
 
 interface Pane {
@@ -202,7 +202,7 @@ const SAMPLE = 'W'.repeat(32)
  * canvas-based estimate opened every pty eight columns narrow.
  *
  * Both axes then follow the WebGL renderer's own arithmetic, which is the one
- * Helm loads: a cell is quantised to whole device pixels, **down** across and
+ * the desktop loads: a cell is quantised to whole device pixels, **down** across and
  * **up** down. That is not a detail - the built-in stack measures 11.72px per
  * cell at 20px and the renderer draws it at 11, which is eight columns across a
  * wide pane. The DOM renderer, which only appears after a lost GL context,
