@@ -126,32 +126,66 @@ mod tests {
     use super::*;
     use crate::testkit::TestDirs;
 
+    /// Whether a folder holding only `entry` (a folder when it ends in `/`)
+    /// is a scope that exists.
+    fn exists_with(dirs: &TestDirs, entry: &str) -> bool {
+        let folder = dirs.folder(&format!("holds {}", entry.trim_end_matches('/')));
+        if let Some(dir) = entry.strip_suffix('/') {
+            std::fs::create_dir(folder.join(dir)).unwrap();
+        } else if !entry.is_empty() {
+            std::fs::write(folder.join(entry), "").unwrap();
+        }
+        project_scope(&folder, ConfigScopeKind::Project, None).exists
+    }
+
     #[test]
     fn a_folder_with_config_in_either_shape_is_a_scope_that_exists() {
         let dirs = TestDirs::new();
-        let exists = |name: &str, make: &dyn Fn(&Path)| {
-            let folder = dirs.folder(name);
-            make(&folder);
-            project_scope(&folder, ConfigScopeKind::Project, None).exists
-        };
-        assert!(!exists("empty", &|_| {}));
-        assert!(exists("claude", &|f| std::fs::create_dir(
-            f.join(".claude")
-        )
-        .unwrap()));
-        assert!(exists("claude md", &|f| std::fs::write(
-            f.join("CLAUDE.md"),
-            ""
-        )
-        .unwrap()));
-        assert!(exists("agents", &|f| std::fs::create_dir(
-            f.join(".agents")
-        )
-        .unwrap()));
-        assert!(exists("agents md", &|f| std::fs::write(
-            f.join("AGENTS.md"),
-            ""
-        )
-        .unwrap()));
+        assert!(!exists_with(&dirs, ""));
+        for entry in [".claude/", "CLAUDE.md", ".agents/", "AGENTS.md"] {
+            assert!(exists_with(&dirs, entry), "{entry}");
+        }
+    }
+
+    #[test]
+    fn a_scope_in_the_shared_shape_lists_its_agents_md_and_its_agents_skills() {
+        let dirs = TestDirs::new();
+        let backend = super::super::test_backend(&dirs);
+        let folder = dirs.folder("hub");
+        let skill = folder.join(".agents").join("skills").join("plan");
+        std::fs::create_dir_all(&skill).unwrap();
+        std::fs::write(folder.join("AGENTS.md"), "# hub\n").unwrap();
+        std::fs::write(skill.join("SKILL.md"), "---\ndescription: Plans.\n---\n").unwrap();
+        std::fs::write(skill.join("reference.md"), "# reference\n").unwrap();
+        // Not configuration, so not listed.
+        std::fs::write(folder.join(".agents").join("notes.md"), "").unwrap();
+
+        let scope = project_scope(&folder, ConfigScopeKind::Project, None);
+        let tree = read_tree(&backend, &scope);
+        assert!(tree.errors.is_empty(), "{:?}", tree.errors);
+        let listed: Vec<(ConfigFileKind, &str, &str)> = tree
+            .files
+            .iter()
+            .map(|file| (file.kind, file.name.as_str(), file.rel_path.as_str()))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                (ConfigFileKind::AgentsMd, "AGENTS.md", "AGENTS.md"),
+                (
+                    ConfigFileKind::Skill,
+                    "plan",
+                    ".agents/skills/plan/SKILL.md"
+                ),
+                (
+                    ConfigFileKind::Other,
+                    "plan/reference.md",
+                    ".agents/skills/plan/reference.md"
+                ),
+            ]
+        );
+        let plan = &tree.files[1];
+        assert_eq!(Path::new(&plan.path), skill.join("SKILL.md"));
+        assert_eq!(plan.description.as_deref(), Some("Plans."));
     }
 }

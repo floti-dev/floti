@@ -450,14 +450,6 @@ pub trait ConfigSource: Send + Sync {
     /// file is listed from its directory entry alone, never opened.
     fn config_files(&self, project: Option<&Path>) -> Result<Vec<ConfigFile>>;
 
-    /// The skills in `project`'s `.agents/skills`, the shared shape's skills
-    /// folder, each listed as [`config_files`](Self::config_files) lists a
-    /// skill: its `SKILL.md`, named by its folder. An agent whose launches
-    /// compose no shared-shape skills lists none.
-    fn shared_skill_files(&self, _project: &Path) -> Result<Vec<ConfigFile>> {
-        Ok(Vec::new())
-    }
-
     /// Where the agent keeps its config - its config folder and its global
     /// config - when it has them.
     fn agent_config(&self) -> Option<crate::agent_config::AgentConfig> {

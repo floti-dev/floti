@@ -409,6 +409,50 @@ async fn offers_the_user_scope_to_copy_from_and_copies_a_skill_as_its_whole_fold
 }
 
 #[tokio::test]
+async fn copies_a_shared_shape_scopes_agents_md_and_a_skill_where_the_shared_shape_keeps_them() {
+    let world = World::new();
+    let hub = world.dirs.folder("hub");
+    let skill = hub.join(".agents").join("skills").join("plan");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(hub.join("AGENTS.md"), "# hub\n").unwrap();
+    std::fs::write(skill.join("SKILL.md"), "---\nname: plan\n---\n").unwrap();
+    std::fs::write(skill.join("reference.md"), "# reference\n").unwrap();
+    let _: TemplateWriteResult = world
+        .ask::<CreateTemplate>(&CreateTemplateRequest {
+            name: "kit".into(),
+            label: None,
+            description: None,
+        })
+        .unwrap();
+
+    let result: TemplateImportResult = world
+        .ask::<ImportIntoTemplate>(&ImportIntoTemplateRequest {
+            template: "kit".into(),
+            scope_path: text(&hub),
+            paths: vec![text(&hub.join("AGENTS.md")), text(&skill.join("SKILL.md"))],
+        })
+        .unwrap();
+
+    assert!(result.problems.is_empty(), "{:?}", result.problems);
+    let mut created = result.created.clone();
+    created.sort();
+    assert_eq!(
+        created,
+        [
+            ".agents/skills/plan/SKILL.md",
+            ".agents/skills/plan/reference.md",
+            "AGENTS.md"
+        ]
+    );
+    let kit = world.templates().join("kit");
+    assert_eq!(
+        std::fs::read_to_string(kit.join("AGENTS.md")).unwrap(),
+        "# hub\n"
+    );
+    assert!(kit.join(".agents/skills/plan/reference.md").is_file());
+}
+
+#[tokio::test]
 async fn an_import_of_a_file_the_scope_no_longer_lists_says_so_and_copies_nothing() {
     let world = World::new();
     let claude = world.dirs.home.join(".claude");

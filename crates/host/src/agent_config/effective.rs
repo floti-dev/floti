@@ -64,6 +64,11 @@ impl Entries {
 
 /// One source's contributions, addressed as a session would address them:
 /// bare for the user's and the folder's own, prefixed for an overlay's.
+///
+/// The shared shape's skills arrive only from an overlay, and only those its
+/// launch links: all of `.agents/skills` where it has no `.claude/skills`,
+/// and otherwise those in a folder `.claude/skills` has none of the same name
+/// for.
 fn entries_from(
     backend: &dyn AgentBackend,
     base: &Path,
@@ -74,8 +79,24 @@ fn entries_from(
         EffectiveSource::User => user_scope(base),
         _ => project_scope(base, ConfigScopeKind::Project, None),
     };
+    let linked: Vec<PathBuf> = match source {
+        EffectiveSource::Overlay => match WorkspaceProject::read(base).skills {
+            Skills::None => Vec::new(),
+            Skills::Folder(folder) => vec![folder],
+            Skills::Each(each) => each.into_values().collect(),
+        },
+        _ => Vec::new(),
+    };
     let mut entries = Entries::default();
     for file in scope_files(backend, &scope).unwrap_or_default() {
+        let shared = file.rel_path.starts_with(".agents/");
+        if shared
+            && !linked
+                .iter()
+                .any(|folder| Path::new(&file.path).starts_with(folder))
+        {
+            continue;
+        }
         let bucket = match file.kind {
             ConfigFileKind::Skill => &mut entries.skills,
             ConfigFileKind::Command => &mut entries.commands,
@@ -104,32 +125,6 @@ fn entry_of(
         path: file.path,
         description: file.description,
     }
-}
-
-/// The skills in overlay `path`'s `.agents/skills` that its launch links: all
-/// of them where it has no `.claude/skills`, and otherwise those in a folder
-/// `.claude/skills` has none of the same name for.
-fn shared_skills(backend: &dyn AgentBackend, path: &Path, namespace: &str) -> Vec<EffectiveEntry> {
-    let linked: Vec<PathBuf> = match WorkspaceProject::read(path).skills {
-        Skills::None => return Vec::new(),
-        Skills::Folder(folder) => vec![folder],
-        Skills::Each(each) => each.into_values().collect(),
-    };
-    let Some(source) = backend.config() else {
-        return Vec::new();
-    };
-    let origin = path.display().to_string();
-    source
-        .shared_skill_files(path)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|file| {
-            linked
-                .iter()
-                .any(|folder| Path::new(&file.path).starts_with(folder))
-        })
-        .map(|file| entry_of(file, EffectiveSource::Overlay, Some(namespace), &origin))
-        .collect()
 }
 
 /// What arrives of an overlay that composes nothing else: its instruction
@@ -456,8 +451,7 @@ pub fn effective_view(
             });
             continue;
         }
-        let mut from = entries_from(backend, path, EffectiveSource::Overlay, Some(&name));
-        from.skills.extend(shared_skills(backend, path, &name));
+        let from = entries_from(backend, path, EffectiveSource::Overlay, Some(&name));
         let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
         overlays.push(EffectiveOverlay {
             name,
@@ -583,33 +577,15 @@ pub fn effective_view(
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::sync::Arc;
 
+    use super::super::test_backend as backend;
     use super::*;
-    use crate::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
-    use crate::platform::process_tree::Native;
+    use crate::agent::claude_code::ClaudeCodeBackend;
     use crate::testkit::TestDirs;
 
     fn put(path: &Path, text: &str) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
-    }
-
-    /// Claude Code with its config folder under `dirs`; nothing here runs it.
-    fn backend(dirs: &TestDirs) -> ClaudeCodeBackend {
-        let config_dir = dirs.home.join(".claude");
-        fs::create_dir_all(&config_dir).unwrap();
-        ClaudeCodeBackend::new(
-            ClaudeCodeSettings {
-                program: "claude".into(),
-                leading_args: Vec::new(),
-                config_dir,
-                pass_config_dir: true,
-                api_key_set: false,
-                search_first: Vec::new(),
-            },
-            Arc::new(Native),
-        )
     }
 
     fn view_of(backend: &ClaudeCodeBackend, cwd: &Path, overlays: &[&Path]) -> EffectiveView {

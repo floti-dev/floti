@@ -81,6 +81,7 @@ const TEXT_EXT: &[&str] = &[
 /// The order a listing groups kinds in.
 const ORDER: &[ConfigFileKind] = &[
     ConfigFileKind::ClaudeMd,
+    ConfigFileKind::AgentsMd,
     ConfigFileKind::Settings,
     ConfigFileKind::SettingsLocal,
     ConfigFileKind::Mcp,
@@ -120,26 +121,6 @@ pub(super) fn config_files(
     Ok(files)
 }
 
-/// The skills in `project`'s `.agents/skills`, the shared shape's, which a
-/// launch composes from an overlay beside its `.claude/skills`: listed as a
-/// `.claude` skill is, with `rel_path` from the project
-/// (`.agents/skills/plan/SKILL.md`). Nothing else under `.agents` is
-/// configuration, so nothing else is listed.
-pub(super) fn shared_skill_files(project: &Path, credentials: &[PathBuf]) -> Vec<ConfigFile> {
-    let agents_dir = project.join(".agents");
-    let tree = Tree {
-        base: project,
-        claude_dir: &agents_dir,
-        credentials,
-    };
-    let mut files = Vec::new();
-    // At the depth `skills` has in a walk from the config folder.
-    walk(&tree, &agents_dir.join("skills"), 1, &mut files);
-    files.retain(|file| file.kind == ConfigFileKind::Skill);
-    files.sort_by(|a, b| compare_names(&a.name, &b.name).then_with(|| a.rel_path.cmp(&b.rel_path)));
-    files
-}
-
 /// Whether `path` might be one of `credentials`, ignoring case on every OS:
 /// a look-alike left unopened costs nothing.
 fn is_credential(credentials: &[PathBuf], path: &Path) -> bool {
@@ -150,8 +131,11 @@ fn is_credential(credentials: &[PathBuf], path: &Path) -> bool {
     })
 }
 
-/// One scope's files, sorted by kind and then name. `loose` adds the
-/// `CLAUDE.md` and `.mcp.json` beside a project's `.claude`.
+/// One scope's files, sorted by kind and then name. `loose` adds what sits
+/// beside a project's `.claude`: its `CLAUDE.md` and `.mcp.json`, and the
+/// shared shape's `AGENTS.md` and `.agents/skills` (listed as a `.claude`
+/// skill folder is, with `rel_path` from the project). Nothing else under
+/// `.agents` is configuration, so nothing else there is listed.
 fn scope_files(
     base: &Path,
     claude_dir: &Path,
@@ -175,8 +159,17 @@ fn scope_files(
         Err(source) => return Err(Error::path("list", claude_dir, source)),
     }
     if loose {
+        let agents_dir = base.join(".agents");
+        let shared = Tree {
+            base,
+            claude_dir: &agents_dir,
+            credentials,
+        };
+        // At the depth `skills` has in a walk from the config folder.
+        walk(&shared, &agents_dir.join("skills"), 1, &mut files);
         for (name, kind) in [
             ("CLAUDE.md", ConfigFileKind::ClaudeMd),
+            ("AGENTS.md", ConfigFileKind::AgentsMd),
             (".mcp.json", ConfigFileKind::Mcp),
         ] {
             let path = base.join(name);

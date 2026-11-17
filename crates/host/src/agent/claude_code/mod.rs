@@ -676,13 +676,6 @@ impl ConfigSource for ClaudeCodeBackend {
         config::config_files(&self.settings.config_dir, project, &self.credential_paths())
     }
 
-    fn shared_skill_files(&self, project: &Path) -> Result<Vec<ConfigFile>> {
-        Ok(config::shared_skill_files(
-            project,
-            &self.credential_paths(),
-        ))
-    }
-
     fn agent_config(&self) -> Option<crate::agent_config::AgentConfig> {
         Some(ClaudeCodeBackend::agent_config(self))
     }
