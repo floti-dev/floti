@@ -5192,13 +5192,6 @@
             "null"
           ]
         },
-        "openingPrompt": {
-          "description": "The session's first message, passed to the agent at launch as its\nopening prompt, as a profile's is, and never typed. Present and not\nblank, it replaces the profile's; a resume takes none. A host before\nit ignores the field and starts the session with no first message.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "permissionMode": {
           "anyOf": [
             {

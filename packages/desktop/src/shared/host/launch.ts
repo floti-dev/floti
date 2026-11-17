@@ -22,7 +22,6 @@ export function launchRequestToHost(req: LaunchSessionRequest): P.LaunchSessionR
     backend: req.backend ?? (agent === null ? CLAUDE_CODE_BACKEND : null),
     ...(agent === null ? {} : { agent }),
     ...(req.chosen === undefined ? {} : { chosen: req.chosen }),
-    ...(req.openingPrompt == null || req.openingPrompt.trim() === '' ? {} : { openingPrompt: req.openingPrompt }),
     cols: req.cols,
     rows: req.rows
   }

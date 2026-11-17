@@ -503,7 +503,6 @@ fn session_requests_and_answers_round_trip_over_cbor() {
                 model: Some("opus".into()),
                 effort: None,
             }),
-            opening_prompt: None,
             cols: 80,
             rows: 24,
         },

@@ -351,8 +351,6 @@ export interface LaunchSessionRequest {
    * absent, the agent's fill what the request leaves out.
    */
   chosen?: { model: string | null; effort: EffortLevel | null }
-  /** The session's first message, passed at launch as its opening prompt and never typed; absent for none. */
-  openingPrompt?: string | null
   cols: number
   rows: number
 }

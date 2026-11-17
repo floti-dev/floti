@@ -1975,10 +1975,10 @@ export interface AppSettings {
   noticesSeen: Readonly<Record<string, string>>
 }
 
-/** A step of the guided first run: 1 Welcome to 6 Your first session. */
-export type WalkthroughStep = 1 | 2 | 3 | 4 | 5 | 6
+/** A step of the guided first run: 1 Welcome to 5 Around the window. */
+export type WalkthroughStep = 1 | 2 | 3 | 4 | 5
 
-export const WALKTHROUGH_STEPS: readonly WalkthroughStep[] = [1, 2, 3, 4, 5, 6]
+export const WALKTHROUGH_STEPS: readonly WalkthroughStep[] = [1, 2, 3, 4, 5]
 
 /** The last step the setup window shows; the shell shows the ones after it. */
 export const WALKTHROUGH_SETUP_LAST: WalkthroughStep = 4
@@ -1988,8 +1988,8 @@ export interface Walkthrough {
   step: WalkthroughStep
   /**
    * The workspace step 4 made or chose, which the shell opens with selected
-   * and step 6 starts its session in; null when it added scan folders, was
-   * skipped, or has not been reached.
+   * and leaves selected on its home screen when the walkthrough is done; null
+   * when it added scan folders, was skipped, or has not been reached.
    */
   workspace: string | null
 }
@@ -2002,7 +2002,7 @@ export function walkthroughInSetupWindow(walkthrough: Walkthrough | null): boole
   return walkthrough !== null && walkthrough.step <= WALKTHROUGH_SETUP_LAST
 }
 
-/** Whether the walkthrough is at a step the shell shows (5 or 6). */
+/** Whether the walkthrough is at the step the shell shows (5). */
 export function walkthroughInShell(walkthrough: Walkthrough | null): boolean {
   return walkthrough !== null && walkthrough.step > WALKTHROUGH_SETUP_LAST
 }

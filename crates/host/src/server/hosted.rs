@@ -725,9 +725,7 @@ impl Hosted {
             None => {
                 let folder = PathBuf::from(&request.cwd);
                 let name = non_empty(request.name).unwrap_or_else(|| folder_name(&folder));
-                // The launch's own first message wins over the profile's.
-                let prompt = non_empty(request.opening_prompt.clone())
-                    .or_else(|| non_empty(profile.as_ref().and_then(|p| p.opening_prompt.clone())));
+                let prompt = non_empty(profile.as_ref().and_then(|p| p.opening_prompt.clone()));
                 (folder, name, prompt)
             }
         };

@@ -1,4 +1,4 @@
-import { AGENT_FIXES, type AppSettings, type Walkthrough, type WalkthroughStep } from '@floti/core/types'
+import { AGENT_FIXES, WALKTHROUGH_STEPS, type AppSettings, type Walkthrough, type WalkthroughStep } from '@floti/core/types'
 import type { WalkthroughAgent } from '@floti/ui'
 import type { ClaudeStatus } from '../../../../shared/ipc'
 
@@ -35,9 +35,12 @@ function versionLine(version: string, command: string): string {
   return bare === '' ? command : `${command} ${bare}`
 }
 
+/** The last step: 5, the tour in the shell. */
+const LAST_STEP = WALKTHROUGH_STEPS[WALKTHROUGH_STEPS.length - 1]!
+
 /** The step after `step`, or the step before it. */
 export function stepAfter(step: WalkthroughStep): WalkthroughStep {
-  return step >= 6 ? 6 : ((step + 1) as WalkthroughStep)
+  return step >= LAST_STEP ? LAST_STEP : ((step + 1) as WalkthroughStep)
 }
 export function stepBefore(step: WalkthroughStep): WalkthroughStep {
   return step <= 1 ? 1 : ((step - 1) as WalkthroughStep)
@@ -46,12 +49,6 @@ export function stepBefore(step: WalkthroughStep): WalkthroughStep {
 /** The walkthrough at `step`, keeping the workspace it chose. */
 export function atStep(current: Walkthrough | null, step: WalkthroughStep): Walkthrough {
   return { step, workspace: current?.workspace ?? null }
-}
-
-/** The folder's own name, for "Start an agent in my-work." */
-export function folderName(path: string): string {
-  const parts = path.split(/[\\/]+/).filter((part) => part !== '')
-  return parts.at(-1) ?? path
 }
 
 /** The patch that leaves the walkthrough, done: it shows again only from Settings. */

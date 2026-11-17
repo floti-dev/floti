@@ -507,7 +507,7 @@ export const SETTING_VALIDATORS: SettingValidators = {
     }
     const { step, workspace, ...rest } = value as Record<string, unknown>
     if (!(WALKTHROUGH_STEPS as readonly unknown[]).includes(step)) {
-      return `expected a step from 1 to 6, got ${describe(step)}`
+      return `expected a step from 1 to 5, got ${describe(step)}`
     }
     if (workspace !== null && (typeof workspace !== 'string' || workspace.trim() === '')) {
       return `expected a workspace folder or null, got ${describe(workspace)}`

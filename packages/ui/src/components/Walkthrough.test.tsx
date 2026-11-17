@@ -3,13 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AgentsStep,
-  FirstSessionStep,
   HostStep,
   TourStep,
   WelcomeStep,
   WorkspaceStep,
   type AgentsStepProps,
-  type FirstSessionStepProps,
   type HostStepProps,
   type WalkthroughAgent,
   type WorkspaceStepProps
@@ -37,8 +35,8 @@ describe('Step 1, Welcome', () => {
     const onGetStarted = vi.fn()
     render(<WelcomeStep onSkipSetup={onSkipSetup} onGetStarted={onGetStarted} />)
     expect(screen.getByRole('heading', { name: 'Welcome to Floti' })).toBeTruthy()
-    expect(screen.getByText('Step 1 of 6')).toBeTruthy()
-    expect(progress()).toEqual(['done', 'todo', 'todo', 'todo', 'todo', 'todo'])
+    expect(screen.getByText('Step 1 of 5')).toBeTruthy()
+    expect(progress()).toEqual(['done', 'todo', 'todo', 'todo', 'todo'])
     expect(screen.getByText('Be the captain of your fleet.')).toBeTruthy()
     expect(
       screen.getByText(
@@ -304,71 +302,18 @@ describe('Step 5, Around the window', () => {
       'SettingsHosts, themes and this tour',
       'HistoryCtrl+HFind and resume past sessions'
     ])
-    expect(progress().filter((bar) => bar === 'done')).toHaveLength(5)
-  })
-})
-
-describe('Step 6, Your first session', () => {
-  function renderFirst(overrides: Partial<FirstSessionStepProps> = {}): FirstSessionStepProps {
-    const props: FirstSessionStepProps = {
-      workspace: 'my-work',
-      agents: [{ id: 'claude-code', name: 'Claude Code' }],
-      agent: 'claude-code',
-      onAgent: vi.fn(),
-      message: '',
-      onMessage: vi.fn(),
-      problems: [],
-      busy: false,
-      onSkip: vi.fn(),
-      onBack: vi.fn(),
-      onStart: vi.fn(),
-      ...overrides
-    }
-    render(<FirstSessionStep {...props} />)
-    return props
-  }
-
-  it('starts an agent in the workspace, with an optional first message', async () => {
-    const props = renderFirst()
-    expect(screen.getByRole('heading', { name: 'Your first session' })).toBeTruthy()
-    expect(screen.getByText('Start an agent in my-work.')).toBeTruthy()
-    expect(screen.getByRole('combobox', { name: 'Agent' })).toHaveProperty('value', 'claude-code')
-    const message = screen.getByRole('textbox', { name: /First message/ })
-    expect(message.getAttribute('placeholder')).toBe('Read AGENTS.md and tell me what this workspace is for.')
-    await userEvent.type(message, 'h')
-    expect(props.onMessage).toHaveBeenCalledWith('h')
-    await userEvent.click(button('Start session'))
-    expect(props.onStart).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Step 5 of 5')).toBeTruthy()
+    expect(progress()).toEqual(['done', 'done', 'done', 'done', 'done'])
   })
 
-  it('cannot start with no workspace to start in, or no agent installed', () => {
-    const { unmount } = render(
-      <FirstSessionStep
-        {...{
-          workspace: null,
-          agents: [{ id: 'claude-code', name: 'Claude Code' }],
-          agent: 'claude-code',
-          onAgent: vi.fn(),
-          message: '',
-          onMessage: vi.fn(),
-          problems: [],
-          busy: false,
-          onSkip: vi.fn(),
-          onBack: vi.fn(),
-          onStart: vi.fn()
-        }}
-      />
-    )
-    expect(button('Start session')).toHaveProperty('disabled', true)
-    unmount()
-    renderFirst({ agents: [], agent: null })
-    expect(button('Start session')).toHaveProperty('disabled', true)
-    expect(screen.getByRole('combobox', { name: 'Agent' })).toHaveProperty('disabled', true)
-  })
-
-  it('can be skipped', async () => {
-    const props = renderFirst()
+  it('hands Skip, Back and Continue to the desktop', async () => {
+    const onSkip = vi.fn()
+    const onBack = vi.fn()
+    const onContinue = vi.fn()
+    render(<TourStep onSkip={onSkip} onBack={onBack} onContinue={onContinue} />)
+    await userEvent.click(button('Continue'))
+    await userEvent.click(button('Back'))
     await userEvent.click(button('Skip'))
-    expect(props.onSkip).toHaveBeenCalledTimes(1)
+    expect([onContinue, onBack, onSkip].map((handler) => handler.mock.calls.length)).toEqual([1, 1, 1])
   })
 })
