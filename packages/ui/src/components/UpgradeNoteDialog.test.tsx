@@ -13,21 +13,21 @@ function renderNote(): UpgradeNoteDialogProps & { unmount: () => void } {
 const note = (): HTMLElement => screen.getByRole('dialog', { name: 'Helm is now Floti' })
 
 describe('UpgradeNoteDialog', () => {
-  it('says harnesses are now called workspaces and that nothing in the folders changed', () => {
+  it('says harnesses are now workspaces and that nothing in the folders changed, in the design’s words', () => {
     renderNote()
     const item = note().querySelector('[data-upgrade-note-item="workspaces"]')
     expect(item?.textContent).toBe(
-      'Harnesses are now called workspaces. Nothing in your folders changed: a folder with harness.yaml works as before, and new ones get workspace.yaml.'
+      "Harnesses are now workspaces. Your folders didn't change."
     )
   })
 
   it('says what came with the update and where quitting is chosen', () => {
     renderNote()
     expect(note().querySelector('[data-upgrade-note-item="kept"]')?.textContent).toBe(
-      'Everything came with you: sessions, history, profiles, templates, plugins and settings.'
+      'Everything came with you.'
     )
     expect(note().querySelector('[data-upgrade-note-item="host"]')?.textContent).toBe(
-      'Sessions run in the host now. Quitting still ends the ones you started here; Settings > Sessions can keep them running instead.'
+      'Sessions run in the background. Settings can keep them running after you quit.'
     )
   })
 

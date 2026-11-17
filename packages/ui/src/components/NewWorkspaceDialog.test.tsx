@@ -77,6 +77,12 @@ describe('NewWorkspaceDialog', () => {
     expect(props.onCreate).toHaveBeenCalledWith({ mode: 'new', dir: 'C:\\work', name: 'my-work', template: 'starter' })
   })
 
+  it('names its two ways in as the onboarding design does: New, and Use a folder I have', () => {
+    renderDialog({ preview: STARTER_PREVIEW })
+    const modes = screen.getByRole('radiogroup', { name: 'What to create' })
+    expect(within(modes).getAllByRole('radio').map((mode) => mode.textContent)).toEqual(['New', 'Use a folder I have'])
+  })
+
   it('shows no picker when using a folder I have', () => {
     renderDialog({ mode: 'convert', preview: { ...STARTER_PREVIEW, entries: ['workspace.yaml'] } })
     expect(screen.queryByRole('radiogroup', { name: 'Template' })).toBeNull()

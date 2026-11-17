@@ -19,6 +19,7 @@ function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProp
     onRecheck: vi.fn(),
     onLocateClaude: vi.fn(),
     onClearClaudeOverride: vi.fn(),
+    onShowWalkthrough: vi.fn(),
     roots: [],
     projectCount: 0,
     scanning: false,
