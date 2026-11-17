@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS } from '@helm/core/types'
+import { DEFAULT_SETTINGS } from '@floti/core/types'
 import { bridge, remoteBridge } from './bridge.testkit'
 import { useSetup } from './useSetup'
 import { PATIENCE } from '../../../../../../test/patience'
@@ -20,7 +20,7 @@ beforeEach(() => {
       { id: 'minimal', label: 'Minimal', description: null, order: null, builtIn: true },
       { id: 'infra', label: 'Infra', description: null, order: 1, builtIn: false }
     ],
-    dir: '/home/you/.config/helm/templates',
+    dir: '/home/you/.config/floti/templates',
     problems: []
   }))
   box.answer('template:preview', ({ template }) => ({ template, entries: ['workspace.yaml'], note: '', problems: [] }))

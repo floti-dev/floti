@@ -91,7 +91,7 @@ mod tests {
     #[tokio::test]
     async fn a_services_output_is_its_lines_with_its_token_replaced() {
         let printed = format!(
-            "listening\r\nHELM_SERVICE_TOKEN={TOKEN}\n\ntoken {TOKEN} twice {TOKEN}\nno newline"
+            "listening\r\nFLOTI_SERVICE_TOKEN={TOKEN}\n\ntoken {TOKEN} twice {TOKEN}\nno newline"
         );
         let told = lines(printed.as_bytes(), PluginLogStream::Err).await;
         let texts: Vec<&str> = told.iter().map(|(_, text)| text.as_str()).collect();
@@ -99,7 +99,7 @@ mod tests {
             texts,
             [
                 "listening",
-                "HELM_SERVICE_TOKEN=[service token]",
+                "FLOTI_SERVICE_TOKEN=[service token]",
                 "",
                 "token [service token] twice [service token]",
                 "no newline",

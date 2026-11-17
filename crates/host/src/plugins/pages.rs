@@ -1,6 +1,6 @@
 //! The files of a plugin's pages, for the client that draws them
-//! (`plugins:file`): what today's `helm-plugin://` handler reads from the
-//! folder, a piece at a time.
+//! (`plugins:file`): what the desktop's `floti-plugin://` handler reads
+//! from the folder, a piece at a time.
 //!
 //! Only a plugin that is on is served, and only a file inside its folder,
 //! links followed ([`resolve_inside`]): a path with `..`, an absolute path or

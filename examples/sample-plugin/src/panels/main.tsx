@@ -1,16 +1,16 @@
 import { StrictMode, useEffect, useMemo, useState, type JSX } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { PluginSession } from '@floti-dev/plugin-sdk'
-import { useHelmEvent, useHelmSettings, useSecret } from '@floti-dev/plugin-sdk/react'
+import { useFlotiEvent, useFlotiSettings, useSecret } from '@floti-dev/plugin-sdk/react'
 import { CHANNEL, listItems, messageOf, optionsOf, type ItemList } from '../lib/api'
 import '../styles.css'
 
 /**
- * The sidebar panel the rail icon opens. Helm draws the header above it, with
+ * The sidebar panel the rail icon opens. Floti draws the header above it, with
  * the manifest's actions in it; everything below is this page.
  */
 function Panel(): JSX.Element {
-  const settings = useHelmSettings()
+  const settings = useFlotiSettings()
   const [token, requestToken] = useSecret('sample-token')
   const [list, setList] = useState<ItemList | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -38,7 +38,7 @@ function Panel(): JSX.Element {
     }
   }, [options, token, reads])
 
-  // The background page refreshed: read the list again.
+  // The background refreshed: read the list again.
   useEffect(() => {
     const channel = new BroadcastChannel(CHANNEL)
     channel.onmessage = (event: MessageEvent) => {
@@ -47,7 +47,7 @@ function Panel(): JSX.Element {
     return () => channel.close()
   }, [])
 
-  useHelmEvent('action', ({ id }) => {
+  useFlotiEvent('action', ({ id }) => {
     if (id === 'refresh') reload()
     if (id === 'add') void floti.tabs.open('item', {}, { title: 'New item' })
   })
@@ -65,11 +65,11 @@ function Panel(): JSX.Element {
   if (token === 'missing') {
     return (
       <main className="panel">
-        <div className="helm-empty" data-sample-empty="token">
-          <p className="helm-empty-title">Add the token</p>
-          <p className="helm-empty-text">The server wants a bearer token. Floti keeps it; this page never sees it.</p>
-          <div className="helm-empty-actions">
-            <button type="button" className="helm-button" data-variant="primary" onClick={() => void requestToken()}>
+        <div className="floti-empty" data-sample-empty="token">
+          <p className="floti-empty-title">Add the token</p>
+          <p className="floti-empty-text">The server wants a bearer token. Floti keeps it; this page never sees it.</p>
+          <div className="floti-empty-actions">
+            <button type="button" className="floti-button" data-variant="primary" onClick={() => void requestToken()}>
               Add token
             </button>
           </div>
@@ -81,42 +81,42 @@ function Panel(): JSX.Element {
   return (
     <main className="panel">
       {error !== null ? (
-        <div className="helm-empty" data-sample-empty="error">
-          <p className="helm-empty-title">No items</p>
-          <p className="helm-empty-text">{error}</p>
-          <div className="helm-empty-actions">
-            <button type="button" className="helm-button" onClick={reload}>
+        <div className="floti-empty" data-sample-empty="error">
+          <p className="floti-empty-title">No items</p>
+          <p className="floti-empty-text">{error}</p>
+          <div className="floti-empty-actions">
+            <button type="button" className="floti-button" onClick={reload}>
               Try again
             </button>
           </div>
         </div>
       ) : list === null ? (
-        <p className="helm-meta pad">Loading…</p>
+        <p className="floti-meta pad">Loading…</p>
       ) : (
-        <ul className="helm-list" data-sample-items>
+        <ul className="floti-list" data-sample-items>
           {list.items.map((item) => (
             <li key={item.id}>
               <button
                 type="button"
-                className="helm-row item"
+                className="floti-row item"
                 data-sample-item={item.id}
-                // A click previews the item, as a click on a file in Helm does: the
+                // A click previews the item, as a click on a file in Floti does: the
                 // next click replaces it. A double click opens it to stay.
                 onClick={() => void floti.tabs.open('item', { id: item.id }, { title: item.title, preview: true })}
                 onDoubleClick={() => void floti.tabs.open('item', { id: item.id }, { title: item.title })}
               >
-                <span className="helm-dot" data-tone={item.read ? undefined : 'accent'} />
+                <span className="floti-dot" data-tone={item.read ? undefined : 'accent'} />
                 <span className="grow">
                   <span className="title">{item.title}</span>
-                  <span className="helm-meta">{item.read ? 'Read' : 'Unread'}</span>
+                  <span className="floti-meta">{item.read ? 'Read' : 'Unread'}</span>
                 </span>
               </button>
             </li>
           ))}
         </ul>
       )}
-      <hr className="helm-rule" />
-      <p className="helm-meta pad" data-sample-service>
+      <hr className="floti-rule" />
+      <p className="floti-meta pad" data-sample-service>
         {service ?? 'Asking the service…'}
       </p>
       <Sessions />
@@ -125,7 +125,7 @@ function Panel(): JSX.Element {
 }
 
 /**
- * The sessions Helm started, kept current by the `sessions` event. What a
+ * The sessions Floti started, kept current by the `sessions` event. What a
  * tracker would show as "who is on this": a name, a folder, and whether it is
  * working.
  */
@@ -145,24 +145,24 @@ function Sessions(): JSX.Element {
       live = false
     }
   }, [])
-  useHelmEvent('sessions', setSessions)
+  useFlotiEvent('sessions', setSessions)
 
   return (
     <>
-      <hr className="helm-rule" />
-      <p className="helm-meta pad">Sessions</p>
+      <hr className="floti-rule" />
+      <p className="floti-meta pad">Sessions</p>
       {sessions !== null && sessions.length === 0 ? (
-        <p className="helm-meta pad" data-sample-sessions-empty>
+        <p className="floti-meta pad" data-sample-sessions-empty>
           None yet.
         </p>
       ) : (
-        <ul className="helm-list" data-sample-sessions>
+        <ul className="floti-list" data-sample-sessions>
           {(sessions ?? []).map((session) => (
-            <li key={session.id} className="helm-row item" data-sample-session={session.name} data-state={session.state}>
-              <span className="helm-dot" data-tone={session.activity === 'busy' || session.activity === 'waiting' ? 'accent' : undefined} />
+            <li key={session.id} className="floti-row item" data-sample-session={session.name} data-state={session.state}>
+              <span className="floti-dot" data-tone={session.activity === 'busy' || session.activity === 'waiting' ? 'accent' : undefined} />
               <span className="grow">
                 <span className="title">{session.name}</span>
-                <span className="helm-meta" data-sample-session-says>
+                <span className="floti-meta" data-sample-session-says>
                   {session.state === 'ended' ? 'Ended' : (session.activity ?? 'Running')} · {session.cwd}
                 </span>
               </span>

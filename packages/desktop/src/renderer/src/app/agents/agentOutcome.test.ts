@@ -10,7 +10,7 @@ import {
   type AgentFileText,
   type PaneLayout,
   type PaneRef
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { bridge } from '../bridge.testkit'
 import { agentOutcomeIn, agentRefOn, type AgentOutcomeWindow } from './agentOutcome'
 import { useAgentDraft, type AgentDraftTarget, type AgentOutcome } from './useAgentDraft'

@@ -1,4 +1,4 @@
-import type { HostCheck, HostSystem, InstallOffer, InstallOutcome } from '@helm/core/types'
+import type { HostCheck, HostSystem, InstallOffer, InstallOutcome } from '@floti/core/types'
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -92,6 +92,23 @@ describe('installing floti from a host’s row in Settings > Hosts', () => {
     expect(later.textContent).toContain('Starts at next sign-in')
     expect(later.querySelector('[data-settings-host-starts-at-sign-in]')).not.toBeNull()
     expect(later.textContent).not.toContain('Cannot connect')
+  })
+
+  it('an install whose download answered 404 in its only line, as on Windows, says that version has no published floti', async () => {
+    const line = 'Exception calling "DownloadFile": "The remote server returned an error: (404) Not Found."'
+    const install = actions(
+      { kind: 'offer', id: 'offer-4', offer: { ...NOT_FOUND_OFFER, how: 'download', version: '3.0.0' } },
+      { ok: false, step: 'install', lastLine: line }
+    )
+    renderHosts(install, { hosts: [host({ state: 'missing', lastLine: 'sh: 1: floti: not found' })] })
+    const row = screen.getByRole('group', { name: 'build-box' })
+    await userEvent.click(within(row).getByRole('button', { name: 'Install floti' }))
+    await userEvent.click(await within(row).findByRole('button', { name: 'Install on build-box' }))
+    const problem = await screen.findByRole('alert')
+    expect(problem.textContent).toContain('floti 3.0.0 has no published build to download')
+    expect(problem.querySelector('[data-settings-host-problem-line]')?.textContent).toBe(line)
+    expect(problem.textContent).toContain('Update Floti on this PC, then try again.')
+    expect(problem.textContent).not.toMatch(/github\.com/)
   })
 
   it('S18: the sidebar’s Update floti starts the same update in the host’s row', async () => {
@@ -234,7 +251,7 @@ describe('a floti update running from a host’s row, and how it ends', () => {
     sessions: null,
     talks: true
   }
-  /** What the check offers for an install from this Helm's floti instead. */
+  /** What the check offers for an install from this desktop's floti instead. */
   const INSTALL_INSTEAD: InstallOffer = { ...NOT_FOUND_OFFER, action: 'update', found: { version: '2.5.0', protocol: '3.1' } }
 
   /** Install actions whose install ends only when the test says, and whose progress the test tells. */

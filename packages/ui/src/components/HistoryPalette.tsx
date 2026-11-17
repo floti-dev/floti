@@ -1,7 +1,7 @@
 import type { JSX, KeyboardEvent, ReactNode } from 'react'
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { HistoryMatchLine, HistorySession, LaunchAgents, RestorableSession } from '@helm/core'
-import { HISTORY_NAME_MAX } from '@helm/core/types'
+import type { HistoryMatchLine, HistorySession, LaunchAgents, RestorableSession } from '@floti/core'
+import { HISTORY_NAME_MAX } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import {
   agentGone,
@@ -23,7 +23,8 @@ import { AgentTag } from './AgentTag'
 import { HostSwitch, type HostChoice } from './HostSwitch'
 import { KeyButton } from './KeyButton'
 import { Overlay } from './Overlay'
-import { HistoryIcon, ResumeIcon } from './icons'
+import { EmptyState } from './EmptyState'
+import { HistoryIcon, RefreshIcon, ResumeIcon } from './icons'
 
 /**
  * History, on Ctrl+H: a palette over the window wherever the user is, not a
@@ -94,6 +95,8 @@ export interface HistoryPaletteProps {
   /** Reads again after a read failed. */
   onRetry: () => void
   onDismiss: () => void
+  /** The empty state's New session: the launcher, in place of the palette. */
+  onNewSession?: (() => void) | undefined
   /** The host switch, shown while more than one host is connected (H15). */
   hosts?: Partial<HostChoice> | undefined
   /** The shown host's name, for the sentences, when more than one is connected. */
@@ -415,7 +418,7 @@ export function HistoryPalette(props: HistoryPaletteProps): JSX.Element {
       )}
 
       {blocked !== null ? (
-        <BlockedBody state={blocked} />
+        <BlockedBody state={blocked} typed={typed} onRetry={props.onRetry} onNewSession={props.onNewSession} />
       ) : (
         <>
           <div
@@ -605,11 +608,42 @@ function blockedState(props: HistoryPaletteProps, typed: boolean, list: HistoryL
   return { kind: 'no-match', other: list === 'titles' ? 'conversations' : 'titles' }
 }
 
-function BlockedBody({ state }: { state: Blocked }): JSX.Element {
+function BlockedBody({
+  state,
+  typed,
+  onRetry,
+  onNewSession
+}: {
+  state: Blocked
+  typed: boolean
+  onRetry: () => void
+  onNewSession: (() => void) | undefined
+}): JSX.Element {
   const body = (title: string, detail: ReactNode): JSX.Element => (
     <div data-history-state={state.kind} className="px-[13px] pt-3 pb-4 text-[12px] leading-[1.55]">
       <p className="text-fg">{title}</p>
       {detail !== null && <p className="mt-1 text-fg-muted">{detail}</p>}
+    </div>
+  )
+  /*
+   * What History holds could not be read: Unknown and why, in the empty-state
+   * pattern, with Try again - never "No history yet", which is the host saying
+   * it holds none. A search that failed says so in its own words instead.
+   */
+  const unknown = (reason: ReactNode): JSX.Element => (
+    <div data-history-state={state.kind}>
+      <EmptyState
+        size="list"
+        name="history-unknown"
+        icon={<HistoryIcon width={18} height={18} />}
+        title="Unknown"
+        action={{ label: 'Try again', icon: <RefreshIcon width={12} height={12} />, secondary: true, onClick: onRetry }}
+      >
+        Floti couldn't open Claude Code's records.
+        <span data-history-reason className="mt-1 block break-words">
+          {reason}
+        </span>
+      </EmptyState>
     </div>
   )
   switch (state.kind) {
@@ -620,10 +654,21 @@ function BlockedBody({ state }: { state: Blocked }): JSX.Element {
         </p>
       )
     case 'empty':
-      return body('No sessions yet', 'A Claude Code session started anywhere on this PC is listed here.')
+      return (
+        <div data-history-state="empty">
+          <EmptyState
+            size="list"
+            name="history"
+            icon={<HistoryIcon width={18} height={18} />}
+            title="No history yet"
+            action={onNewSession === undefined ? undefined : { label: 'New session', onClick: onNewSession }}
+          >
+            Your past sessions show up here.
+          </EmptyState>
+        </div>
+      )
     case 'unreadable':
-      return body(
-        'Could not read the history file',
+      return unknown(
         <>
           <span className="font-mono text-[11px]">{state.file}</span> {state.message}
         </>
@@ -636,9 +681,9 @@ function BlockedBody({ state }: { state: Blocked }): JSX.Element {
         </>
       )
     case 'failed':
-      return body('History could not be searched', state.message)
+      return typed ? body('History could not be searched', state.message) : unknown(state.message)
     case 'uncounted':
-      return body('Could not tell what History holds', state.message)
+      return unknown(state.message)
     case 'no-match':
       return (
         <p data-history-state="no-match" className="px-[13px] pt-3 pb-4 text-[12px] text-fg-muted">

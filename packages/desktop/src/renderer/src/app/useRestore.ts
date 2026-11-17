@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { sessionLabel, type RestoreOffer } from '@helm/core/types'
+import { sessionLabel, type RestoreOffer } from '@floti/core/types'
 import type { RestoreSessionsRequest, RestoreSessionsResult } from '../../../shared/ipc'
-import { helm } from './bridge'
+import { desktop } from './bridge'
 import { readable } from './errors'
 
 /**
@@ -51,7 +51,7 @@ export interface RestoreState {
 export interface RestoreOptions {
   /** Nobody was asked (`restoreWithoutAsking`), so the report says it happened. */
   unasked?: boolean
-  /** The host the sessions went with, as the window names it; absent when they went with Helm. */
+  /** The host the sessions went with, as the window names it; absent when they went with the desktop. */
   lostWith?: string
 }
 
@@ -121,7 +121,7 @@ export function useRestore(reconnects = 0): RestoreState {
 
   useEffect(
     () =>
-      helm.on('session:exit', (record) => {
+      desktop.on('session:exit', (record) => {
         if (record.status === 'lost') setLosses((count) => count + 1)
       }),
     []
@@ -129,7 +129,7 @@ export function useRestore(reconnects = 0): RestoreState {
 
   useEffect(() => {
     let live = true
-    void helm
+    void desktop
       .invoke('session:restorable')
       .then((answer) => {
         if (!live) return
@@ -165,7 +165,7 @@ export function useRestore(reconnects = 0): RestoreState {
       setBusy(true)
       setReport(null)
       try {
-        const result = await helm.invoke('session:restore', { sessions: picks })
+        const result = await desktop.invoke('session:restore', { sessions: picks })
         setReport(restoreReport(result, options.unasked === true, options.lostWith))
         return result
       } catch (err: unknown) {
@@ -182,7 +182,7 @@ export function useRestore(reconnects = 0): RestoreState {
 
   const dismiss = useCallback(() => {
     setOffer(null)
-    void helm.invoke('session:restore', { sessions: [] }).catch(() => undefined)
+    void desktop.invoke('session:restore', { sessions: [] }).catch(() => undefined)
   }, [])
 
   return {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { formatProtocol, type HostTransport } from '@helm/core/types'
+import { formatProtocol, type HostTransport } from '@floti/core/types'
 import { HostRefusedError, connectHost, restartFrame, streamTransport, type HostConnection } from './client'
 import {
   BRIDGE_EXIT,
@@ -38,12 +38,12 @@ import { treeKill } from '../treekill'
  *   host has proven it. From then on a host that proves another key is
  *   refused (`BRIDGE_EXIT.hostNotProven`) and said to have changed its key,
  *   until the user removes it, which forgets the pin, and adds it again.
- * - Batch mode, and no other option: ssh never waits on a prompt, Helm types
+ * - Batch mode, and no other option: ssh never waits on a prompt, the desktop types
  *   nothing into it (the bridge writes only protocol frames on its input),
  *   and nothing is added that would skip a host-key check. When ssh needs a
  *   person - a password, a passphrase, a host key to accept - it fails, and
  *   the last line it wrote is shown unedited, with the fix.
- * - Nothing under `~/.ssh` is read or written by Helm, and no ssh key,
+ * - Nothing under `~/.ssh` is read or written by the desktop, and no ssh key,
  *   password or passphrase is held: each host's client folder holds this
  *   device's key for it and the host key it pinned, which the bridge reads.
  * - A host is never started from here: with none running there, the bridge
@@ -78,7 +78,7 @@ export const KEY_CHANGED_LINE =
 
 /**
  * The folder a remote host's device key and pinned host key live in, inside
- * Helm's data directory: one per host, named from its id so no id can reach
+ * the desktop's data directory: one per host, named from its id so no id can reach
  * outside it. This PC's host keeps its own (`clientFolder`).
  */
 export function remoteClientFolder(places: Pick<HostPlaces, 'dataDir'>, platform: NodeJS.Platform, id: string): string {
@@ -119,7 +119,7 @@ export function transportArgv(transport: HostTransport, programs: TransportProgr
 
 /**
  * The programs, each with any arguments before its own, that run this PC's
- * `ssh` and `wsl.exe`: `ssh` on `PATH` and System32's `wsl.exe` in Helm. A test
+ * `ssh` and `wsl.exe`: `ssh` on `PATH` and System32's `wsl.exe` in the desktop. A test
  * passes the fakes in test/fake-ssh, so none runs the real ones.
  */
 export interface TransportPrograms {
@@ -141,7 +141,7 @@ export function runsAsWritten(transport: HostTransport): boolean {
 
 /**
  * `floti bridge`'s arguments for a remote host. `floti` is the full path of
- * the floti Helm installed there, which every line run there starts with, for
+ * the floti the desktop installed there, which every line run there starts with, for
  * a login whose `PATH` does not have it. A distro on this PC gets
  * `--as-written`, so the bridge appends the line to `wsl.exe`'s command line
  * as written and runs it with `WSL_UTF8=1`.
@@ -187,7 +187,7 @@ export interface RemoteTarget {
   /** The host's own client folder on this device (`remoteClientFolder`). */
   folder: string
   transport: HostTransport
-  /** The full path of floti there, when Helm installed it (`RemoteHost.floti`). */
+  /** The full path of floti there, when the desktop installed it (`RemoteHost.floti`). */
   floti?: string | undefined
 }
 

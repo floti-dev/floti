@@ -195,7 +195,7 @@ async fn s20_a_token_whose_session_is_not_live_marks_no_session_and_has_no_own_d
 }
 
 #[test]
-fn the_family_is_todays_helm_sessions_at_its_route_from_the_shared_table_and_off_until_switched() {
+fn the_family_is_todays_floti_sessions_at_its_route_from_the_shared_table_and_off_until_switched() {
     let tools = SessionTools::new();
     assert_eq!(tools.name(), "floti-sessions");
     assert_eq!(tools.name(), SESSIONS_FAMILY);
@@ -281,7 +281,7 @@ async fn session_title_refuses_a_title_it_cannot_keep_and_a_token_with_no_sessio
 }
 
 #[test]
-fn a_session_is_told_helm_is_still_starting_or_has_no_live_session_for_its_token() {
+fn a_session_is_told_floti_is_still_starting_or_has_no_live_session_for_its_token() {
     assert!(STILL_STARTING.starts_with("Floti cannot answer that right now"));
     assert!(NO_LIVE_SESSION.starts_with("Floti has no live session for this token"));
 }

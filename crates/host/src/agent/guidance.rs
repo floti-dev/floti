@@ -276,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn a_session_given_helm_sessions_is_asked_to_keep_a_descriptive_title() {
+    fn a_session_given_floti_sessions_is_asked_to_keep_a_descriptive_title() {
         let composition = Composition {
             title_guide: true,
             ..Composition::default()

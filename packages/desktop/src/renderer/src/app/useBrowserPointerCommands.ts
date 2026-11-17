@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { BrowserCommand } from '../../../shared/browserKeys'
-import { helm } from './bridge'
+import { desktop } from './bridge'
 
 /**
  * The mouse's back and forward buttons. Windows and Linux deliver them to the
@@ -22,7 +22,7 @@ export function useBrowserPointerCommands(
 ): void {
   useEffect(
     () =>
-      helm.on('browser:pointerCommand', ({ command, at }) => {
+      desktop.on('browser:pointerCommand', ({ command, at }) => {
         if (!shown || frontPage === null) return
         const tab = document.querySelector('[data-browser-tab]')
         if (tab === null) return

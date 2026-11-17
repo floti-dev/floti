@@ -17,9 +17,9 @@ import {
   type PaneRef,
   type SessionRecord,
   type UrgentState
-} from '@helm/core/types'
-import type { ConfirmChild } from '@helm/ui'
-import type { HelmBridge, SessionConfirmRequest } from '../../../shared/ipc'
+} from '@floti/core/types'
+import type { ConfirmChild } from '@floti/ui'
+import type { DesktopBridge, SessionConfirmRequest } from '../../../shared/ipc'
 import type { HostWorkspace } from './useHostWorkspaces'
 
 /**
@@ -159,8 +159,8 @@ export function useShownSessionTabs(
 
 /** Every host's bridge, as the window reaches them (`eachHostBridge` and `bridgeFor` in `bridge.ts`). */
 export interface HostBridgeReach {
-  each: (listener: (host: string, bridge: HelmBridge) => void) => () => void
-  bridgeFor: (host: string) => HelmBridge
+  each: (listener: (host: string, bridge: DesktopBridge) => void) => () => void
+  bridgeFor: (host: string) => DesktopBridge
 }
 
 export interface SessionConfirm {

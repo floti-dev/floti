@@ -16,8 +16,8 @@ import {
   type PaneRef,
   type SavedPane,
   type SavedPaneLayout
-} from '@helm/core/types'
-import type { TreeSession } from '@helm/ui'
+} from '@floti/core/types'
+import type { TreeSession } from '@floti/ui'
 import { commandRow, commandWord, peeksOnPress, pressTreeSession, treeEntries } from './treeFamilies'
 
 /**
@@ -53,7 +53,7 @@ const ids = (rows: readonly TreeSession[] | undefined): string[] => (rows ?? [])
 
 describe('commandRow', () => {
   const record = (extra: Partial<Listed>): Listed =>
-    session(3, 'tests', '/work/helm', { parentId: 1, parentName: 'api-refactor', ...extra })
+    session(3, 'tests', '/work/floti', { parentId: 1, parentName: 'api-refactor', ...extra })
 
   it('S24: marks a command child with its command and a state of running, ended or failed from its record', () => {
     const command = 'pnpm test'
@@ -105,7 +105,7 @@ describe('commandRow', () => {
 
   it('carries the mark into the row a command child is nested as under its parent, ended while its tab is in front', () => {
     const entries = treeEntries(
-      [session(1, 'api-refactor', '/work/helm'), record({ command: 'pnpm test', status: 'exited', exitCode: 1 })],
+      [session(1, 'api-refactor', '/work/floti'), record({ command: 'pnpm test', status: 'exited', exitCode: 1 })],
       (listed) => ({ ...rowOf(listed), ...commandRow(listed) }),
       new Set([3])
     )
@@ -117,7 +117,7 @@ describe('commandRow', () => {
 
   it('draws no row for a command child that exited by itself: its parent was told the code', () => {
     const entries = treeEntries(
-      [session(1, 'api-refactor', '/work/helm'), record({ command: 'pnpm test', status: 'exited', exitCode: 1 })],
+      [session(1, 'api-refactor', '/work/floti'), record({ command: 'pnpm test', status: 'exited', exitCode: 1 })],
       (listed) => ({ ...rowOf(listed), ...commandRow(listed) })
     )
     expect(entries.map((entry) => entry.session.id)).toEqual([1])
@@ -128,11 +128,11 @@ describe('commandRow', () => {
 describe('treeEntries', () => {
   it('lists no session that has exited or was stopped, a kept child included, unless its tab is in front on screen, and keeps a lost one', () => {
     const sessions = [
-      session(1, 'api-refactor', 'C:\\work\\helm'),
-      session(2, 'mapper', 'C:\\work\\helm', { parentId: 1, parentName: 'api-refactor', status: 'exited', kept: true }),
-      session(3, 'docs pass', 'C:\\work\\helm', { status: 'exited', stopped: true }),
-      session(4, 'review', 'C:\\work\\helm', { status: 'exited', exitCode: 0 }),
-      session(5, 'notes', 'C:\\work\\helm', { status: 'lost' })
+      session(1, 'api-refactor', 'C:\\work\\floti'),
+      session(2, 'mapper', 'C:\\work\\floti', { parentId: 1, parentName: 'api-refactor', status: 'exited', kept: true }),
+      session(3, 'docs pass', 'C:\\work\\floti', { status: 'exited', stopped: true }),
+      session(4, 'review', 'C:\\work\\floti', { status: 'exited', exitCode: 0 }),
+      session(5, 'notes', 'C:\\work\\floti', { status: 'lost' })
     ]
 
     const away = treeEntries(sessions, rowOf)
@@ -148,10 +148,10 @@ describe('treeEntries', () => {
   it('S18: nests a child under its parent whatever folder either runs in', () => {
     const entries = treeEntries(
       [
-        session(1, 'api-refactor', 'C:\\work\\helm'),
+        session(1, 'api-refactor', 'C:\\work\\floti'),
         session(2, 'reviewer', 'C:\\work\\trackr', { parentId: 1, parentName: 'api-refactor' }),
         session(3, 'worker', 'C:\\work\\almanac', { parentId: 1, parentName: 'api-refactor' }),
-        session(4, 'docs pass', 'C:\\work\\helm')
+        session(4, 'docs pass', 'C:\\work\\floti')
       ],
       rowOf
     )
@@ -159,8 +159,8 @@ describe('treeEntries', () => {
     // Two top-level entries, listed by the folder each one runs in; the
     // children are inside the parent's row and not entries of their own.
     expect(entries.map((entry) => [entry.session.id, entry.session.cwd])).toEqual([
-      [1, 'C:\\work\\helm'],
-      [4, 'C:\\work\\helm']
+      [1, 'C:\\work\\floti'],
+      [4, 'C:\\work\\floti']
     ])
     expect(ids(entries[0]?.row.nested)).toEqual(['session:2', 'session:3'])
     expect(entries[0]?.row.parentName).toBeUndefined()
@@ -170,7 +170,7 @@ describe('treeEntries', () => {
   it('S18: lists a child whose parent has ended on its own, naming the parent', () => {
     const entries = treeEntries(
       [
-        session(1, 'api-refactor', 'C:\\work\\helm', { status: 'exited' }),
+        session(1, 'api-refactor', 'C:\\work\\floti', { status: 'exited' }),
         session(2, 'worker', 'C:\\work\\trackr', { parentId: 1, parentName: 'api-refactor' })
       ],
       rowOf,
@@ -196,7 +196,7 @@ describe('treeEntries', () => {
   it('nests a grandchild under the child that started it', () => {
     const entries = treeEntries(
       [
-        session(1, 'api-refactor', 'C:\\work\\helm'),
+        session(1, 'api-refactor', 'C:\\work\\floti'),
         session(2, 'lead', 'C:\\work\\trackr', { parentId: 1, parentName: 'api-refactor' }),
         session(3, 'helper', 'C:\\work\\almanac', { parentId: 2, parentName: 'lead' })
       ],
@@ -211,8 +211,8 @@ describe('treeEntries', () => {
   it('keeps every session when the links loop back on themselves', () => {
     const entries = treeEntries(
       [
-        session(1, 'a', 'C:\\work\\helm', { parentId: 2, parentName: 'b' }),
-        session(2, 'b', 'C:\\work\\helm', { parentId: 1, parentName: 'a' })
+        session(1, 'a', 'C:\\work\\floti', { parentId: 2, parentName: 'b' }),
+        session(2, 'b', 'C:\\work\\floti', { parentId: 1, parentName: 'a' })
       ],
       rowOf
     )
@@ -222,7 +222,7 @@ describe('treeEntries', () => {
 
 describe('where pressing a child’s row goes', () => {
   const family = [
-    session(1, 'api-refactor', 'C:\\work\\helm'),
+    session(1, 'api-refactor', 'C:\\work\\floti'),
     session(2, 'reviewer', 'C:\\work\\trackr', { parentId: 1, parentName: 'api-refactor' })
   ]
 
@@ -243,7 +243,7 @@ describe('pressing a child’s row when its parent’s tab is here', () => {
   const parentTab: PaneRef = { kind: 'session', id: 1 }
   const children = [3, 4, 5, 6]
   const family = [
-    session(1, 'lead', 'C:\\work\\helm'),
+    session(1, 'lead', 'C:\\work\\floti'),
     ...children.map((id) =>
       session(id, `worker ${String(id)}`, 'C:\\work\\trackr', { parentId: 1, parentName: 'lead' })
     )
@@ -402,7 +402,7 @@ describe('pressing a child’s row when its parent’s tab is here', () => {
 describe('which rows say a press opens a peek', () => {
   const parentTab: PaneRef = { kind: 'session', id: 1 }
   const family = [
-    session(1, 'lead', 'C:\\work\\helm'),
+    session(1, 'lead', 'C:\\work\\floti'),
     session(3, 'worker', 'C:\\work\\trackr', { parentId: 1, parentName: 'lead' }),
     session(4, 'reviewer', 'C:\\work\\trackr', { parentId: 1, parentName: 'lead' })
   ]

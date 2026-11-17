@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, type AppSettings } from '@helm/core/types'
+import { DEFAULT_SETTINGS, type AppSettings } from '@floti/core/types'
 import { FakeConnection, fakeReach, unusableReach } from '../../../../../test/fake-connection'
 import type * as P from '../../../../shared/host/protocol'
 import type {
   EventChannel,
   EventPayload,
-  HelmBridge,
+  DesktopBridge,
   OwnAppInfo,
   RequestChannel,
   RequestPayload,
@@ -83,7 +83,7 @@ const BUILD: OwnAppInfo = {
   version: '9.9.9',
   mode: 'dev',
   dataDir: '/data dir',
-  dbFile: '/data dir/helm.db',
+  dbFile: '/data dir/desktop.db',
   migrations: [],
   versions: { electron: '1', chrome: '2', node: '3' },
   windowsBuild: null,
@@ -98,7 +98,7 @@ const HOST_INFO = {
   desktop: true
 } as unknown as P.AppInfo
 
-/** Helm's main process as the window's bridge reaches it: its own settings, build and picker. */
+/** The desktop's main process as the window's bridge reaches it: its own settings, build and picker. */
 function ownBridge(patch: Partial<AppSettings> = {}) {
   let settings: AppSettings = { ...DEFAULT_SETTINGS, ...patch }
   const writes: Array<Partial<AppSettings>> = []
@@ -127,10 +127,10 @@ function ownBridge(patch: Partial<AppSettings> = {}) {
     }
   }
   return {
-    bridge: bridge as unknown as Pick<HelmBridge, 'invoke' | 'on'>,
+    bridge: bridge as unknown as Pick<DesktopBridge, 'invoke' | 'on'>,
     writes,
     picks,
-    /** Main changed Helm's own settings, as the browser pane's history does. */
+    /** Main changed the desktop's own settings, as the browser pane's history does. */
     change: (next: Partial<AppSettings>) => {
       settings = { ...settings, ...next }
       for (const listener of listeners) listener(settings)
@@ -290,7 +290,7 @@ describe('the window’s workspace over its own connection', () => {
     await expect(ask(adapter, 'discovery:cached')).rejects.toThrow(UNREACHABLE)
     await expect(ask(adapter, 'roots:suggest')).rejects.toThrow(UNREACHABLE)
     await expect(ask(adapter, 'template:list')).rejects.toThrow(UNREACHABLE)
-    // The window still paints with Helm's own settings.
+    // The window still paints with the desktop's own settings.
     await expect(ask(adapter, 'settings:read')).resolves.toMatchObject({ theme: 'dark' })
     listen()
     await settle()

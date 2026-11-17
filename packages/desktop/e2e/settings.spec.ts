@@ -1,15 +1,15 @@
 import type { Page } from '@playwright/test'
-import { expect, startSession, test } from './helm'
+import { expect, startSession, test } from './desktop'
 
 /** A section of Settings, picked in the sidebar the way a person picks it. */
 const section = (window: Page, name: string) =>
   window.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name, exact: true })
 
 test('the gear opens Settings as a tab with its sections beside it, Ctrl+Tab walks every tab once from inside a terminal, and a setting changed there survives a restart', async ({
-  helm,
+  desktop,
   relaunch
 }) => {
-  const { window } = helm
+  const { window } = desktop
   await startSession(window, 'alpha')
   await startSession(window, 'beta')
 

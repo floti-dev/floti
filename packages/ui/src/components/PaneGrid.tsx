@@ -1,6 +1,6 @@
 import type { JSX, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { isSplit, type PaneNode } from '@helm/core/types'
+import { isSplit, type PaneNode } from '@floti/core/types'
 import { cn } from '../lib/cn'
 import {
   dragShares,
@@ -269,7 +269,7 @@ export function PaneGrid({ root, maximized, gap, panes, onResize, onResizing }: 
             <span
               className={cn(
                 'rounded-full bg-border-strong transition-colors group-hover:bg-accent',
-                upright ? 'h-10 w-[min(3px,var(--helm-gap))]' : 'h-[min(3px,var(--helm-gap))] w-10'
+                upright ? 'h-10 w-[min(3px,var(--floti-gap))]' : 'h-[min(3px,var(--floti-gap))] w-10'
               )}
             />
           </div>

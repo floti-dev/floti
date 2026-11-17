@@ -1,10 +1,10 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { ConfigFile, ConfigScope, ConfigTree, TemplateChoice, TemplateDetail } from '@helm/core'
+import type { ConfigFile, ConfigScope, ConfigTree, TemplateChoice, TemplateDetail } from '@floti/core'
 import { TemplateManager, type TemplateManagerProps } from './TemplateManager'
 
-const DIR = 'C:\\Users\\me\\.config\\helm\\templates'
+const DIR = 'C:\\Users\\me\\.config\\floti\\templates'
 
 const TEMPLATES: TemplateChoice[] = [
   { id: 'minimal', label: 'Minimal', description: 'The built-in.', order: null, builtIn: true },
@@ -190,5 +190,24 @@ describe('TemplateManager', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Copy think' }))
     await userEvent.click(screen.getByRole('button', { name: 'Copy 1 in' }))
     expect(props.onImport).toHaveBeenCalledWith([USER_TREE.files[0]?.path])
+  })
+
+  it('offers a shared-shape scope’s AGENTS.md and its .agents/skills', () => {
+    const sharedTree: ConfigTree = {
+      ...USER_TREE,
+      scope: HUB,
+      files: [
+        configFile('AGENTS.md', 'agents-md', 'AGENTS.md'),
+        configFile('.agents/skills/plan/SKILL.md', 'skill', 'plan'),
+        configFile('.agents/skills/plan/reference.md', 'other', 'plan/reference.md')
+      ]
+    }
+    renderManager({ selected: 'client', detail: DETAIL, importScope: HUB.path, importTree: sharedTree })
+    expect(
+      screen.getAllByRole('checkbox', { name: /^Copy / }).map((box) => box.getAttribute('aria-label'))
+    ).toEqual(['Copy AGENTS.md', 'Copy plan'])
+    // Its kind is named as the file is, not by the wire's `agents-md`.
+    const row = document.querySelector('[data-template-import-file="AGENTS.md"]')
+    expect(row?.textContent).toBe('AGENTS.mdAGENTS.mdAGENTS.md')
   })
 })

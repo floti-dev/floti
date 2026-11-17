@@ -7,7 +7,7 @@ import type {
   PermissionMode,
   Profile,
   Project
-} from '@helm/core/types'
+} from '@floti/core/types'
 
 /**
  * Starting a session as an agent: what the launchers' pickers show once an

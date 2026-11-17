@@ -1,4 +1,4 @@
-import type { LocalHostVersions } from '@helm/core/types'
+import type { LocalHostVersions } from '@floti/core/types'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -21,7 +21,7 @@ function renderNotice(versions: LocalHostVersions | null, onRestart = vi.fn()) {
 
 describe('Settings > Hosts: this PC’s host on another floti than this Floti', () => {
   it('S9: says this PC’s host runs an older floti, naming both versions, and offers Restart host to update', async () => {
-    const onRestart = renderNotice({ older: 'host', host: '2.4.0', helm: '2.4.1', beforeRestart: false })
+    const onRestart = renderNotice({ older: 'host', host: '2.4.0', desktop: '2.4.1', beforeRestart: false })
     const notice = screen.getByRole('group', { name: 'This PC' })
     expect(notice.getAttribute('data-settings-local-host')).toBe('host')
     expect(notice.textContent).toContain('Older host')
@@ -31,7 +31,7 @@ describe('Settings > Hosts: this PC’s host on another floti than this Floti', 
   })
 
   it('S7: a host refused for being behind names both protocols and offers the restart', () => {
-    renderNotice({ older: 'host', host: 'protocol 2.0', helm: 'protocol 2.1', beforeRestart: false })
+    renderNotice({ older: 'host', host: 'protocol 2.0', desktop: 'protocol 2.1', beforeRestart: false })
     expect(screen.getByRole('group', { name: 'This PC' }).textContent).toContain(
       'runs Floti protocol 2.0, older than the Floti protocol 2.1'
     )
@@ -39,7 +39,7 @@ describe('Settings > Hosts: this PC’s host on another floti than this Floti', 
   })
 
   it('S17: a host on protocol 1.x names both versions, says every session and terminal keeps running, and offers Restart host to update', async () => {
-    const onRestart = renderNotice({ older: 'host', host: 'protocol 1.4', helm: 'protocol 2.0', beforeRestart: true })
+    const onRestart = renderNotice({ older: 'host', host: 'protocol 1.4', desktop: 'protocol 2.0', beforeRestart: true })
     const text = screen.getByRole('group', { name: 'This PC' }).textContent ?? ''
     expect(text).toContain('runs Floti protocol 1.4, older than the Floti protocol 2.0 this Floti carries')
     expect(text).toContain('keeps every session and terminal running in its tab')
@@ -49,7 +49,7 @@ describe('Settings > Hosts: this PC’s host on another floti than this Floti', 
   })
 
   it('S8: a Floti behind its host is told to update Floti on this PC, with no restart offered', () => {
-    renderNotice({ older: 'helm', host: 'protocol 2.2', helm: 'protocol 2.0' })
+    renderNotice({ older: 'desktop', host: 'protocol 2.2', desktop: 'protocol 2.0' })
     const notice = screen.getByRole('group', { name: 'This PC' })
     expect(notice.textContent).toContain('Update Floti')
     expect(notice.textContent).toContain('Update Floti on this PC.')

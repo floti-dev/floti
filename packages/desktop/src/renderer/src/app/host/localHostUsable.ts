@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { HostNoticeState } from '@helm/ui'
+import type { HostNoticeState } from '@floti/ui'
 import type { LocalHostStep } from '../../../../shared/ipc'
 import type { HostUnusable, HostUsability } from './link'
 import type { LocalHostStepStore } from './localHostStep'

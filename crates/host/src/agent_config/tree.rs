@@ -33,7 +33,9 @@ pub fn user_scope(config_dir: &Path) -> ConfigScope {
 }
 
 /// A project's scope: its `.claude` folder and the `CLAUDE.md` and
-/// `.mcp.json` beside it.
+/// `.mcp.json` beside it. It exists when the folder holds config in either
+/// shape: a `.claude/` or a `CLAUDE.md`, or the shared shape's `.agents/` or
+/// `AGENTS.md`.
 pub fn project_scope(path: &Path, kind: ConfigScopeKind, label: Option<&str>) -> ConfigScope {
     let base = normalize(path);
     let claude_dir = base.join(".claude");
@@ -47,7 +49,10 @@ pub fn project_scope(path: &Path, kind: ConfigScopeKind, label: Option<&str>) ->
             },
             str::to_owned,
         ),
-        exists: is_dir(&claude_dir) || is_file(&base.join("CLAUDE.md")),
+        exists: is_dir(&claude_dir)
+            || is_file(&base.join("CLAUDE.md"))
+            || is_dir(&base.join(".agents"))
+            || is_file(&base.join("AGENTS.md")),
         path: base.display().to_string(),
         claude_dir: claude_dir.display().to_string(),
     }
@@ -114,4 +119,73 @@ pub fn config_unit<'a>(files: &'a [ConfigFile], file: &'a ConfigFile) -> Vec<&'a
         candidate.path != file.path && candidate.rel_path.to_lowercase().starts_with(&prefix)
     }));
     unit
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testkit::TestDirs;
+
+    /// Whether a folder holding only `entry` (a folder when it ends in `/`)
+    /// is a scope that exists.
+    fn exists_with(dirs: &TestDirs, entry: &str) -> bool {
+        let folder = dirs.folder(&format!("holds {}", entry.trim_end_matches('/')));
+        if let Some(dir) = entry.strip_suffix('/') {
+            std::fs::create_dir(folder.join(dir)).unwrap();
+        } else if !entry.is_empty() {
+            std::fs::write(folder.join(entry), "").unwrap();
+        }
+        project_scope(&folder, ConfigScopeKind::Project, None).exists
+    }
+
+    #[test]
+    fn a_folder_with_config_in_either_shape_is_a_scope_that_exists() {
+        let dirs = TestDirs::new();
+        assert!(!exists_with(&dirs, ""));
+        for entry in [".claude/", "CLAUDE.md", ".agents/", "AGENTS.md"] {
+            assert!(exists_with(&dirs, entry), "{entry}");
+        }
+    }
+
+    #[test]
+    fn a_scope_in_the_shared_shape_lists_its_agents_md_and_its_agents_skills() {
+        let dirs = TestDirs::new();
+        let backend = super::super::test_backend(&dirs);
+        let folder = dirs.folder("hub");
+        let skill = folder.join(".agents").join("skills").join("plan");
+        std::fs::create_dir_all(&skill).unwrap();
+        std::fs::write(folder.join("AGENTS.md"), "# hub\n").unwrap();
+        std::fs::write(skill.join("SKILL.md"), "---\ndescription: Plans.\n---\n").unwrap();
+        std::fs::write(skill.join("reference.md"), "# reference\n").unwrap();
+        // Not configuration, so not listed.
+        std::fs::write(folder.join(".agents").join("notes.md"), "").unwrap();
+
+        let scope = project_scope(&folder, ConfigScopeKind::Project, None);
+        let tree = read_tree(&backend, &scope);
+        assert!(tree.errors.is_empty(), "{:?}", tree.errors);
+        let listed: Vec<(ConfigFileKind, &str, &str)> = tree
+            .files
+            .iter()
+            .map(|file| (file.kind, file.name.as_str(), file.rel_path.as_str()))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                (ConfigFileKind::AgentsMd, "AGENTS.md", "AGENTS.md"),
+                (
+                    ConfigFileKind::Skill,
+                    "plan",
+                    ".agents/skills/plan/SKILL.md"
+                ),
+                (
+                    ConfigFileKind::Other,
+                    "plan/reference.md",
+                    ".agents/skills/plan/reference.md"
+                ),
+            ]
+        );
+        let plan = &tree.files[1];
+        assert_eq!(Path::new(&plan.path), skill.join("SKILL.md"));
+        assert_eq!(plan.description.as_deref(), Some("Plans."));
+    }
 }

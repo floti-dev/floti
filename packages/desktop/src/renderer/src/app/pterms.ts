@@ -5,7 +5,7 @@ import {
   type TerminalHost,
   type TerminalReport
 } from '../terminal'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import { bridgeFor } from './bridge'
 import { onTerminalPrefs, terminalPrefs } from './termprefs'
 

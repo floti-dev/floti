@@ -343,6 +343,13 @@ pub struct LaunchSessionRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub chosen: Option<LaunchChoices>,
+    /// The session's first message, passed to the agent at launch as its
+    /// opening prompt, as a profile's is, and never typed. Present and not
+    /// blank, it replaces the profile's; a resume takes none. A host before
+    /// it ignores the field and starts the session with no first message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub opening_prompt: Option<String>,
     pub cols: u16,
     pub rows: u16,
 }

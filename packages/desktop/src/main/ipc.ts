@@ -1,5 +1,5 @@
-import { app, type BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell, type WebContents } from 'electron'
-import { FOREIGN_PAGE, type HelmPage, type HostPageLinks } from './host/page-link'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell, type WebContents } from 'electron'
+import { FOREIGN_PAGE, type FlotiPage, type HostPageLinks } from './host/page-link'
 import type { RemoteHostLinks } from './host/remote'
 import type { PortForwards } from './host/forwards'
 import type { RemoteInstaller } from './host/remote-install'
@@ -7,8 +7,8 @@ import type { RemoteHostAdder } from './host/remote-add'
 import { readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
-import { pluginThemeOf, type AppSettings } from '@helm/core'
-import { remoteHostsProblem, type SshConfigHosts, type WslDistroList } from '@helm/core/types'
+import { pluginThemeOf, type AppSettings } from '@floti/core'
+import { remoteHostsProblem, type SshConfigHosts, type WalkthroughStep, type WslDistroList } from '@floti/core/types'
 import type { BrowserHost } from './browser'
 import type { MenuLayer } from './menuLayer'
 import type { BrowserMcpHost } from './browser-mcp'
@@ -20,15 +20,13 @@ import { RELEASES_PAGE } from './update'
 import { appMode, dataDir, dbFile } from './paths'
 import type { PluginHost } from './plugins/host'
 import type { OwnDataCopy } from './host/own-data'
-import type { HostPlugins } from './host/plugins'
-import type { RemotePlugins } from './host/remote-plugins'
 import { activePty, windowsBuildNumber } from './pty'
 import { createClipboardText } from './clipboard'
 import { nativeProfileDialogs } from './profiles'
 import { updateSettings, type Services } from './services'
 import type { WorkspaceService } from './host/workspace'
 import { registerConfirmAnswers, showExitNotification, showNeedsYouNotification } from './host/confirm'
-import { isClientOnly, isHostInternal } from '../shared/host/protocol'
+import { isClientOnly } from '../shared/host/protocol'
 import type {
   EventChannel,
   EventPayload,
@@ -44,10 +42,9 @@ import type {
 /**
  * The main-process half of the contract.
  *
- * Main handles only what `boundary.rs` lists as client-only, and the
- * host-internal channels from the hidden plugin window: every other channel
- * is the host's, which each Helm page reaches over its own connection, so
- * main has no handler for it and the page's router refuses it
+ * Main handles only what `boundary.rs` lists as client-only: every other
+ * channel is the host's, which the window reaches over its own connection,
+ * so main has no handler for it and the page's router refuses it
  * (`renderer/src/app/host/router.ts`). `ipc.boundary.test.ts` checks both
  * halves. Nothing in this process may call `ipcMain.handle` outside
  * `registerIpc` - that is what keeps the surface enumerable.
@@ -83,7 +80,7 @@ export function pushTheme(ctx: Pick<IpcContext, 'services' | 'themes' | 'window'
 }
 
 /** A web contents as the page relay sees it: its id, its two events, and when it navigates away or closes. */
-export function helmPageOf(contents: WebContents): HelmPage {
+export function flotiPageOf(contents: WebContents): FlotiPage {
   return {
     id: contents.id,
     send: (channel, payload) => {
@@ -96,16 +93,6 @@ export function helmPageOf(contents: WebContents): HelmPage {
       contents.once('destroyed', listener)
     }
   }
-}
-
-/** Typed `webContents.send` to one page's web contents, such as the hidden plugin window's. */
-export function emitToContents<K extends EventChannel>(
-  contents: WebContents | null | undefined,
-  channel: K,
-  payload: EventPayload<K>
-): void {
-  if (contents === null || contents === undefined || contents.isDestroyed()) return
-  contents.send(channel, payload)
 }
 
 /** Typed `webContents.send`. The only way the main process pushes to a window. */
@@ -121,7 +108,7 @@ export function emit<K extends EventChannel>(
 export interface IpcContext {
   services: Services
   window: () => BrowserWindow | null
-  /** Each Helm page's own connections to the local host and to each remote host; see `host/page-link.ts`. */
+  /** Each desktop page's own connections to the local host and to each remote host; see `host/page-link.ts`. */
   pageLinks: HostPageLinks
   /**
    * The links to the hosts on other computers this device added; see
@@ -157,23 +144,19 @@ export interface IpcContext {
   files: FilesService
   /** Built-in and user themes, and the watch on the user's; see `themes.ts`. */
   themes: ThemeService
-  /** The plugin pages' frames, runtime and theme, and the tool relay; see `plugins/host.ts`. */
+  /** The plugin pages' frames, runtime and theme; see `plugins/host.ts`. */
   plugins: PluginHost
-  /** The hidden window's reports of the local host's background pages it runs; see `host/plugins.ts`. */
-  hostPlugins: HostPlugins
-  /**
-   * Each remote host's plugins (`host/remote-plugins.ts`), whose background
-   * pages the hidden window runs on that host's origin and reports by host.
-   */
-  remotePlugins: RemotePlugins
-  /** The hidden window plugins' background pages run in. */
-  pluginBackground: () => Electron.WebContents | null
   /** This PC's host: how many sessions it runs, and stopping it once the user has agreed. */
   localHost: LocalHostControl
-  /** The copy of Helm's own database into the local host (`host/own-data.ts`): its state answers `ownData:state`. */
+  /** The copy of the desktop's own database into the local host (`host/own-data.ts`): its state answers `ownData:state`. */
   ownData: OwnDataCopy
   /** Called when the renderer reports it has mounted. */
   rendererReady: () => void
+  /**
+   * The guided first run's windows: the setup window handing over to the
+   * shell, and Settings starting it again (`walkthrough:*`).
+   */
+  walkthrough: WalkthroughWindows
   /**
    * Called when the `claude` path, the terminal shell, the archive's ceiling,
    * either browser tools setting or the session tools setting changes: the
@@ -196,15 +179,31 @@ export interface IpcContext {
   chooseFile?: ((title: string) => string | null) | undefined
 }
 
+/** What `walkthrough:*` reaches: main owns which windows are open. */
+export interface WalkthroughWindows {
+  /** Opens the shell, or brings the open one forward, and closes the setup window. */
+  openShell: () => void
+  /** Puts the walkthrough at `step` (1 to 4) and opens the setup window. */
+  open: (step: WalkthroughStep) => void
+}
+
+/**
+ * The window a page's request came from, for a picker's parent and for what
+ * only that page is waiting to hear; the shell when it was not a window.
+ */
+function windowOf(sender: WebContents, fallback: BrowserWindow | null): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(sender) ?? fallback
+}
+
 /** What Settings' Stop host reaches: main holds the link to this PC's host. */
 export interface LocalHostControl {
   /** How many sessions are running in the host, whichever device started them. */
   sessionCount(): Promise<number>
   /** Stops it with the plain-stop reason: every session ends, and none is offered back. */
   stop(): Promise<void>
-  /** What restarting it on the floti this Helm carries would end, asked without changing anything. */
+  /** What restarting it on the floti this desktop carries would end, asked without changing anything. */
   restartAsk(): Promise<LocalHostRestartOffer>
-  /** Restarts it on the floti this Helm carries and connects to the new host, on the user's click. */
+  /** Restarts it on the floti this desktop carries and connects to the new host, on the user's click. */
   restart(): Promise<void>
   /** What main's link to it is doing now (`hostLink:currentStep`); null before its first connect began. */
   step(): LocalHostStep | null
@@ -212,20 +211,9 @@ export interface LocalHostControl {
   reconnect(): void
 }
 
-/**
- * How main handles a channel: a client-only one from any Helm page, a
- * host-internal one only from the hidden plugin window, and any other never.
- */
-export function mainHandles(channel: string): 'always' | 'fromPluginWindow' | 'never' {
-  if (isClientOnly(channel)) return 'always'
-  return isHostInternal(channel) ? 'fromPluginWindow' : 'never'
-}
-
 export function registerIpc(ctx: IpcContext): void {
   const { services, workspace } = ctx
   registerConfirmAnswers()
-  /** Whether a message came from the hidden plugin window, the only page a host-internal channel is taken from. */
-  const fromPluginWindow = (sender: WebContents): boolean => ctx.pluginBackground()?.id === sender.id
   // One for the app, so a later copy supersedes one still retrying.
   const clipboardText = createClipboardText(clipboard)
 
@@ -249,7 +237,7 @@ export function registerIpc(ctx: IpcContext): void {
   })
 
   /**
-   * What follows any write to Helm's settings, from either half: the session
+   * What follows any write to the desktop's settings, from either half: the session
    * host reads the override, not the settings, so a picked CLI written here has
    * to reach it too - otherwise sessions launch from one path and
    * `claude mcp add` from another.
@@ -295,11 +283,11 @@ export function registerIpc(ctx: IpcContext): void {
   }
 
   const requests: RequestHandlers = {
-    // Only a Helm page's own frame: never a frame inside it, which is where
+    // Only a desktop page's own frame: never a frame inside it, which is where
     // an artifact or a plugin page would be.
     'hostLink:open': (payload, event) => {
       if (event.senderFrame !== event.sender.mainFrame) return Promise.reject(new Error(FOREIGN_PAGE))
-      return ctx.pageLinks.open(helmPageOf(event.sender), payload?.host ?? null)
+      return ctx.pageLinks.open(flotiPageOf(event.sender), payload?.host ?? null)
     },
 
     'hostLink:currentStep': () => ctx.localHost.step(),
@@ -351,10 +339,12 @@ export function registerIpc(ctx: IpcContext): void {
     'remoteHosts:cancelAdd': ({ attempt }) => {
       ctx.remoteAdd.cancel(attempt)
     },
-    'remoteHosts:install': async ({ id, host }) => {
-      // A floti update's steps, shown in the row as they come.
+    'remoteHosts:install': async ({ id, host }, event) => {
+      // A floti update's steps, shown in the row as they come, in the window
+      // that asked: the shell's, or the setup window's add-a-host dialog.
+      const asker = windowOf(event.sender, ctx.window())
       const outcome = await ctx.remoteInstall.install(id, (line) =>
-        emit(ctx.window(), 'remoteHosts:installProgress', { id, line })
+        emit(asker, 'remoteHosts:installProgress', { id, line })
       )
       if (outcome.ok === true) ctx.remoteHosts.installed(host, outcome.floti, outcome.startsAtNextSignIn)
       return outcome
@@ -369,21 +359,25 @@ export function registerIpc(ctx: IpcContext): void {
     'forwards:read': () => ctx.forwards.list(),
 
     'ownApp:info': () => ownAppInfo(),
+    'walkthrough:openShell': () => ctx.walkthrough.openShell(),
+    'walkthrough:open': ({ step }) => ctx.walkthrough.open(step),
     'ownData:state': () => ctx.ownData.state(),
     'windowSessions:lostLayout': () => services.lost.layout,
     'windowSessions:hostSessionCount': () => ctx.localHost.sessionCount(),
     'windowSessions:stopHost': () => ctx.localHost.stop(),
     'windowSessions:restartAsk': () => ctx.localHost.restartAsk(),
     'windowSessions:restartHost': () => ctx.localHost.restart(),
-    'pluginBackground:states': () => [...ctx.hostPlugins.reports(), ...ctx.remotePlugins.reports()],
 
     // The window keeps the host's half of the settings over its own
-    // connection and Helm's half here.
+    // connection and the desktop's half here.
     'ownSettings:read': () => services.settings,
 
-    'ownSettings:write': (patch) => {
+    'ownSettings:write': (patch, event) => {
       const next = updateSettings(services, patch)
       emit(ctx.window(), 'ownSettings:changed', next)
+      // The setup window, writing beside the shell, hears its own write too.
+      const asker = windowOf(event.sender, null)
+      if (asker !== null && asker !== ctx.window()) emit(asker, 'ownSettings:changed', next)
       settingsWritten(patch, next)
       return next
     },
@@ -407,13 +401,13 @@ export function registerIpc(ctx: IpcContext): void {
 
     // The picker is the window's own; the folders chosen go to the host's scan
     // roots.
-    'roots:add': async () => {
+    'roots:add': async (_payload, event) => {
       const title = 'Add a folder to scan'
       if (ctx.chooseDirectory) {
         const picked = ctx.chooseDirectory(title)
         return picked === null ? (await workspace.settings()).scanRoots : workspace.acceptRoots([picked])
       }
-      const win = ctx.window()
+      const win = windowOf(event.sender, ctx.window())
       const options: Electron.OpenDialogOptions = {
         title,
         properties: ['openDirectory', 'multiSelections']
@@ -425,9 +419,9 @@ export function registerIpc(ctx: IpcContext): void {
       return workspace.acceptRoots(result.filePaths)
     },
 
-    'path:chooseDirectory': async ({ title }) => {
+    'path:chooseDirectory': async ({ title }, event) => {
       if (ctx.chooseDirectory) return { path: ctx.chooseDirectory(title ?? 'Choose a folder') }
-      const win = ctx.window()
+      const win = windowOf(event.sender, ctx.window())
       const options: Electron.OpenDialogOptions = {
         title: title ?? 'Choose a folder',
         properties: ['openDirectory', 'createDirectory']
@@ -438,10 +432,10 @@ export function registerIpc(ctx: IpcContext): void {
       return { path: result.canceled ? null : (result.filePaths[0] ?? null) }
     },
 
-    'path:chooseFile': async ({ title }) => {
+    'path:chooseFile': async ({ title }, event) => {
       const heading = title ?? 'Choose a program'
       if (ctx.chooseFile) return { path: ctx.chooseFile(heading) }
-      const win = ctx.window()
+      const win = windowOf(event.sender, ctx.window())
       const options: Electron.OpenDialogOptions = {
         title: heading,
         properties: ['openFile'],
@@ -480,7 +474,7 @@ export function registerIpc(ctx: IpcContext): void {
     'files:editor': () => ({ name: ctx.files.editor() }),
     'files:openInEditor': ({ path, line }) => ctx.files.openInEditor(path, line),
 
-    // A link in a note or a terminal is the user's, not Helm's, so it opens
+    // A link in a note or a terminal is the user's, not the desktop's, so it opens
     // where they expect links to open. The scheme check is the whole security
     // of this handler: `shell.openExternal` will happily hand a `file:` URL to
     // the shell, which on Windows is a way to run whatever it points at.
@@ -503,7 +497,7 @@ export function registerIpc(ctx: IpcContext): void {
      * The browser pane. Every handler is a one-line delegation on purpose:
      * every decision behind them - what a typed address means, whether the
      * reach posture allows it, what hiding is - lives in `main/browser.ts` and
-     * `@helm/core`, so there is exactly one place either could be got wrong.
+     * `@floti/core`, so there is exactly one place either could be got wrong.
      */
     'browser:open': (request) => ctx.browsers.open(request),
     'browser:navigate': ({ id, input }) => ctx.browsers.navigate(id, input),
@@ -565,24 +559,6 @@ export function registerIpc(ctx: IpcContext): void {
       ctx.browsers.clearHistory()
     },
 
-    // A remote host's report goes to that host's plugins only.
-    'plugins:backgroundState': ({ plugin, revision, state, error, host }) =>
-      host !== undefined
-        ? ctx.remotePlugins.forHost(host)?.backgroundState(plugin, revision, state, error)
-        : ctx.hostPlugins.backgroundState(plugin, revision, state, error),
-    // A background page's ask that only the window can draw, from the hidden
-    // window, and the window's word that a secret dialog it asked for closed.
-    'pluginWindow:ask': (request, event) => {
-      if (ctx.pluginBackground()?.id === event.sender.id) emit(ctx.window(), 'pluginWindow:asked', request)
-    },
-    'pluginWindow:answer': (answer, event) => {
-      const win = ctx.window()
-      const hidden = ctx.pluginBackground()
-      if (win === null || win.webContents.id !== event.sender.id || hidden === null || hidden.isDestroyed()) return
-      hidden.send('pluginWindow:answered', answer)
-    },
-    'plugins:toolResult': (outcome, event) => ctx.plugins.toolResult(outcome, event.sender.id),
-
     // Consumed by one-shot `ipcMain.once` listeners in the spike drivers, which
     // register alongside these. A no-op here keeps the contract exhaustive
     // without stealing the event.
@@ -609,14 +585,8 @@ export function registerIpc(ctx: IpcContext): void {
   for (const [channel, handler] of Object.entries(requests) as Array<
     [string, (payload: unknown, event: Electron.IpcMainInvokeEvent) => unknown]
   >) {
-    const handles = mainHandles(channel)
-    if (handles === 'never') throw new Error(`${channel} is the host's; main has no handler for it.`)
-    ipcMain.handle(channel, (event, payload: unknown) => {
-      if (handles === 'fromPluginWindow' && !fromPluginWindow(event.sender)) {
-        return Promise.reject(new Error(`${channel} is taken only from the hidden plugin window.`))
-      }
-      return handler(payload, event)
-    })
+    if (!isClientOnly(channel)) throw new Error(`${channel} is the host's; main has no handler for it.`)
+    ipcMain.handle(channel, (event, payload: unknown) => handler(payload, event))
   }
 
   /*
@@ -640,10 +610,8 @@ export function registerIpc(ctx: IpcContext): void {
   for (const [channel, handler] of Object.entries(sends) as Array<
     [string, (payload: unknown, event: Electron.IpcMainEvent) => void]
   >) {
-    const handles = mainHandles(channel)
-    if (handles === 'never') throw new Error(`${channel} is the host's; main has no handler for it.`)
+    if (!isClientOnly(channel)) throw new Error(`${channel} is the host's; main has no handler for it.`)
     ipcMain.on(channel, (event, payload: unknown) => {
-      if (handles === 'fromPluginWindow' && !fromPluginWindow(event.sender)) return
       try {
         handler(payload, event)
       } catch (err) {

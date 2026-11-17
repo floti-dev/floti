@@ -52,6 +52,13 @@ function summary(name: string, patch: Partial<P.AgentSummary> = {}): P.AgentSumm
 }
 
 describe('launchRequestToHost', () => {
+  it('passes a first message as the opening prompt, and none when it is absent or blank', () => {
+    expect(launchRequestToHost({ ...request, openingPrompt: 'Read AGENTS.md.' }).openingPrompt).toBe('Read AGENTS.md.')
+    expect(launchRequestToHost(request)).not.toHaveProperty('openingPrompt')
+    expect(launchRequestToHost({ ...request, openingPrompt: null })).not.toHaveProperty('openingPrompt')
+    expect(launchRequestToHost({ ...request, openingPrompt: '  ' })).not.toHaveProperty('openingPrompt')
+  })
+
   it('runs a session started as no agent on Claude Code, and leaves out what a launcher before agents never said', () => {
     const sent = launchRequestToHost(request)
     expect(sent.backend).toBe('claude-code')

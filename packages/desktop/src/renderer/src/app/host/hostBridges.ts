@@ -1,6 +1,6 @@
-import { LOCAL_HOST_KEY } from '@helm/core/types'
-import { isClientOnly, isHostInternal } from '../../../../shared/host/protocol'
-import type { HelmBridge } from '../../../../shared/ipc'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
+import { isClientOnly } from '../../../../shared/host/protocol'
+import type { DesktopBridge } from '../../../../shared/ipc'
 import { createCompositionAdapter } from './composition'
 import { createFilesAdapter } from './files'
 import { createHistoryAdapter } from './history'
@@ -22,7 +22,7 @@ import { createWorkspaceAdapter, type WorkspaceAdapter } from './workspace'
  * plugins) and a router of its own in front of them.
  *
  * This PC's host is keyed `LOCAL_HOST_KEY`, and its bridge is the window's
- * own (`helm` in `bridge.ts`). A host on another computer is keyed by its id
+ * own (`desktop` in `bridge.ts`). A host on another computer is keyed by its id
  * in the `hosts` setting.
  *
  * Every router sends what `boundary.rs` lists as client-only to the preload's
@@ -46,7 +46,7 @@ export interface HostBridge {
   /** `LOCAL_HOST_KEY`, or a remote host's id. */
   readonly host: string
   /** The router: what every hook on this host calls. */
-  readonly helm: HelmBridge
+  readonly desktop: DesktopBridge
   /** The window's own connection to this host. */
   readonly link: PageLink
   /** Which of this host's sessions have a tab in this window, for its connection to carry. */
@@ -60,7 +60,7 @@ export interface HostBridge {
 
 export interface HostBridgeDeps {
   /** The preload's bridge. */
-  own: HelmBridge
+  own: DesktopBridge
   front: WindowFront
   /** Where a terminal tab's shell is kept across a reload of the page; none in a test. */
   storage: Pick<Storage, 'getItem' | 'setItem'> | null
@@ -71,7 +71,7 @@ export interface HostBridgeDeps {
 }
 
 /** Where every host's seen notices are kept: this device's own settings, through the preload's bridge, never a host. */
-export function ownSeenStorage(own: HelmBridge): SeenStorage {
+export function ownSeenStorage(own: DesktopBridge): SeenStorage {
   return {
     read: () => Promise.resolve().then(async () => (await own.invoke('ownSettings:read')).noticesSeen),
     write: (noticesSeen) => Promise.resolve().then(() => own.invoke('ownSettings:write', { noticesSeen }))
@@ -79,7 +79,7 @@ export function ownSeenStorage(own: HelmBridge): SeenStorage {
 }
 
 /** Where this PC's host's terminal tabs are kept across a reload, as they always were. */
-export const SHELF_KEY = 'helm.hostTerminals'
+export const SHELF_KEY = 'floti.hostTerminals'
 
 /** Where one host's terminal tabs are kept across a reload: a key of its own for each host. */
 export const shelfKeyFor = (host: string): string =>
@@ -95,19 +95,9 @@ export const pickerOnThisPc = (host: string): string =>
  * that host, and this PC's file picker is not offered for a path there.
  * Everything else is the preload's bridge.
  */
-export function remoteOwn(own: HelmBridge, name: () => string): HelmBridge {
-  const silentEvents = new Set<string>([
-    'pluginWindow:asked',
-    'pluginWindow:answered',
-    'windowSessions:quitConfirm',
-    'windowSessions:activate'
-  ])
-  const droppedSends = new Set<string>([
-    'windowSessions:notify',
-    'windowSessions:quitConfirmed',
-    'pluginWindow:ask',
-    'pluginWindow:answer'
-  ])
+export function remoteOwn(own: DesktopBridge, name: () => string): DesktopBridge {
+  const silentEvents = new Set<string>(['windowSessions:quitConfirm', 'windowSessions:activate'])
+  const droppedSends = new Set<string>(['windowSessions:notify', 'windowSessions:quitConfirmed'])
   const answered: Record<string, () => Promise<unknown>> = {
     // The lost layout is this PC's host's sessions'.
     'windowSessions:lostLayout': () => Promise.resolve(null),
@@ -122,12 +112,12 @@ export function remoteOwn(own: HelmBridge, name: () => string): HelmBridge {
     invoke: ((channel: string, payload?: unknown) => {
       const answer = answered[channel]
       return answer === undefined ? invoke(channel, payload) : answer()
-    }) as HelmBridge['invoke'],
+    }) as DesktopBridge['invoke'],
     send: ((channel: string, payload?: unknown) => {
       if (!droppedSends.has(channel)) send(channel, payload)
-    }) as HelmBridge['send'],
+    }) as DesktopBridge['send'],
     on: ((channel: string, listener: (payload: unknown) => void) =>
-      silentEvents.has(channel) ? () => undefined : on(channel, listener)) as HelmBridge['on']
+      silentEvents.has(channel) ? () => undefined : on(channel, listener)) as DesktopBridge['on']
   }
 }
 
@@ -174,19 +164,18 @@ export function createHostBridge(
     // A session a plugin asked for, started after the user's yes, opens as one of the window's tabs.
     createPluginsAdapter({ link, host, own, adopt: (row) => sessions.adopt(row), log: deps.log })
   ]
-  const helm = createRouter({
+  const desktop = createRouter({
     own: deps.own,
     adapters,
     clientOnly: isClientOnly,
-    hostInternal: isHostInternal,
     log: deps.log
   })
-  return { host, helm, link, sessions, notices: notices.store, workspace, adapters }
+  return { host, desktop, link, sessions, notices: notices.store, workspace, adapters }
 }
 
 export interface HostBridges {
   /** The router for `host`: this PC's for `LOCAL_HOST_KEY`, otherwise that host's, made on first ask. */
-  bridgeFor(host: string): HelmBridge
+  bridgeFor(host: string): DesktopBridge
   /** Everything of `host`'s bridge, made on first ask. */
   hostBridge(host: string): HostBridge
   /** Calls `listener` for every bridge there is, this PC's first, and for each made from now on. Returns the stop. */
@@ -225,7 +214,7 @@ export function createHostBridges(deps: HostBridgesDeps): HostBridges {
     add(createHostBridge(host, remoteLink(host), { ...deps, seen, name: () => deps.nameOf(host) }))
 
   return {
-    bridgeFor: (host) => hostBridge(host).helm,
+    bridgeFor: (host) => hostBridge(host).desktop,
     hostBridge,
     each(listener) {
       listeners.add(listener)

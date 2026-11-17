@@ -1,8 +1,8 @@
 // @ts-check
 /**
- * What `helm-plugin.json` may say, as code.
+ * What `floti-plugin.json` may say, as code.
  *
- * One validator, run by Helm when it loads a plugin and by `helm-plugin
+ * One validator, run by Floti when it loads a plugin and by `floti-plugin
  * validate` when somebody builds one, so the two cannot disagree about whether
  * a manifest is good. It is plain JavaScript on purpose: the command runs
  * straight from this folder, linked or installed, with nothing to build first.
@@ -12,54 +12,30 @@
  * folder. Whether those files exist is the caller's question, and
  * `manifestFiles` lists them for it.
  *
- * `helm-plugin.schema.json` says the same things for an editor's benefit, and a
+ * `floti-plugin.schema.json` says the same things for an editor's benefit, and a
  * test holds the two to each other.
  */
 
 /**
- * The bridge versions this SDK speaks, and what `helm-plugin validate`
- * accepts: 1, whose pages get `window.helm` and whose background is a page a
- * window frames, and 2, whose pages get `window.floti` and whose background
- * is a module the host runs in an isolate of its own.
+ * The plugin API versions this SDK speaks, and what `floti-plugin validate`
+ * accepts: 2, whose pages get `window.floti` and whose background is a module
+ * the host runs in an isolate of its own.
  */
-export const SUPPORTED_API_VERSIONS = Object.freeze([1, 2])
+export const SUPPORTED_API_VERSIONS = Object.freeze([2])
+
+/** What a plugin's background is: a module Floti's host runs in an isolate of its own. */
+const BACKGROUND_EXTENSIONS = Object.freeze(['.js', '.mjs'])
 
 /**
- * Where a plugin's background code is, by bridge version: a page Helm frames
- * at 1, a module Floti's host runs in an isolate of its own at 2.
- *
- * @type {Readonly<Record<number, readonly string[]>>}
- */
-const BACKGROUND_EXTENSIONS = Object.freeze({ 1: Object.freeze(['.html']), 2: Object.freeze(['.js', '.mjs']) })
-
-/** @type {Readonly<Record<number, string>>} */
-const BACKGROUND_KINDS = Object.freeze({ 1: 'page', 2: 'module' })
-
-/**
- * What `background` must be, said for the manifest's own version first and
- * then for the other, so an author who wrote the other kind sees which version
- * takes it.
- *
- * @param {number} apiVersion
- * @returns {string}
- */
-function backgroundRule(apiVersion) {
-  const takes = (/** @type {number} */ version) =>
-    `a ${(BACKGROUND_EXTENSIONS[version] ?? []).join(' or ')} ${BACKGROUND_KINDS[version] ?? 'file'} at apiVersion ${String(version)}`
-  const others = Object.keys(BACKGROUND_EXTENSIONS)
-    .map(Number)
-    .filter((version) => version !== apiVersion)
-  return `background must be ${[apiVersion, ...others].map(takes).join(', and ')}`
-}
-
-/**
- * The versions, as a sentence says them: `1`, `1 and 2`, `1, 2 and 3`.
+ * The versions a refusal names: `only apiVersion 2`, or `apiVersion 2 and 3`
+ * for a caller that runs more than one.
  *
  * @param {readonly number[]} versions
  */
-function versionList(versions) {
+function versionsRun(versions) {
   const said = versions.map(String)
-  return said.length < 2 ? said.join('') : `${said.slice(0, -1).join(', ')} and ${said[said.length - 1] ?? ''}`
+  if (said.length < 2) return `only apiVersion ${said.join('')}`
+  return `apiVersion ${said.slice(0, -1).join(', ')} and ${said[said.length - 1] ?? ''}`
 }
 
 /** A plugin's id: the host of its origin, which a standard scheme lower-cases. */
@@ -132,8 +108,8 @@ export function agentToolName(id, tool) {
 /** Past this an icon is not an icon. */
 export const ICON_MAX_BYTES = 64 * 1024
 
-/** The path prefix Helm serves its own runtime under on every plugin's origin. */
-export const RESERVED_PREFIX = '__helm/'
+/** The path prefix Floti serves its own runtime under on every plugin's origin. */
+export const RESERVED_PREFIX = '__floti/'
 
 /** @type {readonly import('./types').PanelActionIcon[]} */
 export const PANEL_ACTION_ICONS = Object.freeze([
@@ -291,8 +267,8 @@ export function normalizeEntry(path) {
 }
 
 /**
- * Every file the manifest names, for the caller to check exists - Helm when it
- * loads the plugin, `helm-plugin validate` when it is built.
+ * Every file the manifest names, for the caller to check exists - Floti when it
+ * loads the plugin, `floti-plugin validate` when it is built.
  *
  * @param {import('./manifest').NormalizedManifest} manifest
  * @returns {Array<{ field: string, path: string }>}
@@ -313,17 +289,17 @@ export function manifestFiles(manifest) {
  * plugin author fixes them in one pass.
  *
  * `options.apiVersions` is for a host that names the versions it runs, as
- * Floti's host does with `[1, 2]`, and changes how a version it does not run
- * is refused. Left out, it is `SUPPORTED_API_VERSIONS`. Version 2 reads every
- * field as version 1 does, except that `background` is a `.js` or `.mjs`
- * module rather than a page.
+ * Floti's host does with `[2]`, and changes how a version it does not run is
+ * refused. Left out, it is `SUPPORTED_API_VERSIONS`. A version this SDK does
+ * not speak is refused whatever the host names.
  *
- * @param {unknown} value the parsed `helm-plugin.json`
+ * @param {unknown} value the parsed `floti-plugin.json`
  * @param {import('./manifest').ValidateOptions} [options]
  * @returns {import('./manifest').ManifestResult}
  */
 export function validateManifest(value, options = {}) {
-  const versions = options.apiVersions ?? SUPPORTED_API_VERSIONS
+  // A version the caller names that this SDK does not speak is not run either.
+  const versions = (options.apiVersions ?? SUPPORTED_API_VERSIONS).filter((version) => SUPPORTED_API_VERSIONS.includes(version))
   /** @type {string[]} */
   const errors = []
   /** @type {string[]} */
@@ -332,26 +308,21 @@ export function validateManifest(value, options = {}) {
     errors.push(message)
   }
 
-  if (!isRecord(value)) return { ok: false, errors: ['helm-plugin.json must be a JSON object'], warnings }
+  if (!isRecord(value)) return { ok: false, errors: ['floti-plugin.json must be a JSON object'], warnings }
 
   for (const key of Object.keys(value)) {
     if (!KNOWN_FIELDS.has(key)) warnings.push(`"${key}" is not a manifest field and is ignored`)
   }
 
   const apiVersion = value['apiVersion']
-  if (typeof apiVersion !== 'number' || !versions.includes(apiVersion) || BACKGROUND_EXTENSIONS[apiVersion] === undefined) {
-    // Said first and on its own: a plugin from a newer Helm fails every other
-    // check for reasons that are not its fault.
+  if (typeof apiVersion !== 'number' || !versions.includes(apiVersion)) {
+    // Said first and on its own: a plugin written for another version fails
+    // every other check for reasons that are not its fault. The host's
+    // sentence is asserted word for word by its own tests
+    // (crates/host/src/plugins/manifest.rs).
     const said = apiVersion === undefined ? 'apiVersion is missing' : `apiVersion ${JSON.stringify(apiVersion)} is not supported`
-    // The host's sentence is asserted word for word by its own tests
-    // (crates/host/src/plugins/manifest.rs), so it keeps its comma list.
-    const message =
-      options.apiVersions === undefined
-        ? apiVersion === undefined
-          ? `${said}; this Floti supports ${versionList(versions)}`
-          : `${said} by this Floti, which supports ${versionList(versions)}`
-        : `${said}: this host runs apiVersion ${versions.join(', ')} plugins`
-    return { ok: false, errors: [message], warnings }
+    const runner = options.apiVersions === undefined ? 'this Floti' : 'this host'
+    return { ok: false, errors: [`${said}: ${runner} runs ${versionsRun(versions)} plugins`], warnings }
   }
 
   const id = value['id']
@@ -453,7 +424,7 @@ export function validateManifest(value, options = {}) {
     warnings.push('pageStrip has no tabs to hold: it gathers the tabs the manifest declares, and this one declares none')
   }
 
-  // What it may do with the Claude Code sessions Helm hosts: ask to start one
+  // What it may do with the Claude Code sessions Floti hosts: ask to start one
   // (shown to the user, who starts it or not), and see the list of them. It
   // never types into one or reads its conversation.
   const sessions = { start: false, list: false }
@@ -491,9 +462,9 @@ export function validateManifest(value, options = {}) {
   const background = optionalEntry(
     value['background'],
     'background',
-    BACKGROUND_EXTENSIONS[apiVersion] ?? ['.html'],
+    BACKGROUND_EXTENSIONS,
     fail,
-    backgroundRule(apiVersion)
+    'background must be a .js or .mjs module'
   )
 
   // --- commands
@@ -618,7 +589,7 @@ export function validateManifest(value, options = {}) {
     }
   }
 
-  // --- agent: what the Claude Code sessions Helm starts are offered
+  // --- agent: what the Claude Code sessions Floti starts are offered
   /** @type {import('./manifest').NormalizedAgent | null} */
   let agent = null
   const rawAgent = value['agent']
@@ -627,7 +598,7 @@ export function validateManifest(value, options = {}) {
     else {
       const instructions = optionalText(rawAgent['instructions'], 'agent.instructions', AGENT_TEXT_MAX, fail)
       const tools = readTools(rawAgent['tools'], typeof id === 'string' && ID_PATTERN.test(id) ? id : null, fail)
-      // The background (a page at version 1, a module at 2) is the only code a
+      // The background module is the only code a
       // plugin has running whenever a session might call: panels and tabs come
       // and go with the screen.
       if (background === null && value['background'] === undefined) {
@@ -643,7 +614,7 @@ export function validateManifest(value, options = {}) {
   return {
     ok: true,
     manifest: {
-      apiVersion: /** @type {1 | 2} */ (apiVersion),
+      apiVersion: /** @type {2} */ (apiVersion),
       id,
       name,
       version,
@@ -901,7 +872,7 @@ function readTools(value, id, fail) {
 
 /**
  * A tool's arguments, as JSON Schema. Only its shape is checked - an object
- * whose `type` is `"object"`, which MCP requires - and its size: Helm passes
+ * whose `type` is `"object"`, which MCP requires - and its size: Floti passes
  * it to the session as written and does not hold arguments to it.
  *
  * @param {unknown} value

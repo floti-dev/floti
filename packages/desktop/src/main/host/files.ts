@@ -13,21 +13,21 @@ import type { Emit } from './sessions'
  * a sentence when it cannot, and refuses a note changed since it was read.
  * Every request names a root, and the host refuses one it does not know with
  * a sentence naming it; it also scopes a note to the deepest folder it knows
- * that holds it. Helm checks neither again: both are the host's.
+ * that holds it. The desktop checks neither again: both are the host's.
  *
  * `files:watch` replaces this client's whole set of watched roots each time,
  * and a watch belongs to a connection, so the last set the window said is told
  * to every new connection; `files:changed` is subscribed on every connect and
  * handed to the window.
  *
- * An HTML artifact keeps the window's `helm-content:` scheme: the host's
+ * An HTML artifact keeps the window's `floti-content:` scheme: the host's
  * `floti-artifact://<token>/<name>` is handed to the window as
- * `helm-content://artifact/<token>/<name>`, and a frame's request for one is
+ * `floti-content://artifact/<token>/<name>`, and a frame's request for one is
  * answered from `content:artifactBytes`, a piece at a time until the body is
  * whole (`artifactBytes`).
  *
  * Every request goes through `link.connection()`, which joins the first
- * connect while it is in flight, so a window that asks before Helm has reached
+ * connect while it is in flight, so a window that asks before the desktop has reached
  * the host gets the host's answer, never an empty one first. When the host
  * cannot be reached, each rejects with the link's sentence; none answers an
  * empty folder, file list or version list in its place.
@@ -72,7 +72,7 @@ export interface HostFilesDeps {
 }
 
 export interface HostFiles extends FilesReads {
-  /** A frame's request for `helm-content://artifact/...`, answered from the host's bytes. */
+  /** A frame's request for `floti-content://artifact/...`, answered from the host's bytes. */
   artifactBytes(url: string): Promise<ArtifactAnswer>
   shutdown(): void
 }

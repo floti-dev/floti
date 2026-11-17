@@ -76,6 +76,10 @@ export function electronFake(): Record<string, unknown> {
       static getAllWindows(): unknown[] {
         return []
       }
+      /** No page here is a window's; a handler falls back to the one it was given. */
+      static fromWebContents(): null {
+        return null
+      }
     }
   }
 }

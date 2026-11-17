@@ -28,10 +28,14 @@ fn refuses_a_path_an_absolute_the_built_in_name_and_a_name_already_taken() {
     assert_eq!(template_name_problems(dir, "", false).len(), 1);
     assert_eq!(template_name_problems(dir, "../escape", false).len(), 1);
     assert!(!template_name_problems(dir, "C:\\Windows", false).is_empty());
-    assert!(template_name_problems(dir, "minimal", false)[0].contains("built-in"));
-    // Case-folded, because Windows would let a `Minimal` folder shadow the row
-    // that always works and the reader refuses only the exact name.
-    assert!(template_name_problems(dir, "MINIMAL", false)[0].contains("built-in"));
+    // Both names the built-in has had, case-folded, because Windows would let
+    // a `Starter` folder shadow the row that always works.
+    for built_in in ["starter", "Starter", "minimal", "MINIMAL"] {
+        assert!(
+            template_name_problems(dir, built_in, false)[0].contains("built-in"),
+            "{built_in}"
+        );
+    }
 
     fs::create_dir(dir.join("taken")).unwrap();
     assert!(template_name_problems(dir, "taken", false)[0].contains("already a template"));
@@ -69,7 +73,7 @@ fn scaffolds_a_manifest_and_an_empty_tree_and_the_picker_then_offers_it() {
     );
 
     let listing = list_templates(&world.templates);
-    assert_eq!(world.listed_ids(), ["minimal", "client-work"]);
+    assert_eq!(world.listed_ids(), ["starter", "client-work"]);
     assert_eq!(listing.templates[1].label, "Client work");
     assert_eq!(
         listing.templates[1].description.as_deref(),
@@ -254,6 +258,7 @@ fn refuses_a_rename_to_a_name_that_is_taken_the_built_in_name_and_its_own_name()
     world.create("b", None);
 
     assert!(!rename(&world, "a", "b"));
+    assert!(!rename(&world, "a", "starter"));
     assert!(!rename(&world, "a", "minimal"));
     assert!(!rename(&world, "a", "a"));
     assert!(world.templates.join("a").exists());
@@ -773,7 +778,7 @@ fn copies_what_was_ticked_leaves_out_what_was_not_and_writes_a_manifest() {
     assert_eq!(result.file_count, 4);
 
     let listing = list_templates(&world.templates);
-    assert_eq!(world.listed_ids(), ["minimal", "frozen"]);
+    assert_eq!(world.listed_ids(), ["starter", "frozen"]);
     assert_eq!(listing.templates[1].label, "Frozen");
 }
 

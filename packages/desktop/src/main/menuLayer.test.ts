@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, WebContentsView } from 'electron'
-import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings } from '@helm/core'
+import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings } from '@floti/core'
 import { FakeBrowserWindow, FakeWebContentsView, type FakeWebContents } from '../../test/browser-electron'
 import { createBrowserHost } from './browser'
 import { TITLEBAR_HEIGHT } from './chrome'
@@ -29,7 +29,7 @@ const MENU: BrowserLayerMenu = {
     { kind: 'item', id: 'devtools', label: 'Open DevTools' }
   ]
 }
-const LOOK: BrowserLayerLook = { vars: { '--helm-bg': '#101010' }, kind: 'dark', data: { theme: 'night' } }
+const LOOK: BrowserLayerLook = { vars: { '--floti-bg': '#101010' }, kind: 'dark', data: { theme: 'night' } }
 const RECT = { x: 600, y: 80, width: 220, height: 300 }
 
 interface Rig {

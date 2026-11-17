@@ -60,7 +60,7 @@ fn a_host_started_without_a_desktop_never_shows_one() {
 }
 
 #[test]
-fn open_helm_opens_the_desktop_and_stop_host_asks_saying_how_many_sessions_it_ends() {
+fn open_floti_opens_the_desktop_and_stop_host_asks_saying_how_many_sessions_it_ends() {
     assert_eq!(
         on_pick(TrayItem::OpenDesktop, occupied(2, 0, 0)),
         Step::Open
@@ -151,7 +151,7 @@ struct Driven {
 
 fn desktop() -> DesktopCommand {
     DesktopCommand {
-        program: OsString::from("C:\\Program Files\\Helm\\Helm.exe"),
+        program: OsString::from("C:\\Program Files\\Floti\\Floti.exe"),
         args: vec![OsString::from("an app folder")],
     }
 }
@@ -208,7 +208,7 @@ impl Driven {
 
 #[tokio::test]
 async fn the_icon_follows_the_session_count_and_goes_when_a_client_attaches() {
-    // Helm has gone, its sessions still run: the icon shows at once.
+    // The desktop has gone, its sessions still run: the icon shows at once.
     let mut tray = drive(occupied(2, 0, 0), &[]);
     assert_eq!(
         tray.next().await,
@@ -222,7 +222,7 @@ async fn the_icon_follows_the_session_count_and_goes_when_a_client_attaches() {
         Call::Show("Floti: 1 session running on this PC's host".to_owned())
     );
 
-    // Helm attaches again: the icon goes.
+    // The desktop attaches again: the icon goes.
     tray.occupancy.send_replace(occupied(1, 0, 1));
     assert_eq!(tray.next().await, Call::Hide);
 
@@ -248,7 +248,7 @@ async fn a_host_with_a_client_attached_from_the_start_shows_nothing_until_it_lea
 }
 
 #[tokio::test]
-async fn open_helm_starts_the_desktop_that_started_the_host() {
+async fn open_floti_starts_the_desktop_that_started_the_host() {
     let mut tray = drive(occupied(1, 0, 0), &[]);
     tray.next().await;
     tray.picks.send(TrayItem::OpenDesktop).unwrap();

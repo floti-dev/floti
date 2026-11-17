@@ -19,13 +19,13 @@
 //! what stopping the host would end, then stops it; without a client folder
 //! it is run on the host's own computer, as the host itself, and `--ask`
 //! prints how many sessions it runs. `floti end-old-host <client folder>` is
-//! what Helm runs, from the floti it carries, when the user chooses Restart
+//! what the desktop runs, from the floti it carries, when the user chooses Restart
 //! host to update for this PC's host and that host speaks protocol 1.x: only
 //! when the host refuses this floti's hello naming protocol 1.x, it ends that
 //! host's process alone, as a crash would, leaving its session keeper
 //! running for the next host to take back. `floti wait-host-exit` is what
-//! Helm runs after it has asked this PC's host to restart for an update: it
-//! waits until no host holds the host's data folder, so the one host Helm
+//! The desktop runs after it has asked this PC's host to restart for an update: it
+//! waits until no host holds the host's data folder, so the one host the desktop
 //! starts next finds it free. `floti doctor` checks that each host
 //! this device uses answers, this computer's through its socket and each on
 //! another computer through its own ssh or command, and prints one line per

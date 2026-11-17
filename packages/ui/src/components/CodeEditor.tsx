@@ -9,14 +9,14 @@ import {
   useRef,
   useState
 } from 'react'
-import type { EditAction, EditorHighlight } from '@helm/core'
-// Values, not types, so they come from `@helm/core/types` - the one entry point
+import type { EditAction, EditorHighlight } from '@floti/core'
+// Values, not types, so they come from `@floti/core/types` - the one entry point
 // with no `node:` imports behind it (CLAUDE.md, hard rules).
-import { caretAt, editorKeyAction, findMatchesIn, lineStarts, syntaxFor } from '@helm/core/types'
+import { caretAt, editorKeyAction, findMatchesIn, lineStarts, syntaxFor } from '@floti/core/types'
 import { CaretIcon, CloseIcon, SearchIcon } from './icons'
 
 /**
- * The one editor. Both of Helm's edit surfaces are this component.
+ * The one editor. Both of Floti's edit surfaces are this component.
  *
  * It is a `<textarea>` with a highlighted `<pre>` underneath it rather than a
  * code-editor framework, and SPEC records the four reasons and the condition
@@ -592,7 +592,7 @@ export function CodeEditor({
    */
   useEffect(() => {
     const area = areaRef.current
-    const root = area?.closest('.helm-editor')
+    const root = area?.closest('.floti-editor')
     if (!area || !(root instanceof HTMLElement)) return
     const measure = (): void => {
       root.style.setProperty('--editor-view-width', `${String(area.clientWidth)}px`)
@@ -760,11 +760,11 @@ export function CodeEditor({
       data-editor-invalid={invalid}
       data-editor-read-only={readOnly}
       data-editor-bare={bare}
-      className="helm-editor"
+      className="floti-editor"
       style={style}
     >
-      <div className="helm-editor-gutter" data-editor-gutter>
-        <div ref={gutterRef} className="helm-editor-gutter-rows">
+      <div className="floti-editor-gutter" data-editor-gutter>
+        <div ref={gutterRef} className="floti-editor-gutter-rows">
           {rows.map((row) => {
             const changed = marks?.changed.has(row.index + 1) === true
             return (
@@ -773,7 +773,7 @@ export function CodeEditor({
                   data-editor-line-number={row.index + 1}
                   data-editor-current={row.index === caret.line - 1}
                   data-editor-changed={changed ? 'true' : undefined}
-                  className="helm-editor-number"
+                  className="floti-editor-number"
                   style={{ top: `${String(row.top)}px` }}
                 >
                   {row.index + 1}
@@ -781,7 +781,7 @@ export function CodeEditor({
                 {changed && (
                   <span
                     aria-hidden
-                    className="helm-editor-mark"
+                    className="floti-editor-mark"
                     style={{ top: `${String(row.top)}px`, height: `${String(row.height)}px` }}
                   />
                 )}
@@ -793,23 +793,23 @@ export function CodeEditor({
               key={`removed-${String(removal.key)}`}
               aria-hidden
               data-editor-removed-after={removal.key}
-              className="helm-editor-removed"
+              className="floti-editor-removed"
               style={{ top: `${String(removal.top)}px` }}
             />
           ))}
         </div>
       </div>
 
-      <div className="helm-editor-body">
-        <div className="helm-editor-clip">
-          <div ref={rowsRef} className="helm-editor-rows">
+      <div className="floti-editor-body">
+        <div className="floti-editor-clip">
+          <div ref={rowsRef} className="floti-editor-rows">
             {marks !== null &&
               rows.map((row) =>
                 marks.changed.has(row.index + 1) ? (
                   <div
                     key={row.index}
                     aria-hidden
-                    className="helm-editor-changed-line"
+                    className="floti-editor-changed-line"
                     style={{ top: `${String(row.top)}px`, height: `${String(row.height)}px` }}
                   />
                 ) : null
@@ -817,17 +817,17 @@ export function CodeEditor({
             {caretBox !== null && (
               <div
                 data-editor-caret-line
-                className="helm-editor-caret-line"
+                className="floti-editor-caret-line"
                 style={{ top: `${String(caretBox.top)}px`, height: `${String(caretBox.height)}px` }}
               />
             )}
           </div>
-          <div ref={layersRef} className="helm-editor-layers">
+          <div ref={layersRef} className="floti-editor-layers">
             <pre
               ref={mirrorRef}
               data-editor-underlay
               aria-hidden
-              className="helm-editor-layer helm-editor-mirror"
+              className="floti-editor-layer floti-editor-mirror"
             >
               {mirrorNodes}
             </pre>
@@ -835,7 +835,7 @@ export function CodeEditor({
               ref={highlightRef}
               data-editor-highlight
               aria-hidden
-              className="helm-editor-layer helm-editor-highlight shiki"
+              className="floti-editor-layer floti-editor-highlight shiki"
               // Produced by shiki in the main process from bytes this window
               // already has; the renderer injects it and evaluates nothing in
               // it - the same argument the markdown body makes.
@@ -858,7 +858,7 @@ export function CodeEditor({
           spellCheck={false}
           wrap={wrap ? 'soft' : 'off'}
           aria-label={ariaLabel}
-          className="helm-editor-layer helm-editor-input"
+          className="floti-editor-layer floti-editor-input"
         />
       </div>
 
@@ -953,7 +953,7 @@ function FindBar({
   return (
     <div
       data-editor-find-bar={mode}
-      className="helm-editor-find"
+      className="floti-editor-find"
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault()

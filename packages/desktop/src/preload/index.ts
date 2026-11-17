@@ -5,7 +5,7 @@ import {
   SEND_CHANNELS,
   type EventChannel,
   type EventPayload,
-  type HelmBridge,
+  type DesktopBridge,
   type RequestChannel,
   type SendChannel
 } from '../shared/ipc'
@@ -21,25 +21,25 @@ import {
  *
  * Channel names are validated against the contract's lists before anything
  * crosses. A renderer compromised badly enough to call `invoke` with an
- * arbitrary string still cannot reach a channel Helm did not declare.
+ * arbitrary string still cannot reach a channel the desktop did not declare.
  */
 
 const requests = new Set<string>(REQUEST_CHANNELS)
 const sends = new Set<string>(SEND_CHANNELS)
 const events = new Set<string>(EVENT_CHANNELS)
 
-const bridge: HelmBridge = {
+const bridge: DesktopBridge = {
   invoke: ((channel: RequestChannel, payload?: unknown) => {
     if (!requests.has(channel)) {
       return Promise.reject(new Error(`unknown request channel: ${String(channel)}`))
     }
     return ipcRenderer.invoke(channel, payload)
-  }) as HelmBridge['invoke'],
+  }) as DesktopBridge['invoke'],
 
   send: ((channel: SendChannel, payload?: unknown) => {
     if (!sends.has(channel)) throw new Error(`unknown send channel: ${String(channel)}`)
     ipcRenderer.send(channel, payload)
-  }) as HelmBridge['send'],
+  }) as DesktopBridge['send'],
 
   on: (<K extends EventChannel>(channel: K, listener: (payload: EventPayload<K>) => void) => {
     if (!events.has(channel)) throw new Error(`unknown event channel: ${String(channel)}`)
@@ -50,7 +50,7 @@ const bridge: HelmBridge = {
     return () => {
       ipcRenderer.removeListener(channel, wrapped)
     }
-  }) as HelmBridge['on']
+  }) as DesktopBridge['on']
 }
 
-contextBridge.exposeInMainWorld('helm', bridge)
+contextBridge.exposeInMainWorld('desktop', bridge)

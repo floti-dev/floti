@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ContentDocument } from '@helm/core'
+import type { ContentDocument } from '@floti/core'
 import { bridge } from './bridge.testkit'
 import { noteDocument } from './document.testkit'
 import { DocumentModeSwitch, DocumentTab, documentKind, type DocumentMode, type DocumentTabProps } from './DocumentTab'
@@ -114,7 +114,7 @@ describe('DocumentTab', () => {
 
   it('opens a wikilink from inside an artifact once main says where it points', async () => {
     const onOpenPath = vi.fn()
-    bridge.answer('content:artifact', () => ({ url: 'helm-content://artifact/t/lesson.html', token: 't' }))
+    bridge.answer('content:artifact', () => ({ url: 'floti-content://artifact/t/lesson.html', token: 't' }))
     bridge.answer('content:wikilink', () => ({ path: 'C:\\p\\notes\\b.md' }))
     onDisk = { ...noteDocument('C:\\p\\lesson.html', 'lesson.html', '<p>x</p>', 'h1'), rendered: null }
     onDisk.file.kind = 'html'
@@ -124,7 +124,7 @@ describe('DocumentTab', () => {
     // document behind it has loaded, and a click that early resolves nothing.
     await waitFor(() => {
       window.dispatchEvent(
-        new MessageEvent('message', { data: { helm: 'wikilink', target: 'b', heading: null }, source: frame.contentWindow })
+        new MessageEvent('message', { data: { floti: 'wikilink', target: 'b', heading: null }, source: frame.contentWindow })
       )
       expect(onOpenPath).toHaveBeenCalledWith('C:\\p\\notes\\b.md')
     })

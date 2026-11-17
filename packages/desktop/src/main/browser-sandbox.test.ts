@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS } from '@helm/core'
+import { DEFAULT_SETTINGS } from '@floti/core'
 import {
   APPARMOR_PROFILE_FILE,
   APPARMOR_USERNS_SYSCTL,
@@ -12,7 +12,7 @@ import {
 
 /**
  * Whether the browser pane runs (main/browser-sandbox.ts): never in a Linux
- * Helm started without Chromium's sandbox, and the command that gives an
+ * desktop started without Chromium's sandbox, and the command that gives an
  * AppImage the sandbox back.
  */
 
@@ -70,14 +70,14 @@ describe('the command that gives an AppImage the sandbox', () => {
   })
 
   it('names a renamed AppImage by its own path, and quotes a folder with a quote in it', () => {
-    expect(appArmorCommand('/opt/apps/helm.AppImage')).toContain(`'profile floti-appimage "/opt/apps/helm.AppImage" flags=(unconfined) {'`)
+    expect(appArmorCommand('/opt/apps/floti.AppImage')).toContain(`'profile floti-appimage "/opt/apps/floti.AppImage" flags=(unconfined) {'`)
     expect(appArmorCommand("/home/o'neil/Floti-3.0.0-linux-x64.AppImage")).toContain(
       `'profile floti-appimage "/home/o'\\''neil/Floti-*.AppImage" flags=(unconfined) {'`
     )
   })
 
   it('writes none for a path a profile cannot hold safely', () => {
-    for (const path of ['Helm.AppImage', '/home/me/"x"/Helm.AppImage', '/home/me/[apps]/Helm.AppImage', '/home/me/a*b/Helm.AppImage']) {
+    for (const path of ['Floti.AppImage', '/home/me/"x"/Floti.AppImage', '/home/me/[apps]/Floti.AppImage', '/home/me/a*b/Floti.AppImage']) {
       expect(appArmorCommand(path), path).toBeNull()
     }
   })

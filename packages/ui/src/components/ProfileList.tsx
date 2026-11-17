@@ -1,6 +1,6 @@
 import type { DragEvent, JSX, KeyboardEvent } from 'react'
 import { useState } from 'react'
-import type { Profile } from '@helm/core'
+import type { Profile } from '@floti/core'
 import { cn } from '../lib/cn'
 import { hasPrimaryModifier } from '../lib/platform'
 import {
@@ -11,6 +11,7 @@ import {
   PlusIcon,
   TrashIcon
 } from './icons'
+import { EmptyState } from './EmptyState'
 
 export interface ProfileListProps {
   profiles: Profile[]
@@ -28,6 +29,8 @@ export interface ProfileListProps {
   onTogglePin: (profile: Profile) => void
   /** New pinned order, as ids. Only pinned profiles are reorderable. */
   onReorder: (ids: number[]) => void
+  /** The empty state's New profile: the editor, blank. With `host`, its `onNew` is used. */
+  onNew?: (() => void) | undefined
   /**
    * The host these profiles are saved on, while the Profiles view lists more
    * than one: a header names it (a remote host's in mono) and offers New
@@ -66,12 +69,14 @@ export function ProfileList({
   onExport,
   onTogglePin,
   onReorder,
+  onNew,
   host
 }: ProfileListProps): JSX.Element {
   const [dragging, setDragging] = useState<number | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
 
   const pinned = profiles.filter((profile) => profile.pinnedOrder !== null)
+  const newProfile = host?.onNew ?? onNew
 
   const finishDrag = (): void => {
     setDragging(null)
@@ -138,11 +143,15 @@ export function ProfileList({
       )}
 
       {profiles.length === 0 ? (
-        <p className="px-3.5 pt-1 pb-3 text-[12px] leading-relaxed text-fg-subtle">
-          {host === undefined || !host.remote
-            ? 'A profile launches one working directory with other repos’ skills and agents composed in.'
-            : `No profiles on ${host.name} yet.`}
-        </p>
+        <EmptyState
+          size="list"
+          name={host === undefined ? 'profiles' : `profiles:${host.id}`}
+          icon={<LayersIcon width={18} height={18} />}
+          title={host === undefined || !host.remote ? 'No profiles yet' : `No profiles on ${host.name} yet`}
+          action={newProfile === undefined ? undefined : { label: 'New profile', onClick: newProfile }}
+        >
+          Save a folder and an agent, to launch in one click.
+        </EmptyState>
       ) : (
         <ul
           className={cn(

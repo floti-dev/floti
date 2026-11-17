@@ -6,9 +6,7 @@ import { describe, expect, it } from 'vitest'
  * What main may listen on and write for agent tools, read from its source: the
  * local host serves its sessions' tools on its own listener, so main binds a
  * port only for a forward the user asked for (`host/forwards.ts`), mints no
- * bearer token, and writes no `--mcp-config`. The one thing main still does
- * with those files is sweep the ones an earlier version left
- * (`cleanStaleMcpConfigs` at start).
+ * bearer token, and writes no `--mcp-config`.
  *
  * Read from the source rather than by starting main because the claim is about
  * what main contains at all: a listener that no test happens to start is still
@@ -43,15 +41,9 @@ describe("main's listeners", () => {
     expect(filesWhere((source) => /\.listen\(\s*\{?\s*(port|0|\d)/.test(source))).toEqual(['host/forwards.ts'])
   })
 
-  it('S6: mints no bearer token and writes no --mcp-config, only sweeping the ones an earlier version left', () => {
+  it('S6: mints no bearer token and keeps no folder of --mcp-config files', () => {
     expect(filesWhere((source) => /Bearer|Authorization/.test(source))).toEqual([])
-    expect(filesWhere((source) => source.includes('mcpConfigDir'))).toEqual(['index.ts', 'paths.ts'])
-
-    const index = mainSources().get('index.ts') ?? ''
-    const uses = index.match(/.*\bmcpConfigDir\b.*/g) ?? []
-    expect(uses).toHaveLength(2)
-    expect(uses[0]).toMatch(/^import .*from '\.\/paths'$/)
-    expect(uses[1]?.trim()).toBe('cleanStaleMcpConfigs(mcpConfigDir)')
+    expect(filesWhere((source) => /\bmcpConfigDir\b|cleanStaleMcpConfigs/.test(source))).toEqual([])
   })
 
   it('S21: serves no agents family, route or environment for it, and puts none in a launch: only the host does', () => {

@@ -290,16 +290,16 @@ mod tests {
     #[test]
     fn the_manifest_and_the_top_folder_of_each_file_it_names_count_and_nothing_else() {
         let relevant = Relevant::of(&manifest(
-            r#"{ "apiVersion": 1, "id": "x", "name": "X", "icon": "./icon.svg",
-                "background": "dist/background.html",
+            r#"{ "apiVersion": 2, "id": "x", "name": "X", "icon": "./icon.svg",
+                "background": "dist/background.js",
                 "panels": { "main": { "title": "Main", "entry": "panel/index.html" } },
                 "tabs": { "board": { "title": "Board", "entry": "dist/board.html" } },
                 "service": { "node": "server/main.mjs" } }"#,
         ));
         for counted in [
-            "helm-plugin.json",
+            "floti-plugin.json",
             "icon.svg",
-            "dist/background.html",
+            "dist/background.js",
             "dist/assets/app.js",
             "panel/style.css",
             "server/main.mjs",
@@ -320,7 +320,7 @@ mod tests {
         let dirs = crate::testkit::TestDirs::new();
         let dir = dirs.plugin_folder(
             "watched plugin",
-            r#"{ "apiVersion": 1, "id": "w", "name": "W" }"#,
+            r#"{ "apiVersion": 2, "id": "w", "name": "W" }"#,
             &[("panel/index.html", "one"), ("src/main.ts", "x")],
         );
         let relevant = Relevant::Roots(BTreeSet::from([
@@ -409,11 +409,11 @@ mod tests {
         assert!(!watch.task.is_finished());
 
         *watch.files.lock().unwrap() = None;
-        watch.events.send("helm-plugin.json".into()).unwrap();
+        watch.events.send("floti-plugin.json".into()).unwrap();
         watch.step(WATCH_DEBOUNCE + Duration::from_millis(1)).await;
         assert_eq!(
             watch.told(),
-            ["helm-plugin.json"],
+            ["floti-plugin.json"],
             "too many files to tell is a change"
         );
     }

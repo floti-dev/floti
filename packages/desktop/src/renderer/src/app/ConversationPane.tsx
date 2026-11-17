@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from 'react'
-import type { ArchivedConversation, ConversationRef, HistoryPrompt, HistorySession, LaunchAgents } from '@helm/core'
-import { hostOf } from '@helm/core/types'
-import { agentGone, ConversationTab, historySpan, type ConversationFamily } from '@helm/ui'
+import type { ArchivedConversation, ConversationRef, HistoryPrompt, HistorySession, LaunchAgents } from '@floti/core'
+import { hostOf } from '@floti/core/types'
+import { agentGone, ConversationTab, historySpan, type ConversationFamily } from '@floti/ui'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
 
@@ -57,13 +57,13 @@ export function ConversationPane({
 
   useEffect(() => {
     let live = true
-    const helm = bridgeFor(host)
-    helm.invoke('archive:conversation', { sessionId: tab.sessionId }).then(
+    const desktop = bridgeFor(host)
+    desktop.invoke('archive:conversation', { sessionId: tab.sessionId }).then(
       (answer) => {
         if (!live) return
         setConversation(answer)
         if (answer === null || answer.state !== 'archived') {
-          helm.invoke('history:prompts', { sessionId: tab.sessionId }).then(
+          desktop.invoke('history:prompts', { sessionId: tab.sessionId }).then(
             (typed) => live && setPrompts(typed),
             (err: unknown) => live && setError(readable(err))
           )
@@ -72,11 +72,11 @@ export function ConversationPane({
       (err: unknown) => live && setError(readable(err))
     )
     // Not known is not gone: a listing that could not be read sends the agent, and the host says if it is gone.
-    helm.invoke('agents:list').then(
+    desktop.invoke('agents:list').then(
       (listed) => live && setAgents(listed),
       () => undefined
     )
-    helm.invoke('history:sessions', { parent: tab.sessionId, limit: FAMILY_LIMIT }).then(
+    desktop.invoke('history:sessions', { parent: tab.sessionId, limit: FAMILY_LIMIT }).then(
       (page) => live && setFamily({ children: page.sessions, commands: page.commands ?? [] }),
       (err: unknown) => live && setFamily({ error: readable(err) })
     )

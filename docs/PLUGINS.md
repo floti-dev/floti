@@ -1,34 +1,27 @@
 # Plugins
 
 The host runs them (`crates/host/src/plugins`): their registry, settings,
-secrets, programs, services and their pages' `fetch`. Main keeps the
-`floti-plugin://` and `helm-plugin://` schemes (`main/plugins/protocol.ts`),
-the hidden plugin host window (`main/plugins/background.ts`) and the tool
-relay (`main/host/plugin-tools.ts`); the window draws their pages.
-`packages/plugin-sdk` holds the manifest validator Floti loads with, so a
-manifest change starts there. `apiVersion` is 1 or 2, and both load side by
-side; anything else is an error in Settings, never a crash.
+secrets, programs, services, backgrounds, tools and their pages' `fetch`.
+Main keeps the `floti-plugin://` scheme (`main/plugins/protocol.ts`); the
+window draws their pages. `packages/plugin-sdk` holds the manifest validator
+Floti loads with, so a manifest change starts there. `apiVersion` is 2; any
+other is refused with an error in Settings naming version 2 as the only one,
+never a crash.
 
 Writing a plugin is in
 [packages/plugin-sdk/README.md](../packages/plugin-sdk/README.md). This is how
 Floti runs one. A plugin's agent tools are served by the host's listener, in
 [AGENT-TOOLS.md](AGENT-TOOLS.md#plugin-tools).
 
-## API versions
+## API version
 
-- Version 2 is the current one. Its pages are served on
-  `floti-plugin://<id>/` and get `window.floti`; its background is an ES
-  module the host runs in an isolate of its own
-  (`crates/host/src/plugins/runtime`), with `floti`, `BroadcastChannel` and
-  timers and nothing else, importing only its plugin's own files by relative
-  path. What needs a window (opening a tab or a link, asking for a secret,
-  starting or listing sessions) rejects there. `examples/sample-plugin` is a
-  version 2 plugin.
-- Version 1 pages are served on `helm-plugin://<id>/` and get `window.helm`,
-  with the same methods; a version 1 background is a page in the hidden
-  plugin window. The host writes each page URL with its version's scheme
-  (`plugins/manifest.rs` `page_scheme`), which is how a client tells the two
-  apart.
+- Version 2 is the only one. Its pages are served on `floti-plugin://<id>/`
+  and get `window.floti`; its background is an ES module the host runs in an
+  isolate of its own (`crates/host/src/plugins/runtime`), with `floti`,
+  `BroadcastChannel` and timers and nothing else, importing only its
+  plugin's own files by relative path. What needs a window (opening a tab or
+  a link, asking for a secret, starting or listing sessions) rejects there.
+  `examples/sample-plugin` is one.
 
 ## The SDK
 
@@ -39,28 +32,24 @@ folder: run through npx, that folder is a cache.
 
 ## Pages
 
-- A plugin page is served on its version's scheme, one origin per plugin,
+- A plugin page is served on `floti-plugin://`, one origin per plugin,
   framed out of process, with no preload and no Node. The bridge and the
   primitives stylesheet are injected into every page it serves. The same
   plugin on a remote host has an origin of its own,
-  `floti-plugin://<id>.<label>/` or `helm-plugin://<id>.<label>/`
-  (`shared/plugins/origin.ts`), served from that host's files only, so no
-  storage or navigation is shared between hosts; This PC's stays
-  `<scheme>://<id>/`.
-- Its CSP has `connect-src 'none'`: `floti.fetch` (`helm.fetch` at version 1;
-  the host's `plugins/net`) is its only way out, to origins the manifest lists
-  and to its own service (`service:/path`), checked again on every redirect
-  hop. A version 2 background's `floti.fetch` is held to the same rule.
+  `floti-plugin://<id>.<label>/` (`shared/plugins/origin.ts`), served from
+  that host's files only, so no storage or navigation is shared between
+  hosts; This PC's stays `floti-plugin://<id>/`.
+- Its CSP has `connect-src 'none'`: `floti.fetch` (the host's `plugins/net`)
+  is its only way out, to origins the manifest lists and to its own service
+  (`service:/path`), checked again on every redirect hop. A background's
+  `floti.fetch` is held to the same rule.
 - `guards.ts`: `will-frame-navigate` keeps a plugin frame on its own origin,
   and plugin origins get `clipboard-sanitized-write` and no other permission.
-- The host answers a page's calls, `BroadcastChannel` posts included. The window and the hidden plugin window each ask it over their own
-  connection (`app/host/plugins.ts`), and each draws or answers what concerns
-  only its own pages: opening a tab and a link (`shared/plugins/client-calls.ts`),
-  the theme. What a version 1 background page asks that only the window can
-  draw goes between the two windows through main (`pluginWindow:*`). A remote host's pages call that host only, over
-  its own connection (`bridgeFor(host)` in the window, a page link per host
-  in the hidden window, whose background frames are keyed by host and
-  plugin).
+- The host answers a page's calls, `BroadcastChannel` posts included. The
+  window asks it over its own connection (`app/host/plugins.ts`), and draws
+  or answers what concerns only its own pages: opening a tab and a link
+  (`shared/plugins/client-calls.ts`), the theme. A remote host's pages call
+  that host only, over its own connection (`bridgeFor(host)`).
 - Frames live outside React (`app/pluginFrames.ts`) and move between slots
   with `moveBefore`; `appendChild` would reload them. One relay
   (`renderer/src/plugins/relay.ts`) per page owns every frame's port.
@@ -73,16 +62,13 @@ folder: run through npx, that folder is a cache.
 
 ## Background
 
-- Version 1 background pages are iframes in the hidden `plugin-host.html`
-  window, not top-level pages: Chromium partitions an iframe's storage by its
-  top-level site, and a top-level page would share nothing with the plugin's
-  panels. A version 2 background module has no frame and no storage of its
-  own; the host relays its `BroadcastChannel` posts to and from the plugin's
-  pages on every client.
+- A background module has no frame and no storage of its own; the host
+  relays its `BroadcastChannel` posts to and from the plugin's pages on every
+  client.
 
 ## Programs and services
 
-- `helm.exec` runs only programs the manifest names, with an argument array
+- `floti.exec` runs only programs the manifest names, with an argument array
   and no shell. A service gets a loopback port and a token for the run. Both
   run with the user's rights, which is why Settings names them. Turning a
   plugin off or reloading it ends its calls in flight, programs and service.
@@ -90,11 +76,9 @@ folder: run through npx, that folder is a cache.
 ## Tools
 
 - A plugin's tools (`agent` in its manifest) are served by the host as one
-  more family on its agent tools listener. A version 2 plugin's are answered
-  by its background module (`floti.tools.handle`) in the host's isolate, with
-  no client attached; a version 1 plugin's by its background page
-  (`helm.tools.handle`) in the hidden window, through `main/plugins/tools.ts`.
-  A plugin sends no notifications and
+  more family on its agent tools listener, answered by its background module
+  (`floti.tools.handle`) in the host's isolate, with no client attached. A
+  plugin sends no notifications and
   never sends a running session anything: a session calls it, not the other
   way round.
 - A tool its manifest marks `readOnly` is listed with `readOnlyHint` and

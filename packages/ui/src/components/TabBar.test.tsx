@@ -188,7 +188,7 @@ describe('TabBar: the new-tab button', () => {
   it('takes a tab dropped on it as a drop at the end of the strip', () => {
     const onMove = vi.fn()
     renderBar({ onMove, onNewTab: vi.fn() })
-    const data = new Map<string, string>([['application/x-helm-tab', 'session:1']])
+    const data = new Map<string, string>([['application/x-floti-tab', 'session:1']])
     const dataTransfer = {
       types: [...data.keys()],
       getData: (type: string) => data.get(type) ?? '',

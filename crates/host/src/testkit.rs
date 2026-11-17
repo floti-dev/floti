@@ -227,7 +227,7 @@ impl TestDirs {
     }
 
     /// A plugin folder named `name` under the root: `manifest` as its
-    /// `helm-plugin.json`, written as given so a test can write a broken
+    /// `floti-plugin.json`, written as given so a test can write a broken
     /// one, and each of `files` at its path relative to the folder.
     pub fn plugin_folder(&self, name: &str, manifest: &str, files: &[(&str, &str)]) -> PathBuf {
         let folder = self.folder(name);

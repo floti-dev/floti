@@ -7,7 +7,7 @@ import {
   sessionRef,
   type PaneLayout,
   type SavedPane
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { describe, expect, it } from 'vitest'
 import { CHILD_GRID, REPLAY_LIMIT, createPeek, openChildTab, type PeekDeps } from './peek'
 

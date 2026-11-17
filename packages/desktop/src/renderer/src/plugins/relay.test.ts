@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HelmTheme } from '@floti-dev/plugin-sdk'
-import type { HelmBridge, PluginCallOutcome, PluginCallRequest, PluginDelivery, PluginToolCall } from '../../../shared/ipc'
-import { CONNECT, HELLO, type ConnectMessage, type HelmMessage } from '../../plugin-runtime/wire'
+import type { FlotiTheme } from '@floti-dev/plugin-sdk'
+import type { DesktopBridge, PluginCallOutcome, PluginCallRequest, PluginDelivery } from '../../../shared/ipc'
+import { CONNECT, HELLO, type ConnectMessage, type FlotiMessage } from '../../plugin-runtime/wire'
 import { CRASH_GRACE_MS, LOAD_GRACE_MS, createPluginRelay, type PluginRelay, type SurfaceSpec } from './relay'
 
 /**
- * The Helm half of every plugin frame, against a page the test plays.
+ * The Floti half of every plugin frame, against a page the test plays.
  *
  * jsdom has no MessageChannel, and a real one would not let a test end the
  * page's side the way a crashed process does, so the channel is a small fake:
@@ -76,7 +76,7 @@ function fakeMain() {
     return () => set.delete(listener)
   })
   return {
-    ipc: { invoke, send, on } as unknown as HelmBridge,
+    ipc: { invoke, send, on } as unknown as DesktopBridge,
     invoke,
     send,
     calls,
@@ -111,7 +111,7 @@ const spec = (overrides: Partial<SurfaceSpec> = {}): SurfaceSpec => ({
   key: 'panel:sample/main',
   plugin: 'sample',
   revision: 1,
-  url: 'helm-plugin://sample/dist/panels/main.html',
+  url: 'floti-plugin://sample/dist/panels/main.html',
   surface: 'panel',
   name: 'main',
   params: {},
@@ -119,9 +119,9 @@ const spec = (overrides: Partial<SurfaceSpec> = {}): SurfaceSpec => ({
   ...overrides
 })
 
-const THEME: HelmTheme = {
+const THEME: FlotiTheme = {
   kind: 'dark',
-  tokens: { bg: '#000' } as HelmTheme['tokens'],
+  tokens: { bg: '#000' } as FlotiTheme['tokens'],
   radius: 4,
   density: 'compact'
 }
@@ -145,7 +145,7 @@ afterEach(() => {
 })
 
 /** A frame on screen, and the page in it saying HELLO; returns the page's end of its port. */
-function connect(element: HTMLIFrameElement, origin = 'helm-plugin://sample'): { port: FakePort; connect: ConnectMessage } {
+function connect(element: HTMLIFrameElement, origin = 'floti-plugin://sample'): { port: FakePort; connect: ConnectMessage } {
   const win = element.contentWindow!
   const post = vi.spyOn(win, 'postMessage').mockImplementation(() => undefined)
   window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin, source: win }))
@@ -164,7 +164,7 @@ function open(overrides: Partial<SurfaceSpec> = {}): HTMLIFrameElement {
 }
 
 /** What a page received on its port, as messages. */
-const got = (port: FakePort): HelmMessage[] => port.received as HelmMessage[]
+const got = (port: FakePort): FlotiMessage[] => port.received as FlotiMessage[]
 
 describe('the frame', () => {
   it('is made sandboxed, named with its context, on its URL, and loading', () => {
@@ -172,30 +172,10 @@ describe('the frame', () => {
     expect(element.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin allow-forms')
     expect(element.getAttribute('allow')).toBe('clipboard-write')
     expect(element.referrerPolicy).toBe('no-referrer')
-    expect(element.name).toBe('helm:{"plugin":"sample","surface":"panel","name":"main","params":{"id":"2"}}')
-    expect(element.getAttribute('src')).toBe('helm-plugin://sample/dist/panels/main.html')
+    expect(element.name).toBe('floti:{"plugin":"sample","surface":"panel","name":"main","params":{"id":"2"}}')
+    expect(element.getAttribute('src')).toBe('floti-plugin://sample/dist/panels/main.html')
     expect(element.dataset['pluginFrame']).toBe('panel:sample/main')
     expect(relay.state('panel:sample/main')).toEqual({ kind: 'loading' })
-  })
-
-  it('s1: connects a version 2 frame from its floti-plugin origin, and a version 1 frame from helm-plugin, each only from its own scheme', () => {
-    const v2 = open({ key: 'panel:next/main', plugin: 'next', url: 'floti-plugin://next/dist/panel.html' })
-    const v1 = open()
-    const v2Post = vi.spyOn(v2.contentWindow!, 'postMessage').mockImplementation(() => undefined)
-    const v1Post = vi.spyOn(v1.contentWindow!, 'postMessage').mockImplementation(() => undefined)
-    // The other scheme's origin for the same plugin is not this frame's page.
-    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'helm-plugin://next', source: v2.contentWindow }))
-    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'floti-plugin://sample', source: v1.contentWindow }))
-    expect(v2Post).not.toHaveBeenCalled()
-    expect(v1Post).not.toHaveBeenCalled()
-    v2Post.mockRestore()
-    v1Post.mockRestore()
-
-    const next = connect(v2, 'floti-plugin://next')
-    expect(next.connect).toMatchObject({ type: CONNECT, context: { plugin: 'next', surface: 'panel', name: 'main' } })
-    expect(relay.state('panel:next/main')).toEqual({ kind: 'ready' })
-    connect(v1, 'helm-plugin://sample')
-    expect(relay.state('panel:sample/main')).toEqual({ kind: 'ready' })
   })
 
   it('is one frame per key: opening the same surface again hands back the same element', () => {
@@ -236,13 +216,13 @@ describe('the handshake', () => {
   it('ignores a HELLO on another plugin origin, or from a window that is not one of its frames', () => {
     const element = open()
     const post = vi.spyOn(element.contentWindow!, 'postMessage').mockImplementation(() => undefined)
-    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'helm-plugin://other', source: element.contentWindow }))
+    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'floti-plugin://other', source: element.contentWindow }))
     window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'https://example.com', source: element.contentWindow }))
     const stranger = document.createElement('iframe')
     document.body.appendChild(stranger)
     const strangerPost = vi.spyOn(stranger.contentWindow!, 'postMessage').mockImplementation(() => undefined)
-    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'helm-plugin://sample', source: stranger.contentWindow }))
-    window.dispatchEvent(windowMessage({ data: { type: 'not-hello' }, origin: 'helm-plugin://sample', source: element.contentWindow }))
+    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'floti-plugin://sample', source: stranger.contentWindow }))
+    window.dispatchEvent(windowMessage({ data: { type: 'not-hello' }, origin: 'floti-plugin://sample', source: element.contentWindow }))
     expect(post).not.toHaveBeenCalled()
     expect(strangerPost).not.toHaveBeenCalled()
     expect(relay.state('panel:sample/main')).toEqual({ kind: 'loading' })
@@ -271,7 +251,7 @@ describe('calls', () => {
   })
 
   it.each([
-    ['sessions.start', { cwd: 'C:\\work', prompt: 'work on HELM-2' }],
+    ['sessions.start', { cwd: 'C:\\work', prompt: 'work on FLOTI-2' }],
     ['open', 'https://github.com/owner/repo/pull/7']
   ])('that put something in front of the user (%s) go to main only while the user has just acted', async (method, arg) => {
     const { port } = connect(open())
@@ -284,7 +264,7 @@ describe('calls', () => {
         id: 1,
         ok: false,
         code: 'not-allowed',
-        message: `helm.${method} needs a click or key press the user just made in the page`
+        message: `floti.${method} needs a click or key press the user just made in the page`
       }
     ])
 
@@ -370,19 +350,12 @@ describe('events', () => {
     ])
   })
 
-  it('reach only the plugin they are for, and a background delivery only its background page', () => {
+  it('reach only the plugin they are for, and a delivery to the background no page', () => {
     const panel = connect(open()).port
-    const background = connect(
-      open({ key: 'background:sample', surface: 'background', name: 'background', url: 'helm-plugin://sample/bg.html' })
-    ).port
-    const other = connect(open({ key: 'panel:other/main', plugin: 'other', url: 'helm-plugin://other/p.html' }), 'helm-plugin://other').port
+    const other = connect(open({ key: 'panel:other/main', plugin: 'other', url: 'floti-plugin://other/p.html' }), 'floti-plugin://other').port
     main.emit('plugins:deliver', { plugin: 'sample', event: 'command', data: { id: 'refresh' }, to: 'background' })
     main.emit('plugins:deliver', { plugin: 'sample', event: 'secrets', data: { token: 'ready' }, to: 'all' })
     expect(got(panel)).toEqual([{ t: 'event', name: 'secrets', data: { token: 'ready' } }])
-    expect(got(background)).toEqual([
-      { t: 'event', name: 'command', data: { id: 'refresh' } },
-      { t: 'event', name: 'secrets', data: { token: 'ready' } }
-    ])
     expect(got(other)).toEqual([])
   })
 
@@ -509,7 +482,7 @@ describe("the frame's life", () => {
     expect(main.send).toHaveBeenCalledWith('plugins:cancel', { callId })
     expect(port.peer!.closed).toBe(true)
     expect(relay.state('panel:sample/main')).toEqual({ kind: 'loading' })
-    expect(element.getAttribute('src')).toBe('helm-plugin://sample/dist/panels/main.html')
+    expect(element.getAttribute('src')).toBe('floti-plugin://sample/dist/panels/main.html')
   })
 
   it('restarts when opened for a newer revision, and not for a new title alone', () => {
@@ -552,93 +525,14 @@ describe("the frame's life", () => {
     expect(main.listening('plugins:deliver')).toBe(0)
     // A HELLO after that reaches nothing.
     const post = vi.spyOn(window, 'postMessage')
-    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'helm-plugin://sample', source: element.contentWindow }))
+    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'floti-plugin://sample', source: element.contentWindow }))
     expect(post).not.toHaveBeenCalled()
-  })
-})
-
-describe('tool calls', () => {
-  const BACKGROUND: Partial<SurfaceSpec> = {
-    key: 'background:sample',
-    surface: 'background',
-    name: 'background',
-    url: 'helm-plugin://sample/dist/background/index.html'
-  }
-  const SESSION = { id: 'a1b2c3', name: 'alpha', cwd: 'C:/work/alpha' }
-  const tool = (id: string, plugin = 'sample'): PluginToolCall => ({ id, plugin, name: 'list_items', args: { all: true }, session: SESSION })
-  const answers = (): unknown[] => main.send.mock.calls.filter(([channel]) => channel === 'plugins:toolResult').map(([, payload]) => payload)
-
-  it("reach the plugin's background page, and its answer goes back to main under the call's id", () => {
-    const { port } = connect(open(BACKGROUND))
-    const panel = connect(open({ key: 'panel:sample/main' }), 'helm-plugin://sample').port
-    main.emit('plugins:tool', tool('c1'))
-    expect(got(port)).toEqual([{ t: 'tool', id: 'c1', name: 'list_items', args: { all: true }, session: SESSION }])
-    expect(got(panel)).toEqual([])
-    port.postMessage({ t: 'tool-result', id: 'c1', ok: true, text: 'two items' })
-    port.postMessage({ t: 'tool-result', id: 'c1', ok: true, text: 'again' })
-    expect(answers()).toEqual([{ id: 'c1', ok: true, text: 'two items' }])
-  })
-
-  it('carry a failure through, and take no answer for a call the page was not handed', () => {
-    const { port } = connect(open(BACKGROUND))
-    const panel = connect(open({ key: 'panel:sample/main' }), 'helm-plugin://sample').port
-    main.emit('plugins:tool', tool('c1'))
-    panel.postMessage({ t: 'tool-result', id: 'c1', ok: true, text: 'from the panel' })
-    port.postMessage({ t: 'tool-result', id: 'c2', ok: true, text: 'never asked' })
-    port.postMessage({ t: 'tool-result', id: 'c1', ok: false, message: 'The board is locked.' })
-    expect(answers()).toEqual([{ id: 'c1', ok: false, message: 'The board is locked.' }])
-  })
-
-  it('are answered at once when the plugin has no background page connected', () => {
-    open(BACKGROUND)
-    main.emit('plugins:tool', tool('c1'))
-    main.emit('plugins:tool', tool('c2', 'other'))
-    expect(answers()).toEqual([
-      { id: 'c1', ok: false, message: "The plugin's background page is not running." },
-      { id: 'c2', ok: false, message: "The plugin's background page is not running." }
-    ])
-  })
-
-  it('are cancelled at the page when main says so', () => {
-    const { port } = connect(open(BACKGROUND))
-    main.emit('plugins:tool', tool('c1'))
-    main.emit('plugins:toolCancel', { id: 'c1' })
-    main.emit('plugins:toolCancel', { id: 'c9' })
-    expect(got(port).at(-1)).toEqual({ t: 'tool-cancel', id: 'c1' })
-    // An answer for a cancelled call goes nowhere.
-    port.postMessage({ t: 'tool-result', id: 'c1', ok: true, text: 'late' })
-    expect(answers()).toEqual([])
-  })
-
-  it('fail for the session when the page stops before answering: a crash, a reload, or the frame going', () => {
-    const crashed = connect(open(BACKGROUND)).port
-    main.emit('plugins:tool', tool('c1'))
-    crashed.close()
-    connect(relay.open(spec(BACKGROUND)))
-    main.emit('plugins:tool', tool('c2'))
-    relay.reload('background:sample')
-    connect(relay.open(spec(BACKGROUND)))
-    main.emit('plugins:tool', tool('c3'))
-    relay.dispose('background:sample')
-    const stopped = { ok: false, message: "The plugin's background page stopped before it answered." }
-    expect(answers()).toEqual([
-      { id: 'c1', ...stopped },
-      { id: 'c2', ...stopped },
-      { id: 'c3', ...stopped }
-    ])
-  })
-
-  it('stop being listened for when the relay is destroyed', () => {
-    relay.destroy()
-    expect(main.listening('plugins:tool')).toBe(0)
-    expect(main.listening('plugins:toolCancel')).toBe(0)
   })
 })
 
 describe('the same plugin on two hosts', () => {
   const BUILD_BOX = 'build-box'
-  const BUILD_ORIGIN = 'helm-plugin://sample.build-box'
-  const SESSION = { id: 'm1', name: 'alpha', cwd: '/home/me/alpha' }
+  const BUILD_ORIGIN = 'floti-plugin://sample.build-box'
   let buildBox: ReturnType<typeof fakeMain>
   let hosted: PluginRelay
 
@@ -670,7 +564,7 @@ describe('the same plugin on two hosts', () => {
 
   it('s22: a page of build-box’s plugin calls build-box only, and This PC’s calls This PC only', async () => {
     const theirs = connect(openOn(remote()), BUILD_ORIGIN).port
-    const ours = connect(openOn({}), 'helm-plugin://sample').port
+    const ours = connect(openOn({}), 'floti-plugin://sample').port
     for (const method of ['fetch', 'exec', 'settings.get', 'secrets.get', 'sessions.list', 'channel.post']) {
       theirs.postMessage({ t: 'call', id: 1 + buildBox.calls.length, method, args: [] })
     }
@@ -695,7 +589,7 @@ describe('the same plugin on two hosts', () => {
 
   it('s22: a delivery from build-box reaches build-box’s pages of the plugin, and This PC’s from This PC only', () => {
     const theirs = connect(openOn(remote()), BUILD_ORIGIN).port
-    const ours = connect(openOn({}), 'helm-plugin://sample').port
+    const ours = connect(openOn({}), 'floti-plugin://sample').port
     const delivery = (data: string): PluginDelivery => ({ plugin: 'sample', event: 'channel', data, to: 'all' })
     buildBox.emit('plugins:deliver', delivery('build-box says'))
     main.emit('plugins:deliver', delivery('This PC says'))
@@ -712,34 +606,10 @@ describe('the same plugin on two hosts', () => {
     const win = element.contentWindow!
     const post = vi.spyOn(win, 'postMessage').mockImplementation(() => undefined)
     // This PC's origin for the plugin, or another host's, is not this frame's page.
-    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'helm-plugin://sample', source: win }))
-    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'helm-plugin://sample.lab', source: win }))
+    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'floti-plugin://sample', source: win }))
+    window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: 'floti-plugin://sample.lab', source: win }))
     expect(post).not.toHaveBeenCalled()
     window.dispatchEvent(windowMessage({ data: { type: HELLO }, origin: BUILD_ORIGIN, source: win }))
     expect(post).toHaveBeenCalledTimes(1)
-  })
-
-  it('s20: a build-box session’s tool call is handed to build-box’s background page, and This PC’s to This PC’s', () => {
-    const background = { surface: 'background' as const, name: 'background' }
-    const theirs = connect(
-      openOn({ ...background, ...remote({ key: 'host:build-box/background:sample', url: `${BUILD_ORIGIN}/bg.html` }) }),
-      BUILD_ORIGIN
-    ).port
-    const ours = connect(
-      openOn({ ...background, key: 'background:sample', url: 'helm-plugin://sample/bg.html' }),
-      'helm-plugin://sample'
-    ).port
-    const call = (id: string, host?: string): PluginToolCall => ({
-      id,
-      plugin: 'sample',
-      name: 'find',
-      args: {},
-      session: SESSION,
-      ...(host !== undefined ? { host } : {})
-    })
-    main.emit('plugins:tool', call('remote', BUILD_BOX))
-    main.emit('plugins:tool', call('local'))
-    expect(got(theirs).filter((message) => message.t === 'tool').map((message) => (message as { id: string }).id)).toEqual(['remote'])
-    expect(got(ours).filter((message) => message.t === 'tool').map((message) => (message as { id: string }).id)).toEqual(['local'])
   })
 })

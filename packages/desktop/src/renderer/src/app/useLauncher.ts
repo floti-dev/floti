@@ -5,9 +5,9 @@ import type {
   DiscoveryResult,
   Project,
   ThemePreference
-} from '@helm/core'
+} from '@floti/core'
 import type { AppInfo } from '../../../shared/ipc'
-import { helm } from './bridge'
+import { desktop } from './bridge'
 import { applyTerminalSettings } from './termprefs'
 import { applyShape } from './theme'
 
@@ -91,28 +91,28 @@ export function useLauncher(): LauncherState {
 
   useEffect(() => {
     const offs = [
-      helm.on('discovery:updated', (result) => {
+      desktop.on('discovery:updated', (result) => {
         setDiscovery(result)
         setScanError(undefined)
       }),
-      helm.on('scan:status', (status) => {
+      desktop.on('scan:status', (status) => {
         setScanning(status.running)
         setScanError(status.error)
       }),
-      helm.on('settings:changed', adopt)
+      desktop.on('settings:changed', adopt)
     ]
 
     // Apart from the settings: the app info waits on the host's reading of the CLI, and nothing that needs the
     // settings (the scan roots a new workspace is offered) should wait on it.
-    void helm.invoke('app:info').then(setInfo, () => undefined)
+    void desktop.invoke('app:info').then(setInfo, () => undefined)
 
     void (async () => {
-      const loaded = await helm.invoke('settings:read')
+      const loaded = await desktop.invoke('settings:read')
       adopt(loaded)
 
       let cached: CachedProject[]
       try {
-        cached = await helm.invoke('discovery:cached')
+        cached = await desktop.invoke('discovery:cached')
       } catch (err) {
         // Could not look, which is not "no projects": the sidebar says why,
         // where a failed scan says why, and paints no tree in its place.
@@ -126,7 +126,7 @@ export function useLauncher(): LauncherState {
 
     // Tells the main process the window is listening. It answers with the
     // current settings and theme and kicks off the first scan.
-    helm.send('renderer:ready')
+    desktop.send('renderer:ready')
 
     return () => {
       for (const off of offs) off()
@@ -142,7 +142,7 @@ export function useLauncher(): LauncherState {
    */
   useEffect(
     () =>
-      helm.on('git:updated', (states) => {
+      desktop.on('git:updated', (states) => {
         setDiscovery((current) =>
           current
             ? {
@@ -159,7 +159,7 @@ export function useLauncher(): LauncherState {
 
   const rescan = useCallback(() => {
     setScanning(true)
-    void helm
+    void desktop
       .invoke('discovery:scan', { includeGit: true })
       .then(setDiscovery)
       .catch((err: unknown) => {
@@ -169,7 +169,7 @@ export function useLauncher(): LauncherState {
   }, [])
 
   const addRoot = useCallback(() => {
-    void helm.invoke('roots:add').then((roots) => {
+    void desktop.invoke('roots:add').then((roots) => {
       setSettings((current) => (current ? { ...current, scanRoots: roots } : current))
       rescan()
     })
@@ -184,7 +184,7 @@ export function useLauncher(): LauncherState {
    */
   const removeRoot = useCallback(
     (path: string) => {
-      void helm.invoke('roots:remove', { path }).then((roots) => {
+      void desktop.invoke('roots:remove', { path }).then((roots) => {
         setSettings((current) => (current ? { ...current, scanRoots: roots } : current))
         rescan()
       })
@@ -201,7 +201,7 @@ export function useLauncher(): LauncherState {
    */
   const writeSettings = useCallback(
     (patch: Partial<AppSettings>) => {
-      void helm.invoke('settings:write', patch).then(adopt)
+      void desktop.invoke('settings:write', patch).then(adopt)
     },
     [adopt]
   )
@@ -223,7 +223,7 @@ export function useLauncher(): LauncherState {
   )
 
   const reveal = useCallback((path: string) => {
-    void helm.invoke('shell:showItem', { path })
+    void desktop.invoke('shell:showItem', { path })
   }, [])
 
   const select = useCallback((project: Project | null) => {

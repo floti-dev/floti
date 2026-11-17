@@ -291,7 +291,7 @@ async fn s7_the_held_wsl_outlives_every_client_and_a_client_that_comes_back_find
     // the desktop attached and the distro held, it is not.
     let idle = tokio::spawn(until_idle(pair.windows_now.clone(), Duration::ZERO));
 
-    // Every window closes and Helm quits keeping its sessions: both of its
+    // Every window closes and the desktop quits keeping its sessions: both of its
     // connections end.
     drop(desktop);
     drop(in_distro);
@@ -314,7 +314,7 @@ async fn s7_the_held_wsl_outlives_every_client_and_a_client_that_comes_back_find
         "the Windows host judged itself idle while it held a distro"
     );
 
-    // Helm opens again: the session is there, and its ask for the same
+    // The desktop opens again: the session is there, and its ask for the same
     // distro opens no second wsl.exe.
     let mut in_distro = TestClient::connect(&pair.distro_endpoint(), &["terminal"]).await;
     let listed = in_distro

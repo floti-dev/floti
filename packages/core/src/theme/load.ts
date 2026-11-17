@@ -16,10 +16,9 @@ import {
  *
  * The directory is a sibling of the templates one and takes the same branch
  * (`themesDir` in `paths.ts`): `themes` in the user's config folder
- * (`~/.config/floti`, or `~/.config/helm` only while Floti's is not there and
- * Helm's is) for an installed Floti,
+ * (`~/.config/floti`) for an installed Floti,
  * because these are files a person writes by hand and may keep in git, and
- * `helm-data/themes` beside a portable exe or under a check's own data
+ * `floti-data/themes` beside a portable exe or under a check's own data
  * directory. Read here, never written except by `seedThemesDir` and
  * `writeThemeCopy`, both of which only ever create a file that was not there.
  */
@@ -131,7 +130,7 @@ export interface ThemesSeedResult {
 
 /**
  * Creates the directory and its README, only when the directory is absent -
- * the rule the templates folder is seeded by, for the same reason: Helm
+ * the rule the templates folder is seeded by, for the same reason: Floti
  * keeps no
  * record of what it wrote, so it cannot tell an edited file from an untouched
  * one, and the only safe time to write is when there is nothing there.
@@ -153,7 +152,7 @@ export function seedThemesDir(dir: string): ThemesSeedResult {
 /**
  * Writes `theme` as a new file in `dir` and returns its path: `<id>-copy.json`,
  * or `-copy-2` and on while that is taken. `wx`, so an existing file is never
- * overwritten even by a race with another Helm.
+ * overwritten even by a race with another desktop.
  */
 export function writeThemeCopy(dir: string, theme: ThemeDefinition): string {
   mkdirSync(dir, { recursive: true })

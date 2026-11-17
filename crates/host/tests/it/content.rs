@@ -226,7 +226,7 @@ async fn a_client_opens_an_artifact_and_its_neighbour_over_the_wire_under_a_poli
     );
     assert_eq!(entry.total_bytes, entry.body.len() as u64);
     let html = String::from_utf8(entry.body.0.clone()).unwrap();
-    let open = "<script type=\"application/json\" data-helm-wikilinks>";
+    let open = "<script type=\"application/json\" data-floti-wikilinks>";
     let start = html.find(open).unwrap() + open.len();
     let end = start + html[start..].find("</script>").unwrap();
     let island: Value = serde_json::from_str(&html[start..end]).unwrap();

@@ -6,7 +6,7 @@ import type {
   ConfigTree,
   TemplateChoice,
   TemplateDetail
-} from '@helm/core'
+} from '@floti/core'
 import { cn } from '../lib/cn'
 import { ROW_SELECTED } from '../lib/rows'
 import { formatAge, formatBytes } from '../lib/time'
@@ -32,11 +32,11 @@ import { Overlay } from './Overlay'
  * Explorer" is the whole of the editing story. What is left is the three things
  * a folder listing cannot tell you or cannot do:
  *
- * - **`.tpl` is a Helm invention.** Nobody looking at a folder guesses that
+ * - **`.tpl` is a Floti invention.** Nobody looking at a folder guesses that
  *   `CLAUDE.md.tpl` is filled in and renamed on the way out, so the file list
  *   badges it, names the four variables in a help line, and offers the rename
  *   that opts a file in.
- * - **A skill you already wrote is somewhere Helm can see.** The import picker
+ * - **A skill you already wrote is somewhere Floti can see.** The import picker
  *   is `config:scopes` and `config:tree` with checkboxes on it - every
  *   `.claude` tree the host lists, `~/.claude` included, read only.
  * - **`template.yaml` is metadata, not a file to edit.** Two fields and a Save,
@@ -50,9 +50,9 @@ import { Overlay } from './Overlay'
  */
 
 export interface TemplateManagerProps {
-  /** The picker's rows, `minimal` included - it is shown, and is not editable. */
+  /** The picker's rows, Starter included - it is shown, and is not editable. */
   templates: readonly TemplateChoice[]
-  /** Where they live, said out loud so the folder can be found without Helm. */
+  /** Where they live, said out loud so the folder can be found without Floti. */
   templatesDir: string
   /** A template that could not be read. Not fatal to the rest of the list. */
   listProblems?: readonly string[] | undefined
@@ -161,7 +161,7 @@ export function TemplateManager({
           >
             {authored.length === 0 && !creating && (
               <p className="px-2 py-3 text-[11.5px] leading-[1.55] text-fg-subtle">
-                No templates yet. Every new workspace gets the built-in Minimal scaffold until there
+                No templates yet. Every new workspace gets the built-in Starter template until there
                 is one.
               </p>
             )}
@@ -619,7 +619,7 @@ function FileList({
  *
  * The sources are `config:scopes` - every `.claude` tree the host lists, the
  * user's own `~/.claude` included, because importing a skill you wrote
- * for yourself is the obvious case and reading is all Helm does there anyway.
+ * for yourself is the obvious case and reading is all Floti does there anyway.
  * `ClaudeInventory` could not feed this: it is counts and carries no names.
  *
  * What lands is a **plain copy**. A template travels - mailed, cloned,
@@ -768,6 +768,7 @@ const IMPORTABLE = new Set<ConfigFile['kind']>([
   'hook',
   'rule',
   'claude-md',
+  'agents-md',
   'settings',
   'mcp'
 ])
@@ -780,6 +781,7 @@ const KIND_LABEL: Partial<Record<ConfigFile['kind'], string>> = {
   hook: 'hook',
   rule: 'rule',
   'claude-md': 'CLAUDE.md',
+  'agents-md': 'AGENTS.md',
   settings: 'settings',
   mcp: 'mcp'
 }

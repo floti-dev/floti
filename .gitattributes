@@ -19,3 +19,7 @@ crates/host/src/update/fixtures/** text eol=lf
 # The vendored license texts are written LF (third-party-notices.mjs vendor-v8),
 # and a Windows checkout keeps them as written.
 third-party/** text eol=lf
+
+# Starter's AGENTS.md is embedded with include_str! and written as it is, so
+# a Windows checkout keeps it LF like every other file the host writes.
+crates/host/src/workspace/templates/starter/** text eol=lf

@@ -79,12 +79,12 @@ and GitHub build attestations.
 
 ## Getting started
 
-1. Open Floti and add a folder of repositories, or create a workspace.
-2. Start a session from a project, or save a profile to start one in one click.
-3. To add a server or WSL distro, open **Settings → Hosts**. Floti reaches a
-   server through your own `ssh` login and can install `floti` there for you.
+The first time Floti opens, a short walkthrough checks Claude Code, sets up a
+workspace and starts your first session. `floti doctor` checks Claude Code
+from a terminal.
 
-`floti doctor` checks your setup from a terminal.
+To add a server or WSL distro later, open **Settings → Hosts**. Floti reaches
+a server through your own `ssh` login and can install `floti` there for you.
 
 ## Updates
 
@@ -129,7 +129,7 @@ start. Neither command touches `~/.claude`, `~/.ssh` or your repositories.
 ## Documentation
 
 - [The wiki](https://github.com/floti-dev/floti/wiki): workspaces, templates, themes and writing plugins.
-- [The plugin SDK](packages/plugin-sdk/README.md): manifests, the bridge and the `helm-plugin` CLI.
+- [The plugin SDK](packages/plugin-sdk/README.md): manifests, the bridge and the `floti-plugin` CLI.
 - [docs/](docs/): how Floti is built, starting with [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Building from source

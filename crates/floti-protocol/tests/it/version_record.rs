@@ -30,7 +30,7 @@ fn the_committed_records_read_in_order_only_add_within_a_major() {
 }
 
 #[test]
-fn the_record_holds_the_handshake_and_no_client_only_or_host_internal_entry() {
+fn the_record_holds_the_handshake_and_no_client_only_entry() {
     let text = record(PROTOCOL_VERSION, &Catalogue::protocol());
     let record: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(record["version"], PROTOCOL_VERSION.to_string());
@@ -50,8 +50,8 @@ fn the_record_holds_the_handshake_and_no_client_only_or_host_internal_entry() {
     }
     let channels = record["channels"].as_object().unwrap();
     assert!(channels.contains_key("session:list"));
-    use floti_protocol::channels::boundary::{CLIENT_ONLY, HOST_INTERNAL};
-    for entry in CLIENT_ONLY.iter().chain(HOST_INTERNAL) {
+    use floti_protocol::channels::boundary::CLIENT_ONLY;
+    for entry in CLIENT_ONLY {
         let family = entry.channels.trim_end_matches('*');
         assert!(
             !channels

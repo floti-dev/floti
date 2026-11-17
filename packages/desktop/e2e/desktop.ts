@@ -14,19 +14,19 @@ import { createWorld, disposeWorld, fakeClaudeLogs, repoRoot, seedSettings, type
 
 export { expect }
 
-export interface Helm {
+export interface Desktop {
   app: ElectronApplication
   window: Page
 }
 
 /** Starts the built app into a world. `pnpm test:e2e` builds it first. */
-export async function launchHelm(world: World): Promise<Helm> {
+export async function launchDesktop(world: World): Promise<Desktop> {
   const desktop = join(repoRoot(), 'packages', 'desktop')
   const app = await electron.launch({
     args: [desktop],
     cwd: desktop,
     // Main records the channels each page uses over IPC (`ipc-recorder.ts`).
-    env: { ...world.env, HELM_RECORD_IPC: '1' }
+    env: { ...world.env, FLOTI_RECORD_IPC: '1' }
   })
   const window = await app.firstWindow()
   await window.waitForLoadState('domcontentloaded')
@@ -72,7 +72,7 @@ export function worldProcesses(world: World): number[] {
 }
 
 /**
- * A test with a fresh world, seeded and torn down around it. `helm` is the app,
+ * A test with a fresh world, seeded and torn down around it. `desktop` is the app,
  * launched once; a test that restarts it calls `relaunch`.
  *
  * The world goes only once nothing it ran is still running: the app's quit
@@ -82,8 +82,8 @@ export function worldProcesses(world: World): number[] {
  */
 export const test = base.extend<{
   world: World
-  helm: Helm
-  relaunch: () => Promise<Helm>
+  desktop: Desktop
+  relaunch: () => Promise<Desktop>
 }>({
   // eslint-disable-next-line no-empty-pattern
   world: async ({}, use) => {
@@ -96,17 +96,17 @@ export const test = base.extend<{
     removeHostShims(world)
     disposeWorld(world)
   },
-  helm: async ({ world }, use) => {
-    const current = await launchHelm(world)
+  desktop: async ({ world }, use) => {
+    const current = await launchDesktop(world)
     await use(current)
     await current.app.close()
   },
-  relaunch: async ({ world, helm }, use) => {
-    let latest = helm
+  relaunch: async ({ world, desktop }, use) => {
+    let latest = desktop
     await use(async () => {
       await latest.app.close()
-      latest = await launchHelm(world)
-      Object.assign(helm, latest)
+      latest = await launchDesktop(world)
+      Object.assign(desktop, latest)
       return latest
     })
   }
@@ -126,12 +126,12 @@ interface TerminalReport {
  */
 export async function terminalText(window: Page, sessionId: number): Promise<string> {
   const sessions = await window.evaluate(
-    () => (window as unknown as { __helmTerminals: () => { sessions: TerminalReport[] } }).__helmTerminals().sessions
+    () => (window as unknown as { __flotiTerminals: () => { sessions: TerminalReport[] } }).__flotiTerminals().sessions
   )
   return sessions.find((s) => s.key === String(sessionId))?.text ?? ''
 }
 
-/** The session id behind a session tab, which Helm keys its terminals by. */
+/** The session id behind a session tab, which the desktop keys its terminals by. */
 export async function sessionIdOf(window: Page, tabName: string | RegExp): Promise<number> {
   const id = await window.getByRole('tab', { name: tabName }).first().getAttribute('data-tab')
   const match = /^session:(\d+)$/.exec(id ?? '')
@@ -183,7 +183,7 @@ export async function typeLine(pane: Locator, text: string): Promise<void> {
 }
 
 /**
- * Moves Helm's window clear of the system cursor before a test holds a divider
+ * Moves the desktop's window clear of the system cursor before a test holds a divider
  * down, without moving the cursor: it is the person's at the machine.
  *
  * Playwright's mouse is not the system's. Whenever what is under the resting
@@ -195,8 +195,8 @@ export async function typeLine(pane: Locator, text: string): Promise<void> {
  * to whichever side of the cursor has more room, past the screen's edge if it
  * must.
  */
-export async function keepClearOfCursor(helm: Helm): Promise<void> {
-  await helm.app.evaluate(({ BrowserWindow, screen }) => {
+export async function keepClearOfCursor(desktop: Desktop): Promise<void> {
+  await desktop.app.evaluate(({ BrowserWindow, screen }) => {
     const win = BrowserWindow.getAllWindows().find((candidate) => candidate.isVisible())
     if (win === undefined) throw new Error('no visible Floti window')
     const cursor = screen.getCursorScreenPoint()
@@ -213,7 +213,7 @@ export async function keepClearOfCursor(helm: Helm): Promise<void> {
   })
 }
 
-/** Closes Helm's window the way its close button or Alt+F4 does. */
+/** Closes the desktop's window the way its close button or Alt+F4 does. */
 export const closeWindow = (app: ElectronApplication): Promise<void> =>
   app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()
@@ -222,8 +222,8 @@ export const closeWindow = (app: ElectronApplication): Promise<void> =>
   })
 
 /**
- * Clicks an answer that quits Helm. The page clicks it once this call has
- * returned: Playwright fails any action whose page closes under it. Helm's
+ * Clicks an answer that quits the desktop. The page clicks it once this call has
+ * returned: Playwright fails any action whose page closes under it. The desktop's
  * exit is then awaited on its main process, since a host it leaves running
  * holds the stdio Playwright's own close event waits on.
  */
@@ -241,8 +241,8 @@ export async function closeKeepRunning(window: Page, tab: Locator, name: string)
     .click()
 }
 
-/** The pid of Helm's main process: `app.process()` is the launcher Playwright started. */
-export const mainPid = (helm: Helm): Promise<number> => helm.app.evaluate(() => process.pid)
+/** The pid of the desktop's main process: `app.process()` is the launcher Playwright started. */
+export const mainPid = (desktop: Desktop): Promise<number> => desktop.app.evaluate(() => process.pid)
 
 /** The `floti` programs a process started, by pid: the host and the bridge. */
 export function flotiChildren(parent: number): number[] {

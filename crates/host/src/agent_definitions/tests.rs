@@ -873,7 +873,7 @@ fn the_shipped_agents_name_no_product_no_path_no_handle_and_only_made_up_item_id
         // product of this repository, no agent but the one they run on, no
         // path, address or handle.
         for word in [
-            "Helm", "Floti", "codex", "C:\\", "/Users/", "/home/", "http:", "https:", "@",
+            "Floti", "codex", "C:\\", "/Users/", "/home/", "http:", "https:", "@",
         ] {
             assert!(!source.contains(word), "{file} names {word}");
         }

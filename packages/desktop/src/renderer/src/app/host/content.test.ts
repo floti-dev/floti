@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Project } from '@helm/core/types'
+import type { Project } from '@floti/core/types'
 import { FakeConnection, fakeReach, reconnectingReach } from '../../../../../test/fake-connection'
 import type * as P from '../../../../shared/host/protocol'
 import { configScopesWithScan, hostArtifactUrl, windowArtifactUrl } from '../../../../shared/host/records/content'
@@ -112,6 +112,27 @@ describe('what composition reads of an agent’s config, over the window’s own
     expect(scopes[1]).toEqual({ kind: 'workspace', path: HUB, claudeDir: `${HUB}/.claude`, label: 'hub', exists: false })
   })
 
+  it('lists a folder in the shared shape, with only an AGENTS.md or an .agents/, as a scope that exists', () => {
+    const shared = (path: string, inventory: Partial<Project['inventory']>): Project => {
+      const base = folder(path, 'repo', path.split('/').pop() ?? path, false)
+      return { ...base, inventory: { ...base.inventory, ...inventory } }
+    }
+    const merged = configScopesWithScan(
+      [scope('user', HOME, 'User')],
+      [
+        shared('/work dir/agents-md', { agentsMd: true }),
+        shared('/work dir/agents-dir', { agentsDir: true }),
+        shared('/work dir/neither', {})
+      ]
+    )
+    expect(merged.map((s) => [s.label, s.exists])).toEqual([
+      ['User', true],
+      ['agents-md', true],
+      ['agents-dir', true],
+      ['neither', false]
+    ])
+  })
+
   it('tells apart paths that differ only by separators, a trailing one or case', () => {
     const merged = configScopesWithScan(
       [scope('user', HOME, 'User'), scope('project', 'C:\\work\\alpha\\', 'alpha'), scope('project', OUTSIDE, 'tooling')],
@@ -165,7 +186,7 @@ describe('the Files view over the window’s own connection', () => {
     await expect(ask(adapter, 'content:write', request)).resolves.toMatchObject({ ok: true, snapshotId: 7 })
     expect(connection.payloads('content:write')).toEqual([request])
     await expect(ask(adapter, 'content:artifact', { scopePath: ALPHA, path: NOTE })).resolves.toEqual({
-      url: 'helm-content://artifact/tok123/report.html',
+      url: 'floti-content://artifact/tok123/report.html',
       token: 'tok123'
     })
     await expect(ask(adapter, 'content:wikilink', { scopePath: ALPHA, target: 'a', from: NOTE })).resolves.toEqual({
@@ -210,9 +231,9 @@ describe('the Files view over the window’s own connection', () => {
   })
 
   it('maps an artifact’s address between the host’s scheme and the window’s', () => {
-    expect(windowArtifactUrl('floti-artifact://t/a.html')).toBe('helm-content://artifact/t/a.html')
-    expect(hostArtifactUrl('helm-content://artifact/t/a.html')).toBe('floti-artifact://t/a.html')
-    expect(hostArtifactUrl('helm-content://elsewhere/a.html')).toBeNull()
+    expect(windowArtifactUrl('floti-artifact://t/a.html')).toBe('floti-content://artifact/t/a.html')
+    expect(hostArtifactUrl('floti-content://artifact/t/a.html')).toBe('floti-artifact://t/a.html')
+    expect(hostArtifactUrl('floti-content://elsewhere/a.html')).toBeNull()
     expect(() => windowArtifactUrl('https://example.invalid/a.html')).toThrow()
   })
 })

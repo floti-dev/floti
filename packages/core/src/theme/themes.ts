@@ -2,7 +2,7 @@ import type { ThemePreference } from '../types'
 import { contrastRatio, formatColor, mix, parseColor, withAlpha, type Rgba } from './color'
 
 /**
- * Themes: what one is, the three Helm ships, and how a file becomes one.
+ * Themes: what one is, the three Floti ships, and how a file becomes one.
  *
  * A theme is the twenty-seven colours the chrome is painted with and nothing
  * else: nineteen roles - grounds, edges, text, accent, status - and the eight
@@ -16,14 +16,14 @@ import { contrastRatio, formatColor, mix, parseColor, withAlpha, type Rgba } fro
  * - **Shape.** Gaps, corners and density are settings of their own, so a
  *   person's choice of corner survives changing colours.
  *
- * Pure: no DOM, no Node. The renderer imports it through `@helm/core/types`;
+ * Pure: no DOM, no Node. The renderer imports it through `@floti/core/types`;
  * reading theme files off disk is `theme/load.ts`, which is not reachable from
  * there.
  */
 
 /**
  * Every colour a theme sets, by the name it has in a theme file and - with a
- * `--helm-` prefix - as a CSS custom property. Order is the order a duplicated
+ * `--floti-` prefix - as a CSS custom property. Order is the order a duplicated
  * theme file lists them in: grounds, edges, text, accent, status, palette.
  */
 export const THEME_TOKENS = [
@@ -79,15 +79,15 @@ export const THEME_KINDS: readonly ThemeKind[] = ['dark', 'light']
 export const PALETTE_HUES = ['blue', 'teal', 'green', 'amber', 'orange', 'red', 'pink', 'violet'] as const
 export type PaletteHue = (typeof PALETTE_HUES)[number]
 
-/** A palette hue's token: `blue` is `hue-blue`, painted as `--helm-hue-blue`. */
+/** A palette hue's token: `blue` is `hue-blue`, painted as `--floti-hue-blue`. */
 export function hueToken(hue: PaletteHue): `hue-${PaletteHue}` {
   return `hue-${hue}`
 }
 
 /**
  * How much of a hue a palette tag's tint is, over the island: the weight the
- * built-ins give their accent tint, per kind. The primitives (`helm.css`) and
- * Helm's own tags (`ui/lib/hues.ts`) mix at these, and the floors are measured
+ * built-ins give their accent tint, per kind. The primitives (`floti.css`) and
+ * Floti's own tags (`ui/lib/hues.ts`) mix at these, and the floors are measured
  * on the result.
  */
 export const HUE_TINT_ALPHA: Readonly<Record<ThemeKind, number>> = { dark: 0.14, light: 0.1 }
@@ -203,7 +203,7 @@ const SHADOW: Record<ThemeKind, string> = {
 }
 
 /**
- * The three Helm ships.
+ * The three Floti ships.
  *
  * **Nocturne** is v1's dark ramp exactly, values measured into DESIGN.md over
  * many rounds (the hover step, `accent-soft-hover`, the 4.5:1 floors), so the

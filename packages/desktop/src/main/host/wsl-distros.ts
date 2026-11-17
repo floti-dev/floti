@@ -1,4 +1,4 @@
-import type { RemoteHost, RemoteHostConnection, WslDistroList } from '@helm/core/types'
+import type { RemoteHost, RemoteHostConnection, WslDistroList } from '@floti/core/types'
 import { lastLineOf, type RunTransport } from './remote-install'
 import { transportArgv, type TransportPrograms } from './remote-launcher'
 
@@ -66,7 +66,7 @@ async function listOn(
   pcName: string
 ): Promise<WslDistroList> {
   // This PC's wsl.exe runs as written, which gives it WSL_UTF8=1 like every
-  // wsl.exe Helm starts; `--quiet`, its last word, needs no quoting.
+  // wsl.exe the desktop starts; `--quiet`, its last word, needs no quoting.
   const run = through === null ? await deps.run(argv, null, undefined, { asWritten: true }) : await deps.run(argv, null)
   const named = run.code === 0 ? parseWslList(run.stdout) : []
   return {

@@ -12,13 +12,19 @@
  * is not on this PC, or that the login printed text before floti's own line.
  * A line it does not know falls back to `transportFix`.
  *
- * Every fix points at the user's own setup and never changes it: Helm runs
+ * Every fix points at the user's own setup and never changes it: Floti runs
  * ssh in batch mode, answers no prompt, accepts no host key and edits no ssh
  * config. Where the fix names the line to run by hand, it is the transport as
  * the user gave it (`ssh build-box`).
  */
 
-import { NO_HOST_LINE, saysNotFound, describeInstallFailure, type InstallStep } from './hostInstall'
+import {
+  NO_HOST_LINE,
+  saysDownloadNotFound,
+  saysNotFound,
+  describeInstallFailure,
+  type InstallStep
+} from './hostInstall'
 import { describeTransport, sshTargetOf, transportFix, type HostTransport } from './hosts'
 
 /** What main tells apart that the last line alone cannot say. */
@@ -29,17 +35,25 @@ export type HostFailureCause =
   | { kind: 'loginOutput' }
   /** The host proved another key than the one this device pinned for it. */
   | { kind: 'keyChanged' }
-  /** Its floti is newer than this Helm: by version from the check, or by protocol from a refused hello. */
+  /** Its floti is newer than this desktop: by version from the check, or by protocol from a refused hello. */
   | { kind: 'newer'; host: string; ours: string; by: 'version' | 'protocol' }
-  /** Its floti is too old for this Helm, by protocol. */
+  /** Its floti is too old for this desktop, by protocol. */
   | { kind: 'tooOld'; host: string; ours: string }
   /** There is no floti build for that computer; `system` is its OS and CPU, as it said them. */
   | { kind: 'noBuild'; system: string }
   /** An install or update step failed there. */
-  | { kind: 'install'; step: InstallStep; folder: string }
+  | {
+      kind: 'install'
+      step: InstallStep
+      folder: string
+      /** Everything the step wrote, which says a download answered 404 where its last line does not. */
+      said?: string | undefined
+      /** The floti version the install fetches. */
+      version?: string | undefined
+    }
 
 export interface HostFailureInput {
-  /** The host's name in Helm. */
+  /** The host's name in Floti. */
   name: string
   transport: HostTransport
   /** The last line written, shown unedited. */
@@ -147,7 +161,7 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
             'noTransport',
             'Floti could not find ssh on this PC',
             'No ssh',
-            'Install the OpenSSH client (on Windows, Settings > System > Optional features). Floti has no ssh of its own. Then try again.',
+            'Install the OpenSSH client (on Windows, Settings > System > Optional features).',
             'Floti said'
           )
         : failure(
@@ -160,9 +174,9 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
     case 'loginOutput':
       return failure(
         'loginOutput',
-        `${name}’s login printed text where floti’s connection goes`,
+        `${name}’s shell prints text at login`,
         'Login output',
-        'Make whatever prints in its shell start-up files run only for interactive shells, then try again.',
+        'Make its start-up files print only in interactive shells.',
         'The login printed'
       )
     case 'keyChanged':
@@ -194,20 +208,19 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
     case 'noBuild':
       return failure(
         'noBuild',
-        `There is no floti for ${cause.system} yet`,
+        `There is no floti for ${cause.system.replace(' · ', ' on ')} yet`,
         'No build',
-        'None from Floti’s side: that computer can’t be a host yet.',
+        'That computer can’t be a host yet.',
         'Floti said'
       )
     case 'install': {
       if (cause.step === 'install') {
-        return failure(
-          'installFailed',
-          `Installing floti on ${name} failed`,
-          'Install failed',
-          'Run the install command in a terminal there to see all of its output, then try again.',
-          'The install script said'
-        )
+        // A 404 on the download is a release with no floti for this host, said by describeInstallFailure.
+        const said404 = saysDownloadNotFound(cause.said ?? lastLine) && cause.version !== undefined
+        const words = said404
+          ? describeInstallFailure('install', name, cause.folder, { said: cause.said ?? lastLine, version: cause.version })
+          : { title: `Installing floti on ${name} failed`, fix: 'Run the install command there to see its full output.' }
+        return failure('installFailed', words.title, 'Install failed', words.fix, 'The install script said')
       }
       const words = describeInstallFailure(cause.step, name, cause.folder)
       return failure('installFailed', words.title, 'Install failed', words.fix, 'floti said')
@@ -234,7 +247,7 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       'hostKeyChanged',
       `${name}’s host key changed`,
       'Host key',
-      `Run ${reach} once in a terminal and check the fingerprint it shows. Floti never accepts a host key for you.`
+      `Run ${reach} once in a terminal and check the key it shows.`
     )
   }
   if (KEY_UNKNOWN.test(said)) {
@@ -242,7 +255,7 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       'unknownKey',
       `ssh does not trust ${name} yet`,
       'Host key',
-      `Run ${reach} once in a terminal and check the fingerprint it shows. Floti never accepts a host key for you.`
+      `Run ${reach} once in a terminal and check the key it shows.`
     )
   }
   if (UNRESOLVED.test(said)) {
@@ -250,7 +263,7 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       'unresolved',
       ssh ? `ssh does not know ${sshTarget}` : `The command does not know ${name}`,
       'Unknown name',
-      'Check the name, or add a Host for it to ~/.ssh/config, then try again.'
+      'Check the name, or add a Host for it to ~/.ssh/config.'
     )
   }
   if (UNREACHABLE.test(said)) {
@@ -258,7 +271,7 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       'unreachable',
       `Can’t reach ${name}`,
       'Unreachable',
-      `Check that ${name} is on and connected to your network, and that its SSH server is running. In a terminal, ${reach} should reach it. Then try again.`
+      'Check it is on and its SSH server is running (on Windows, OpenSSH Server).'
     )
   }
   if (PASSWORD.test(said)) {
@@ -266,7 +279,7 @@ export function classifyHostFailure(input: HostFailureInput): HostFailure {
       'password',
       `${name} wants a password`,
       'Needs a key',
-      `Use a key, added there or loaded into the SSH agent, so ${reach} gets in without asking. Then try again.`
+      `Set up key sign-in, so ${reach} gets in without asking.`
     )
   }
   if (lastLine === NO_HOST_LINE) {

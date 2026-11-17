@@ -50,10 +50,10 @@ export const MARK_VARIABLE = 'TEST_LEFTOVERS_MARK'
  * The folders tests make in the OS temp folder: a vitest run's root
  * (`test/run-root.ts`), which holds every temp folder its tests make, the
  * host testkit's `TestDirs`, the end-to-end tests' worlds, and
- * `pnpm test:posix`'s mirror. Rust's tempfile uses the same temp folder as
- * `os.tmpdir()`.
+ * `pnpm test:posix`'s mirror, whose `floti-test-posix-` the run root's prefix
+ * covers. Rust's tempfile uses the same temp folder as `os.tmpdir()`.
  */
-export const TEST_FOLDER_PREFIXES = ['helm-test-run-', 'floti test ', 'helm world-', 'helm-test-posix-']
+export const TEST_FOLDER_PREFIXES = ['floti-test-', 'floti test ', 'floti world-']
 
 /**
  * The kinds of process tests start: every `floti*` binary of crates/host, Node
@@ -134,7 +134,7 @@ export function processName(raw) {
  *   folder or the checkout, as `places` names them);
  * - reaching any other ancestor of the check that was there before means that
  *   ancestor started it beside the check (vitest's other workers around the
- *   check's own test, Helm's other sessions around a check run in one of its
+ *   check's own test, Floti's other sessions around a check run in one of its
  *   terminals), and it is not reported: what the step started descends from
  *   the check, or was orphaned and adopted by a reaper.
  *

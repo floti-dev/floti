@@ -52,7 +52,10 @@ pub struct ConfigScopeRef {
     pub scope_path: String,
 }
 
-/// What a file in a config tree is, as the agent resolves it.
+/// What a file in a config tree is, as the agent resolves it. `agents-md`,
+/// a project's `AGENTS.md` (the shared shape's instructions file), is since
+/// protocol 4.2. No variant carries a doc of its own: one would make this
+/// type's schema a `oneOf` rather than an `enum` gaining a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum ConfigFileKind {
@@ -67,6 +70,7 @@ pub enum ConfigFileKind {
     Mcp,
     Rule,
     Other,
+    AgentsMd,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]

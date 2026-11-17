@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { screenText } from './terminal'
 
 /**
- * The real xterm, opened in jsdom, for the parts of it Helm reaches that have
+ * The real xterm, opened in jsdom, for the parts of it the desktop reaches that have
  * no public handle. `keepScrollbarInStep` in `terminal.ts` sizes the scrollbar
  * through xterm's own viewport and renderer, and leaves a terminal alone when
  * they are not where it looks. An xterm that moved them would bring the dead

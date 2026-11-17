@@ -1,7 +1,8 @@
 import { useState, type JSX, type ReactNode } from 'react'
-import type { LaunchAgents } from '@helm/core/types'
+import type { LaunchAgents } from '@floti/core/types'
 import { cn } from '../lib/cn'
-import { PlusIcon } from './icons'
+import { EmptyState } from './EmptyState'
+import { AgentCardIcon, PlusIcon } from './icons'
 import { Menu, type MenuEntry } from './Menu'
 import { SidebarAction } from './Sidebar'
 
@@ -18,6 +19,8 @@ export interface AgentListProps {
   selected: string | null
   onOpen: (name: string) => void
   onAdd: (name: string) => void
+  /** The empty state's New agent: the editor, on a blank agent. */
+  onNew?: (() => void) | undefined
 }
 
 const SECTION = 'flex items-center gap-1.5 px-2 pt-3 pb-1 text-[9.5px] font-semibold tracking-[.08em] text-fg-subtle uppercase'
@@ -30,7 +33,7 @@ const ROW = 'flex w-full min-w-0 flex-col gap-px rounded-raised px-2 py-row text
  * each with Add. A row carries nothing else: everything about an agent is on
  * its page. The foot names the folder and the host.
  */
-export function AgentList({ listing, error, hostName, remote, selected, onOpen, onAdd }: AgentListProps): JSX.Element {
+export function AgentList({ listing, error, hostName, remote, selected, onOpen, onAdd, onNew }: AgentListProps): JSX.Element {
   if (listing === null) {
     return (
       <p data-agents-state className="px-3.5 py-2 text-[12px] leading-relaxed text-fg-subtle">
@@ -43,7 +46,16 @@ export function AgentList({ listing, error, hostName, remote, selected, onOpen, 
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
         {error !== null && <p className="px-2 py-1.5 text-[11.5px] text-danger">{error}</p>}
         {listing.agents.length === 0 && (
-          <p className="px-2 py-1.5 text-[12px] text-fg-subtle">No agents in this folder yet.</p>
+          <EmptyState
+            size="list"
+            name="agents"
+            icon={<AgentCardIcon width={18} height={18} />}
+            title="No agents yet"
+            // A folder Floti cannot write to takes no new agent; the foot says why.
+            action={onNew === undefined || listing.readOnly !== null ? undefined : { label: 'New agent', onClick: onNew }}
+          >
+            A role with its own instructions, ready to start.
+          </EmptyState>
         )}
         <ul className="m-0 list-none p-0">
           {listing.agents.map((agent) => (

@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import type { TemplateChoice, TemplatePreview } from '@helm/core'
+import type { TemplateChoice, TemplatePreview } from '@floti/core'
 import { cn } from '../lib/cn'
 import { ROW_SELECTED } from '../lib/rows'
 import { SEGMENT_ON } from '../lib/segmented'
@@ -14,7 +14,7 @@ export interface NewWorkspaceDialogProps {
    * versus "I already have one"), and someone who picks the wrong one should
    * not have to close the dialog to say so.
    *
-   * 'new' scaffolds a directory that does not exist yet. 'convert' writes a
+   * 'new' scaffolds a directory that does not exist yet. 'convert' writes only a
    * manifest into one that already holds repositories.
    */
   mode: 'new' | 'convert'
@@ -26,12 +26,12 @@ export interface NewWorkspaceDialogProps {
   problems?: readonly string[] | undefined
   busy?: boolean | undefined
   /**
-   * The picker's rows, `minimal` first. Empty before `template:list` answers,
+   * The picker's rows, Starter first. Empty before `template:list` answers,
    * which is a frame or two - the picker simply is not there yet rather than
    * showing a row that might be replaced.
    */
   templates?: readonly TemplateChoice[] | undefined
-  /** The chosen template's id. `minimal` until someone says otherwise. */
+  /** The chosen template's id. `starter` until someone says otherwise. */
   template?: string | undefined
   onTemplateChange?: ((template: string) => void) | undefined
   /** Where the user's templates live, said out loud so they can be written. */
@@ -78,9 +78,9 @@ export interface NewWorkspaceDialogProps {
  * list written in the component is a list that can describe a layout nobody
  * would get.
  *
- * The picker is `'new'` only. Converting writes a manifest and a `.claude/`
- * into a directory somebody already has, and a template applied to that would
- * be Helm writing a layout into their work.
+ * The picker is `'new'` only. Converting writes only a manifest into a
+ * directory somebody already has, and a template applied to that would be
+ * Floti writing a layout into their work.
  */
 export function NewWorkspaceDialog({
   mode: initialMode,
@@ -90,7 +90,7 @@ export function NewWorkspaceDialog({
   problems = [],
   busy = false,
   templates = [],
-  template = 'minimal',
+  template = 'starter',
   onTemplateChange,
   templatesDir,
   onManageTemplates,
@@ -186,7 +186,7 @@ export function NewWorkspaceDialog({
                   : 'text-fg-muted hover:text-fg'
               )}
             >
-              {candidate === 'new' ? 'A new folder' : 'A folder I already have'}
+              {candidate === 'new' ? 'New' : 'Use a folder I have'}
             </button>
           ))}
         </div>
@@ -402,7 +402,7 @@ export function NewWorkspaceDialog({
           data-workspace-create
           disabled={!ready || busy}
           onClick={() =>
-            onCreate({ mode, dir, name: trimmed, template: mode === 'new' ? template : 'minimal' })
+            onCreate({ mode, dir, name: trimmed, template })
           }
           className={cn(
             'rounded-well border px-3.5 py-1.5 text-[12px] font-medium transition-colors',

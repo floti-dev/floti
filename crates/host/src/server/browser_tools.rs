@@ -161,7 +161,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_table_is_todays_helm_browser_at_mcp_with_its_sixteen_tools() {
+    fn the_table_is_todays_floti_browser_at_mcp_with_its_sixteen_tools() {
         assert_eq!(TABLE.name, "floti-browser");
         assert_eq!(TABLE.path, "/mcp");
         assert!(TABLE.instructions.contains("browser pane inside Floti"));

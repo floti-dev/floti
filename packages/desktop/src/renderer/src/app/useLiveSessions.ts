@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { LiveSession, SessionResources, SessionsOverview } from '@helm/core'
-import { helm } from './bridge'
+import type { LiveSession, SessionResources, SessionsOverview } from '@floti/core'
+import { desktop } from './bridge'
+import { readable } from './errors'
 
 /**
- * Every live Claude Code session on the machine, and what Helm's own are
+ * Every live Claude Code session on the machine, and what the desktop's own are
  * holding.
  *
  * Two facts with two different costs, so two channels and two lifetimes.
@@ -24,9 +25,17 @@ import { helm } from './bridge'
 export interface LiveSessionsState {
   /** Every live session on the machine, hosted first. */
   sessions: LiveSession[]
-  /** When main last read the registry, epoch ms. Null before the first answer. */
+  /**
+   * When main last read the registry, epoch ms. Null before the first answer:
+   * `sessions` is then empty because nothing has been read, not because
+   * nothing runs.
+   */
   readAtMs: number | null
-  /** What each hosted session is holding, by Helm's session row id. */
+  /** Why the registry could not be read, while no answer has come since; null otherwise. */
+  error: string | null
+  /** Reads the registry again: an Unknown's Try again. */
+  retry: () => void
+  /** What each hosted session is holding, by the desktop's session row id. */
   resources: Map<number, SessionResources>
   /**
    * Ask main to run the resource pass while this is true.
@@ -39,15 +48,33 @@ export interface LiveSessionsState {
 
 export function useLiveSessions(): LiveSessionsState {
   const [overview, setOverview] = useState<SessionsOverview | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [resources, setResources] = useState<Map<number, SessionResources>>(new Map())
+
+  /**
+   * One read of the registry. A failure is kept as why, never as an empty
+   * list: the last answer, if there was one, stays, and a push clears it.
+   */
+  const readOverview = useCallback(() => {
+    void desktop.invoke('sessions:overview').then(
+      (next) => {
+        setOverview(next)
+        setError(null)
+      },
+      (err: unknown) => setError(readable(err))
+    )
+  }, [])
 
   useEffect(() => {
     const offs = [
-      helm.on('sessions:overview', (next) => setOverview(next)),
+      desktop.on('sessions:overview', (next) => {
+        setOverview(next)
+        setError(null)
+      }),
       // The whole set every time, for the reason `session:activity` sends the
       // whole set: a window that missed one push - mounted late, or reloaded -
       // is corrected by the next one rather than carrying a stale tree.
-      helm.on('sessions:resources', (next) => {
+      desktop.on('sessions:resources', (next) => {
         setResources(new Map(next.map((snapshot) => [snapshot.id, snapshot])))
       })
     ]
@@ -55,10 +82,10 @@ export function useLiveSessions(): LiveSessionsState {
     // Adopted on mount rather than waited for. An idle machine publishes
     // nothing until something moves, so a pane that waited for the next push
     // would be blank for as long as nobody did anything.
-    void helm.invoke('sessions:overview').then(setOverview)
+    readOverview()
     // A read that failed (the local host could not be reached) keeps the map
     // empty, so every hosted row paints Unknown rather than "nothing there".
-    void helm
+    void desktop
       .invoke('sessions:resources')
       .then((next) => setResources(new Map(next.map((snapshot) => [snapshot.id, snapshot]))))
       .catch(() => undefined)
@@ -66,15 +93,19 @@ export function useLiveSessions(): LiveSessionsState {
     return () => {
       for (const off of offs) off()
     }
-  }, [])
+  }, [readOverview])
+
+  const retry = useCallback(() => readOverview(), [readOverview])
 
   const watch = useCallback((on: boolean) => {
-    helm.send('sessions:watch', { watching: on })
+    desktop.send('sessions:watch', { watching: on })
   }, [])
 
   return {
     sessions: overview?.sessions ?? [],
     readAtMs: overview?.readAtMs ?? null,
+    error,
+    retry,
     resources,
     watch
   }

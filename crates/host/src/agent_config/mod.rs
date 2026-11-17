@@ -54,6 +54,26 @@ pub struct AgentConfig {
     pub own_commands: Vec<String>,
 }
 
+/// Claude Code with its config folder under `dirs`, for this module's tests;
+/// nothing here runs it.
+#[cfg(test)]
+fn test_backend(dirs: &crate::testkit::TestDirs) -> crate::agent::claude_code::ClaudeCodeBackend {
+    use crate::agent::claude_code::{ClaudeCodeBackend, ClaudeCodeSettings};
+    let config_dir = dirs.home.join(".claude");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    ClaudeCodeBackend::new(
+        ClaudeCodeSettings {
+            program: "claude".into(),
+            leading_args: Vec::new(),
+            config_dir,
+            pass_config_dir: true,
+            api_key_set: false,
+            search_first: Vec::new(),
+        },
+        Arc::new(crate::platform::process_tree::Native),
+    )
+}
+
 /// Names ordered as a person reads them: case folded first, then exact.
 pub(crate) fn compare_names(a: &str, b: &str) -> Ordering {
     a.to_lowercase()

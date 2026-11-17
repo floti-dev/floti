@@ -1,12 +1,9 @@
 //! A plugin as a client draws it: [`PluginInfo`], shaped as today's
 //! `core/plugins/info.ts` shapes it.
 //!
-//! A page is `<scheme>://<id>/<entry>`, one origin per plugin: the scheme is
-//! `helm-plugin` for a version 1 plugin and `floti-plugin` for version 2
-//! ([`Manifest::page_scheme`](super::manifest::Manifest::page_scheme)). A
-//! version 1 background is listed and never run here: a client frames it,
-//! and says how it is doing. A folder that did not load is still listed,
-//! with its error and every surface empty. Status and badge show only while
+//! A page is `floti-plugin://<id>/<entry>`, one origin per plugin. A folder
+//! that did not load is still listed, with its error and every surface
+//! empty. Status and badge show only while
 //! the plugin is on.
 
 use std::collections::BTreeMap;
@@ -24,7 +21,7 @@ use super::net::service::ServiceStatus;
 use super::secrets::SecretsAccess;
 use super::store::PluginFolder;
 
-/// The scheme a version 2 plugin's pages are served on.
+/// The scheme a plugin's pages are served on.
 pub const PLUGIN_SCHEME: &str = "floti-plugin";
 
 /// What a plugin's MCP server is called in a session, before its id: the
@@ -43,24 +40,11 @@ pub struct Live<'a> {
     pub service: Option<ServiceStatus>,
 }
 
-/// A page's address on the plugin's origin under `scheme`, each segment of
-/// its entry encoded as `encodeURIComponent` encodes it.
-/// Whether the host's own engine runs `plugin`'s background: a version 2
-/// module ([`super::manifest::Manifest::host_background`]), the only kind
-/// listed on [`PLUGIN_SCHEME`]. A version 1 background page is listed on
-/// `helm-plugin` and runs in a client.
-pub fn host_runs_background(plugin: &PluginInfo) -> bool {
-    plugin.background.as_ref().is_some_and(|background| {
-        background
-            .url
-            .strip_prefix(PLUGIN_SCHEME)
-            .is_some_and(|rest| rest.starts_with("://"))
-    })
-}
-
-pub fn page_url(scheme: &str, id: &str, entry: &str) -> String {
+/// A page's address on the plugin's origin, each segment of its entry
+/// encoded as `encodeURIComponent` encodes it.
+pub fn page_url(id: &str, entry: &str) -> String {
     let path: Vec<String> = entry.split('/').map(encode_component).collect();
-    format!("{scheme}://{id}/{}", path.join("/"))
+    format!("{PLUGIN_SCHEME}://{id}/{}", path.join("/"))
 }
 
 fn encode_component(segment: &str) -> String {
@@ -122,7 +106,6 @@ pub fn loaded(
 ) -> PluginInfo {
     let manifest = &plugin.manifest;
     let id = manifest.id.as_str();
-    let scheme = manifest.page_scheme();
     PluginInfo {
         path: live.folder.path.clone(),
         id: Some(manifest.id.clone()),
@@ -141,7 +124,7 @@ pub fn loaded(
             .map(|(key, panel)| {
                 let info = PluginPanelInfo {
                     title: panel.title.clone(),
-                    url: page_url(scheme, id, &panel.entry),
+                    url: page_url(id, &panel.entry),
                     actions: panel.actions.clone(),
                 };
                 (key.clone(), info)
@@ -153,7 +136,7 @@ pub fn loaded(
             .map(|(key, tab)| {
                 let info = PluginTabInfo {
                     title: tab.title.clone(),
-                    url: page_url(scheme, id, &tab.entry),
+                    url: page_url(id, &tab.entry),
                 };
                 (key.clone(), info)
             })
@@ -163,7 +146,7 @@ pub fn loaded(
             .background
             .as_deref()
             .map(|module| PluginBackgroundInfo {
-                url: page_url(scheme, id, module),
+                url: page_url(id, module),
                 state: live.background,
                 error: live.background_error.map(str::to_owned),
             }),
@@ -239,16 +222,12 @@ mod tests {
     #[test]
     fn a_page_is_on_the_plugins_own_origin_with_each_segment_encoded() {
         assert_eq!(
-            page_url(PLUGIN_SCHEME, "factory", "dist/tabs/run board.html"),
+            page_url("factory", "dist/tabs/run board.html"),
             "floti-plugin://factory/dist/tabs/run%20board.html"
         );
         assert_eq!(
-            page_url(PLUGIN_SCHEME, "x", "a/é#?.js"),
+            page_url("x", "a/é#?.js"),
             "floti-plugin://x/a/%C3%A9%23%3F.js"
-        );
-        assert_eq!(
-            page_url("helm-plugin", "trackr", "panel/index.html"),
-            "helm-plugin://trackr/panel/index.html"
         );
     }
 }

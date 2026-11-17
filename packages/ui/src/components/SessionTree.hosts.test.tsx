@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_INVENTORY, type DiscoveryResult, type Project } from '@helm/core/types'
+import { EMPTY_INVENTORY, type DiscoveryResult, type Project } from '@floti/core/types'
 import {
   SessionTree,
   sessionTreeHostProps,
@@ -79,7 +79,7 @@ function renderTree(overrides: Partial<SessionTreeProps> = {}) {
     onLaunch: vi.fn(),
     launchingPath: null,
     onOpenSession: vi.fn(),
-    onAddRoot: vi.fn(),
+    onNewSession: vi.fn(),
     ...overrides
   }
   const view = render(<SessionTree {...props} />)
@@ -339,7 +339,7 @@ describe('SessionTree with hosts on other computers', () => {
     expect(view.container.querySelector('[data-host-phase="loading"]')).toBeNull()
     const unknown = view.container.querySelector('[data-empty-state="host-unlisted:local"]') as HTMLElement
     expect(within(unknown).getByText('Floti could not list the sessions on This PC. This PC’s host did not answer.')).toBeTruthy()
-    expect(screen.queryByText('No folders are being scanned yet.')).toBeNull()
+    expect(screen.queryByText('No sessions yet')).toBeNull()
     await userEvent.click(within(unknown).getByRole('button', { name: 'Try again' }))
     expect(onRelistSessions).toHaveBeenCalledOnce()
   })
@@ -452,15 +452,15 @@ describe('SessionTree with hosts on other computers', () => {
     expect(local().querySelector('[data-host-phase]')).toBeNull()
   })
 
-  it('shows this PC’s no-folders state only once its sessions are listed', () => {
+  it('shows this PC’s empty state only once its sessions are listed', () => {
     const none: DiscoveryResult = { ...THIS_PC, roots: [], workspaces: [], projects: [] }
     const { view, rerender } = renderTree({ discovery: none, sessionsByPath: new Map(), sessionsListed: false })
     expect(view.container.querySelector('[data-host-phase="loading"]')).not.toBeNull()
-    expect(screen.queryByText('No folders are being scanned yet.')).toBeNull()
+    expect(screen.queryByText('No sessions yet')).toBeNull()
 
     rerender({ sessionsListed: true })
     expect(view.container.querySelector('[data-host-phase]')).toBeNull()
-    expect(screen.getByText('No folders are being scanned yet.')).toBeTruthy()
+    expect(screen.getByText('No sessions yet')).toBeTruthy()
   })
 
   it('says on build-box’s header that its floti is older, with both versions, and a press starts its update', async () => {
@@ -528,9 +528,46 @@ describe('SessionTree with hosts on other computers', () => {
     const remote = group(view.container, 'h1')
     expect(remote.querySelector('[data-empty-state="host-empty:h1"]')).not.toBeNull()
     expect(within(remote).getByText('No workspaces on build-box yet')).toBeTruthy()
-    expect(within(remote).getByText('A workspace there is a folder on build-box, and its sessions run there.')).toBeTruthy()
+    expect(within(remote).getByText('Its sessions run on build-box.')).toBeTruthy()
     await userEvent.click(within(remote).getByRole('button', { name: 'New workspace' }))
     expect(hostActions.onNewWorkspace).toHaveBeenCalledWith('h1')
+  })
+
+  it('with nothing on this PC, says No sessions yet and offers New session, which opens the launcher', async () => {
+    const none: DiscoveryResult = { ...THIS_PC, roots: [], workspaces: [], projects: [] }
+    const { props, view } = renderTree({ discovery: none, sessionsByPath: new Map() })
+    const empty = view.container.querySelector('[data-empty-state="sessions-empty"]') as HTMLElement
+    expect(within(empty).getByText('No sessions yet')).toBeTruthy()
+    expect(within(empty).getByText('Start an agent in one of your workspaces.')).toBeTruthy()
+    const button = within(empty).getByRole('button', { name: 'New session' })
+    expect(button.textContent).toMatch(/(Ctrl\+|⌘)N$/)
+    await userEvent.click(button)
+    expect(props.onNewSession).toHaveBeenCalledOnce()
+  })
+
+  it('says Unknown with Try again, never No sessions yet, while this PC’s folders cannot be read', async () => {
+    const hostActions = actions()
+    const none: DiscoveryResult = { ...THIS_PC, roots: [], workspaces: [], projects: [] }
+    const { view } = renderTree({
+      discovery: none,
+      sessionsByPath: new Map(),
+      scanError: 'The scan roots could not be read.',
+      hosts: [buildBox()],
+      hostActions
+    })
+    const local = group(view.container, 'local')
+    expect(local.querySelector('[data-empty-state="sessions-empty"]')).toBeNull()
+    const unknown = local.querySelector('[data-empty-state="sessions-unknown"]') as HTMLElement
+    expect(within(unknown).getByText('Unknown')).toBeTruthy()
+    expect(within(unknown).getByText('Floti could not read the folders on This PC.')).toBeTruthy()
+    await userEvent.click(within(unknown).getByRole('button', { name: 'Try again' }))
+    expect(hostActions.onRescan).toHaveBeenCalledWith('local')
+  })
+
+  it('says it is scanning, never No sessions yet, before this PC’s first scan has answered', () => {
+    renderTree({ discovery: null, sessionsByPath: new Map() })
+    expect(screen.queryByText('No sessions yet')).toBeNull()
+    expect(screen.getByText('Scanning…')).toBeTruthy()
   })
 
   it('says Unknown and why, never the empty state, while the host’s folders cannot be read', async () => {

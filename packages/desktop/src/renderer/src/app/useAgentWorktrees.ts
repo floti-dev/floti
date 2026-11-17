@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentWorktree, AgentWorktreeRemoval, SessionRecord } from '@helm/core'
-import { helm } from './bridge'
+import type { AgentWorktree, AgentWorktreeRemoval, SessionRecord } from '@floti/core'
+import { desktop } from './bridge'
 import { readable } from './errors'
 
 /**
@@ -28,7 +28,7 @@ export function useAgentWorktrees(project: string, activity: string): AgentWorkt
 
   const read = useCallback((): Promise<void> => {
     const mine = ++latest.current
-    return helm
+    return desktop
       .invoke('worktrees:list', { project })
       .then((listed) => {
         if (mine === latest.current) setWorktrees(listed)
@@ -58,7 +58,7 @@ export function useAgentWorktrees(project: string, activity: string): AgentWorkt
     async (worktree: AgentWorktree): Promise<AgentWorktreeRemoval> => {
       let removal: AgentWorktreeRemoval
       try {
-        removal = await helm.invoke('worktrees:remove', { project, folder: worktree.folder })
+        removal = await desktop.invoke('worktrees:remove', { project, folder: worktree.folder })
       } catch (err) {
         return { removed: false, refusal: readable(err) }
       }

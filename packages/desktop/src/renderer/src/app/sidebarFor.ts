@@ -1,4 +1,4 @@
-import type { PaneRef } from '@helm/core/types'
+import type { PaneRef } from '@floti/core/types'
 
 /** What the sidebar can show: the lists the rail opens and tabs are opened from. */
 export type SidebarView = 'sessions' | 'files' | 'profiles' | 'agents' | 'settings' | `plugin:${string}`

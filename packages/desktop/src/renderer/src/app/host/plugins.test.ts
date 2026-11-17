@@ -6,7 +6,7 @@ import { sessionFromHost } from '../../../../shared/host/records'
 import type {
   EventChannel,
   EventPayload,
-  HelmBridge,
+  DesktopBridge,
   PluginCallRequest,
   PluginInfo,
   RequestChannel,
@@ -15,7 +15,7 @@ import type {
   SendChannel,
   SendPayload
 } from '../../../../shared/ipc'
-import { createBackgroundAdapter, createPluginsAdapter } from './plugins'
+import { createPluginsAdapter } from './plugins'
 import type { HostAdapter } from './router'
 
 const UNREACHABLE = 'No local host answered on its socket.'
@@ -33,10 +33,10 @@ const hostPlugin = (patch: Partial<P.PluginInfo> = {}): P.PluginInfo => ({
   revision: 1,
   icon: null,
   rail: { title: 'Sample', panel: 'main' },
-  panels: { main: { title: 'Sample', url: 'helm-plugin://sample/dist/panel.html', actions: [] } },
-  tabs: { item: { title: 'Item', url: 'helm-plugin://sample/dist/item.html' } },
+  panels: { main: { title: 'Sample', url: 'floti-plugin://sample/dist/panel.html', actions: [] } },
+  tabs: { item: { title: 'Item', url: 'floti-plugin://sample/dist/item.html' } },
   pageStrip: false,
-  background: { url: 'helm-plugin://sample/dist/background.html', state: 'stopped', error: null },
+  background: { url: 'floti-plugin://sample/dist/background.js', state: 'running', error: null },
   commands: [],
   settings: [{ type: 'text', key: 'greeting', label: 'Greeting' }],
   settingValues: { greeting: 'hello' },
@@ -96,7 +96,7 @@ function ownBridge(answers: Record<string, (payload: unknown) => unknown> = {}) 
       listeners.set(channel, set)
       return () => set.delete(listener)
     }
-  } as unknown as HelmBridge
+  } as unknown as DesktopBridge
   const push = <K extends EventChannel>(channel: K, payload: EventPayload<K>): void => {
     for (const listener of listeners.get(channel) ?? []) listener(payload)
   }
@@ -137,7 +137,6 @@ interface Options {
   connection?: FakeConnection | null
   hosted?: P.PluginInfo[]
   chosen?: string | null
-  reports?: Array<{ plugin: string; revision: number; state: 'running' | 'crashed'; error: string | null }>
 }
 
 /** The window's adapter on a fake connection whose host keeps a registry. */
@@ -151,8 +150,7 @@ function windowWorld(options: Options = {}) {
       return { path, error: null, plugins: [...hosted] }
     })
   const bridge = ownBridge({
-    'path:chooseDirectory': () => ({ path: options.chosen ?? null }),
-    'pluginBackground:states': () => options.reports ?? []
+    'path:chooseDirectory': () => ({ path: options.chosen ?? null })
   })
   const adopted: number[] = []
   const adapter = createPluginsAdapter({
@@ -164,14 +162,6 @@ function windowWorld(options: Options = {}) {
     }
   })
   return { connection: connection ?? new FakeConnection(), adapter, bridge, hosted, adopted }
-}
-
-/** The hidden plugin window's adapter on a connection of its own. */
-function backgroundWorld(connection = new FakeConnection()) {
-  connection.answer('plugins:list', () => [hostPlugin()])
-  const bridge = ownBridge({ 'ownSettings:read': () => ({ cornerRadius: 6, density: 'compact' }) })
-  const adapter = createBackgroundAdapter({ link: fakeReach(connection, UNREACHABLE), own: bridge.own })
-  return { connection, adapter, bridge }
 }
 
 describe('the window’s plugins over its own connection', () => {
@@ -220,7 +210,7 @@ describe('the window’s plugins over its own connection', () => {
 
     expect((await ask(adapter, 'plugins:setEnabled', { path: DIR, enabled: false }))[0]?.enabled).toBe(false)
     expect(connection.payloads('plugins:setEnabled')).toEqual([{ path: DIR, enabled: false }])
-    expect((await ask(adapter, 'plugins:log', { path: DIR })).map((line) => line.stream)).toEqual(['helm', 'out'])
+    expect((await ask(adapter, 'plugins:log', { path: DIR })).map((line) => line.stream)).toEqual(['floti', 'out'])
     const input = { key: 'TOKEN', value: 'x', hosts: [], plugins: ['sample'] }
     expect((await ask(adapter, 'secrets:save', input)).secrets).toHaveLength(1)
     expect(connection.payloads('secrets:save')).toEqual([input])
@@ -297,7 +287,7 @@ describe('the window’s plugins over its own connection', () => {
     expect(adopted).toEqual([31])
   })
 
-  it('takes every delivery but those for the background page', async () => {
+  it('takes every delivery but those for the background', async () => {
     const { adapter, connection } = windowWorld()
     const delivered = hear(adapter, 'plugins:deliver')
     await ask(adapter, 'plugins:list')
@@ -315,88 +305,14 @@ describe('the window’s plugins over its own connection', () => {
     ])
   })
 
-  it('lays what the hidden window reported, as main tells it, over the host’s list', async () => {
-    const { adapter, connection, bridge } = windowWorld({ reports: [{ plugin: 'sample', revision: 1, state: 'running', error: null }] })
+  it('shows the background as the host lists it, and follows the host as it moves', async () => {
+    const { adapter, connection } = windowWorld()
     const changed = hear(adapter, 'plugins:changed')
     const background = (list: PluginInfo[] | undefined) => list?.[0]?.background
     expect(background(await ask(adapter, 'plugins:list'))).toMatchObject({ state: 'running' })
 
-    bridge.push('pluginBackground:changed', [{ plugin: 'sample', revision: 1, state: 'crashed', error: 'it threw' }])
-    expect(background(changed.at(-1))).toEqual({ url: 'helm-plugin://sample/dist/background.html', state: 'crashed', error: 'it threw' })
-
-    // A new read of the plugin starts its page again.
-    connection.push('plugins:changed', [hostPlugin({ revision: 2 })])
-    expect(background(changed.at(-1))?.state).toBe('starting')
-  })
-
-  it('hands a secret dialog the hidden window asked for back to it when the dialog closes, never to the host', async () => {
-    const { adapter, connection, bridge } = windowWorld()
-    const ui = hear(adapter, 'plugins:ui')
-    bridge.push('pluginWindow:asked', { kind: 'secret', requestId: 'b1', plugin: 'sample', key: 'token', hosts: [] })
-    bridge.push('pluginWindow:asked', { kind: 'openTab', plugin: 'sample', tab: 'item', params: {}, title: null, preview: false })
-    expect(ui.map((request) => request.kind)).toEqual(['secret', 'openTab'])
-    send(adapter, 'plugins:answer', { requestId: 'b1' })
-    await settle()
-    expect(bridge.sent).toEqual([{ channel: 'pluginWindow:answer', payload: { requestId: 'b1' } }])
-    expect(connection.payloads('plugins:answer')).toEqual([])
-  })
-})
-
-describe('the hidden plugin window’s background pages over its own connection', () => {
-  it('runs a page background as starting until this window’s own frames say it runs or crashed', async () => {
-    const { adapter } = backgroundWorld()
-    const changed = hear(adapter, 'plugins:changed')
-    expect((await ask(adapter, 'plugins:list'))[0]?.background?.state).toBe('starting')
-    adapter.reported({ plugin: 'sample', revision: 1, state: 'crashed', error: 'it threw' })
-    expect(changed.at(-1)?.[0]?.background).toMatchObject({ state: 'crashed', error: 'it threw' })
-  })
-
-  it('takes the plugin channels only, and every delivery, the background’s included', async () => {
-    const { adapter, connection } = backgroundWorld()
-    expect(Object.keys(adapter.requests ?? {}).sort()).toEqual(['plugins:call', 'plugins:list', 'settings:read'])
-    expect(Object.keys(adapter.sends ?? {})).toEqual(['plugins:cancel'])
-    expect(Object.keys(adapter.events ?? {}).sort()).toEqual(['plugins:changed', 'plugins:deliver'])
-    const delivered = hear(adapter, 'plugins:deliver')
-    await ask(adapter, 'plugins:list')
-    expect([...connection.subscriptions.keys()].sort()).toEqual(['plugins:changed', 'plugins:deliver', 'plugins:ui'])
-    connection.push('plugins:deliver', { event: 'command', plugin: 'sample', data: { id: 'refresh' }, to: 'background' })
-    connection.push('plugins:deliver', { event: 'channel', plugin: 'sample', data: { name: 'n', message: 1, token: 't' }, to: 'all' })
-    expect(delivered.map((each) => each.event)).toEqual(['command', 'channel'])
-  })
-
-  it('sends a background page’s calls to the host on its own connection, and answers the relay’s first theme from Floti’s own settings', async () => {
-    const { adapter, connection } = backgroundWorld()
-    connection.answer('plugins:call', () => ({ ok: true, value: 'answered' }))
-    expect(await ask(adapter, 'plugins:call', pageCall('channel.post', ['n', 1], { surface: 'background' }))).toEqual({
-      ok: true,
-      value: 'answered'
-    })
-    expect(connection.payloads('plugins:call')).toEqual([
-      { plugin: 'sample', surface: 'background', method: 'channel.post', args: ['n', 1], callId: '1.1.7' }
-    ])
-    expect(await ask(adapter, 'settings:read')).toMatchObject({ cornerRadius: 6, density: 'compact' })
-  })
-
-  it('hands the window a tab and a secret dialog through main, refuses a link, and answers the dialog’s close on its own connection', async () => {
-    const { adapter, connection, bridge } = backgroundWorld()
-    await ask(adapter, 'plugins:list')
-    const background = { surface: 'background' as const }
-    expect(await ask(adapter, 'plugins:call', pageCall('tabs.open', ['item'], background))).toEqual({ ok: true, value: undefined })
-    expect(await ask(adapter, 'plugins:call', pageCall('open', ['https://example.com/'], background))).toMatchObject({
-      ok: false,
-      code: 'not-allowed'
-    })
-    connection.push('plugins:ui', { kind: 'secret', requestId: 'b1', plugin: 'sample', key: 'token', hosts: [] })
-    expect(bridge.sent).toEqual([
-      {
-        channel: 'pluginWindow:ask',
-        payload: { kind: 'openTab', plugin: 'sample', tab: 'item', params: {}, title: null, preview: false }
-      },
-      { channel: 'pluginWindow:ask', payload: { kind: 'secret', requestId: 'b1', plugin: 'sample', key: 'token', hosts: [] } }
-    ])
-
-    bridge.push('pluginWindow:answered', { requestId: 'b1' })
-    await settle()
-    expect(connection.payloads('plugins:answer')).toEqual([{ requestId: 'b1' }])
+    const crashed = { url: 'floti-plugin://sample/dist/background.js', state: 'crashed' as const, error: 'it threw' }
+    connection.push('plugins:changed', [hostPlugin({ revision: 2, background: crashed })])
+    expect(background(changed.at(-1))).toEqual(crashed)
   })
 })

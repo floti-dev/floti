@@ -1,4 +1,4 @@
-import type { StandingNotice } from '@helm/core/types'
+import type { StandingNotice } from '@floti/core/types'
 import type { HostConnection, HostSubscription } from '../../../../shared/host/client'
 import type * as P from '../../../../shared/host/protocol'
 import type { HostReach } from './history'

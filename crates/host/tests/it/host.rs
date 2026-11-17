@@ -504,6 +504,7 @@ async fn s1_floti_host_is_one_executable_that_starts_and_serves_clients() {
             backend: Some(BackendId::new("shell")),
             agent: None,
             chosen: None,
+            opening_prompt: None,
             cols: 80,
             rows: 24,
         })
@@ -1026,7 +1027,7 @@ fn host_a_desktop_started(dirs: &TestDirs) -> HostProcess {
     HostProcess::spawn(
         floti_host_command(dirs)
             .arg("--desktop")
-            .arg(app.join("Helm.exe"))
+            .arg(app.join("Floti.exe"))
             .arg("--desktop-arg")
             .arg(app.join("resources app")),
     )
@@ -1088,7 +1089,7 @@ async fn s15_a_host_a_desktop_started_keeps_running_while_a_session_runs_and_exi
     drop(first);
 
     // Its client left with a session running: the host stays, and the next
-    // client finds the session there, as Helm's next start does.
+    // client finds the session there, as the desktop's next start does.
     let mut later = TestClient::connect(&endpoint, TERMINAL).await;
     assert_eq!(
         later
@@ -1572,7 +1573,7 @@ import { childScript, watchOwner } from './common.mjs'
 watchOwner(process.cwd(), () => process.exit(0))
 spawn(process.execPath, ['-e', childScript(process.cwd())], { stdio: 'ignore' })
 createServer((request, response) => response.end('ok'))
-  .listen(Number(process.env.HELM_SERVICE_PORT), '127.0.0.1')
+  .listen(Number(process.env.FLOTI_SERVICE_PORT), '127.0.0.1')
 ";
 
 /// A host that is killed takes a plugin's service with it, as a stop does:

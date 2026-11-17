@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import type { LiveSession } from '@helm/core/types'
+import type { LiveSession } from '@floti/core/types'
 import type { SentencePart } from '../lib/launcher'
 import { WarnIcon } from './icons'
 

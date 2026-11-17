@@ -2,18 +2,18 @@ import { describe, expect, it } from 'vitest'
 import type { HostPlaces } from './launcher'
 import { createLocalFloti, ensureLocalFloti, type LocalFlotiDeps, type Ran } from './local-floti'
 
-const CARRIED = '/Applications/Helm.app/Contents/Resources/floti'
+const CARRIED = '/Applications/Floti.app/Contents/Resources/floti'
 const OWN = '/Users/me/.local/bin/floti'
 
 const PLACES: HostPlaces = {
   appMode: 'installed',
-  dataDir: '/Users/me/Library/Application Support/Helm',
+  dataDir: '/Users/me/Library/Application Support/Floti',
   packaged: true,
-  resourcesPath: '/Applications/Helm.app/Contents/Resources',
-  repoRoot: '/src/helm',
-  templatesDir: '/Users/me/.config/helm/templates',
-  execPath: '/Applications/Helm.app/Contents/MacOS/Helm',
-  appPath: '/Applications/Helm.app/Contents/Resources/app.asar'
+  resourcesPath: '/Applications/Floti.app/Contents/Resources',
+  repoRoot: '/src/floti',
+  templatesDir: '/Users/me/.config/floti/templates',
+  execPath: '/Applications/Floti.app/Contents/MacOS/Floti',
+  appPath: '/Applications/Floti.app/Contents/Resources/app.asar'
 }
 
 /** A computer with floti at the paths `files` names, each saying its version; install-self puts the carried one in place. */

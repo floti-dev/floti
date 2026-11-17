@@ -446,8 +446,9 @@ async fn a_client_lists_previews_and_reads_templates_and_a_broken_manifest_does_
 
     let listing = wire.listing().await;
     let ids: Vec<&str> = listing.templates.iter().map(|t| t.id.as_str()).collect();
-    assert_eq!(ids[0], "minimal");
-    for id in ["example", "good", "demo"] {
+    assert_eq!(ids[0], "starter");
+    assert!(!ids.contains(&"example"), "{ids:?}");
+    for id in ["good", "demo"] {
         assert!(ids.contains(&id), "{ids:?}");
     }
     assert!(!ids.contains(&"broken"), "{ids:?}");

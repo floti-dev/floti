@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { COPIED_SHOWN_MS, COPY_REFUSED, REFUSED_SHOWN_MS } from '../lib/copyFeedback'
-import type { FileView as FileViewData } from '@helm/core'
+import type { FileView as FileViewData } from '@floti/core'
 import { installLayoutStandIns } from './CodeEditor.testkit'
 import { FileActions, FileCrumb, FileView, revealRange, type FileViewProps } from './FileView'
 

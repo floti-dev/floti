@@ -360,6 +360,7 @@ fn launch_request(folder: &Path) -> LaunchSessionRequest {
         backend: Some(BackendId::claude_code()),
         agent: None,
         chosen: None,
+        opening_prompt: None,
         cols: 80,
         rows: 24,
     }
@@ -590,6 +591,57 @@ async fn a_profile_launch_runs_at_its_root_named_after_it_in_its_own_permission_
         .await
         .expect_err("a deleted profile does not launch");
     assert!(gone.message.contains("no longer exists"), "{gone:?}");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_launchs_first_message_is_its_opening_prompt_over_the_profiles_and_a_blank_one_is_none() {
+    let world = ClaudeWorld::new();
+    let host = world.host();
+    let mut client = world.client().await;
+    let root = world.folder("prompted root");
+    let profile = world.profile(&ProfileRow {
+        opening_prompt: Some("the profile's prompt"),
+        ..ProfileRow::at("Prompted", &root)
+    });
+
+    let own = world.folder("first message");
+    client
+        .request::<SessionLaunch>(&LaunchSessionRequest {
+            opening_prompt: Some("Read AGENTS.md and tell me what this workspace is for.".into()),
+            ..launch_request(&own)
+        })
+        .await
+        .expect("launch with a first message");
+    assert_eq!(
+        world.run_in(&own)["openingPrompt"],
+        "Read AGENTS.md and tell me what this workspace is for."
+    );
+
+    let over = world.folder("over the profile");
+    client
+        .request::<SessionLaunch>(&LaunchSessionRequest {
+            profile_id: Some(profile),
+            opening_prompt: Some("mine".into()),
+            ..launch_request(&over)
+        })
+        .await
+        .expect("launch with a profile and a first message");
+    assert_eq!(world.run_in(&over)["openingPrompt"], "mine");
+
+    let blank = world.folder("blank message");
+    client
+        .request::<SessionLaunch>(&LaunchSessionRequest {
+            profile_id: Some(profile),
+            opening_prompt: Some("   ".into()),
+            ..launch_request(&blank)
+        })
+        .await
+        .expect("launch with a blank first message");
+    assert_eq!(
+        world.run_in(&blank)["openingPrompt"],
+        "the profile's prompt"
+    );
     host.stop(HostStopReason::Stop).await;
 }
 
@@ -1103,7 +1155,7 @@ async fn a_name_is_made_unique_against_the_running_sessions_on_launch_and_rename
     let agent = fake_agent!(&dirs);
     let endpoint = dirs.endpoint();
     let host = RunningHost::start(fake_config(&dirs, &endpoint, &agent, &[]));
-    let folder = dirs.folder("helm");
+    let folder = dirs.folder("floti");
     let mut client = TestClient::connect(&endpoint, TERMINAL).await;
 
     let first = client
@@ -1114,26 +1166,26 @@ async fn a_name_is_made_unique_against_the_running_sessions_on_launch_and_rename
         .request::<SessionStart>(&start_request(&folder))
         .await
         .unwrap();
-    assert_eq!(first.name, "helm");
-    assert_eq!(second.name, "helm 2");
+    assert_eq!(first.name, "floti");
+    assert_eq!(second.name, "floti 2");
 
     // Against the other sessions, never itself, and ignoring case.
     let renamed = client
         .request::<SessionRename>(&RenameSessionRequest {
             id: second.id,
-            label: Some("HELM".into()),
+            label: Some("FLOTI".into()),
         })
         .await
         .unwrap();
-    assert_eq!(renamed.label.as_deref(), Some("HELM 2"));
+    assert_eq!(renamed.label.as_deref(), Some("FLOTI 2"));
     let same = client
         .request::<SessionRename>(&RenameSessionRequest {
             id: first.id,
-            label: Some("helm".into()),
+            label: Some("floti".into()),
         })
         .await
         .unwrap();
-    assert_eq!(same.label.as_deref(), Some("helm"));
+    assert_eq!(same.label.as_deref(), Some("floti"));
     let cleared = client
         .request::<SessionRename>(&RenameSessionRequest {
             id: second.id,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PaneRef } from '@helm/core/types'
+import type { PaneRef } from '@floti/core/types'
 import { sidebarFor } from './sidebarFor'
 
 describe('sidebarFor', () => {

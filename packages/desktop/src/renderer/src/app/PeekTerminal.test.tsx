@@ -45,7 +45,7 @@ vi.mock('../terminal', () => ({
     return host
   }
 }))
-vi.mock('./bridge', () => ({ helm: { invoke: vi.fn() } }))
+vi.mock('./bridge', () => ({ desktop: { invoke: vi.fn() } }))
 
 import { PeekTerminal, peekHiddenRows } from './PeekTerminal'
 

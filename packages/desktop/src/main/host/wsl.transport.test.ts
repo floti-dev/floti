@@ -10,7 +10,7 @@ import {
   type HostTransport,
   type RemoteHost,
   type RemoteHostConnection
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { describe, expect, inject, it } from 'vitest'
 import { RUN_ROOT } from '../../../../../test/run-root'
 import { createRemoteInstaller, spawnTransportRun } from './remote-install'

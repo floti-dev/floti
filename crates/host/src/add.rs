@@ -446,7 +446,6 @@ impl Adder<'_> {
         ));
         self.installs
             .install_desktop(target, &downloaded)
-            .map(|_| ())
             .map_err(|err| AddError::Install {
                 app: target.name,
                 reason: err.to_string(),

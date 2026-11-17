@@ -6,7 +6,7 @@ import { dirname } from 'node:path'
 import { migrate, type MigrationOutcome } from './migrate'
 import * as schema from './schema'
 
-export type HelmDatabase = BetterSQLite3Database<typeof schema>
+export type DesktopDatabase = BetterSQLite3Database<typeof schema>
 
 export interface OpenStoreOptions {
   /** Absolute path to the database file, or `:memory:` for tests. */
@@ -23,7 +23,7 @@ export interface OpenStoreOptions {
 }
 
 export interface Store {
-  db: HelmDatabase
+  db: DesktopDatabase
   /** The driver handle, for pragmas and the migrator. */
   raw: Database.Database
   file: string

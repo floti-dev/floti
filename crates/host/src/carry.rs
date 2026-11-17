@@ -1,8 +1,8 @@
 //! Merging a client's own data into `floti.db`, for `carry:*`.
 //!
-//! Helm kept archived conversations, their usage and History's session
+//! The desktop kept archived conversations, their usage and History's session
 //! names in its own database before the host ran its sessions; the host
-//! cannot rebuild them from the agent's files. Helm reads them and sends them in batches, and each batch is merged
+//! cannot rebuild them from the agent's files. The desktop reads them and sends them in batches, and each batch is merged
 //! here in one transaction. What `floti.db` already holds always wins, and
 //! nothing is written twice, so a batch sent again after a copy that stopped
 //! part way changes nothing it already wrote:
@@ -11,7 +11,7 @@
 //!   part of it is skipped. A copied message is keyed by its uuid like every
 //!   archived one, stored with the host's own compression and search entry.
 //!   A conversation's row is written only with its last part, keeping when
-//!   Helm captured it; a dropped one is copied as dropped, with its figures
+//!   The desktop captured it; a dropped one is copied as dropped, with its figures
 //!   and no messages. The first part of a conversation clears what an
 //!   earlier attempt left of it without a row, so a copy that stopped part
 //!   way leaves no conversation showing part of its messages, and its retry
@@ -75,7 +75,7 @@ pub fn status(conn: &Connection) -> Result<CarryStatus> {
             |row| row.get(0),
         )
         .optional()
-        .map_err(sql("read whether Helm's data was copied"))?;
+        .map_err(sql("read whether the desktop's data was copied"))?;
     Ok(CarryStatus {
         // Written as a JSON string, as every setting is; anything else still
         // says it finished.
@@ -91,7 +91,7 @@ pub fn finish(conn: &Connection) -> Result<CarryStatus> {
          ON CONFLICT(key) DO NOTHING",
         [FINISHED_SETTING],
     )
-    .map_err(sql("record that Helm's data was copied"))?;
+    .map_err(sql("record that the desktop's data was copied"))?;
     status(conn)
 }
 

@@ -8,9 +8,12 @@ export const RUN_ROOT = 'testRunRoot'
 
 /**
  * What a run's root is named: the leftover check (`scripts/test-leftovers.mjs`)
- * lists a folder with this prefix that a run left behind.
+ * lists a folder with this prefix that a run left behind. Short, because on
+ * macOS the root sits in a temp folder that already takes nearly half of a
+ * socket path's limit, and a host a test starts puts the keeper's socket
+ * under it (`launcher.test.ts` measures that against this prefix).
  */
-export const RUN_ROOT_PREFIX = 'helm-test-run-'
+export const RUN_ROOT_PREFIX = 'floti-test-'
 
 /** The variables `os.tmpdir()` reads: `TMPDIR` on macOS and Linux, `TEMP` and `TMP` on Windows. */
 const TEMP_VARS = ['TMPDIR', 'TEMP', 'TMP'] as const
@@ -34,7 +37,7 @@ interface RunRoot {
  * extends), and Vitest loads it once per project, so the run's one root is
  * kept on the process rather than in this module.
  */
-const SHARED = Symbol.for('helm.testRunRoot')
+const SHARED = Symbol.for('floti.testRunRoot')
 type WithRunRoot = typeof globalThis & { [SHARED]?: RunRoot }
 
 /** A hold on the run's root: `release` it once, when the run ends. */

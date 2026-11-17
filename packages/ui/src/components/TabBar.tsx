@@ -169,7 +169,7 @@ export interface TabBarProps {
  * another pane's strip, or its drop zones, which never saw the drag start, can
  * accept it.
  */
-export const TAB_MIME = 'application/x-helm-tab'
+export const TAB_MIME = 'application/x-floti-tab'
 
 /**
  * A pane's tabs, as one-line pills.
@@ -400,7 +400,7 @@ export function TabBar({
                   setMenu({ tab, at, entries })
                 }}
                 className={cn(
-                  'group relative flex h-[calc(var(--helm-strip)-10px)] min-w-0 shrink-0 items-center rounded-raised transition-colors',
+                  'group relative flex h-[calc(var(--floti-strip)-10px)] min-w-0 shrink-0 items-center rounded-raised transition-colors',
                   active ? (focused ? 'bg-active' : 'bg-hover') : 'hover:bg-hover',
                   dragging === tab.id && 'opacity-40'
                 )}

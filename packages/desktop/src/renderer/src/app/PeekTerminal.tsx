@@ -1,8 +1,8 @@
-import type { PeekScreenRoom } from '@helm/ui'
+import type { PeekScreenRoom } from '@floti/ui'
 import type { JSX } from 'react'
 import { useLayoutEffect, useRef } from 'react'
 import { createTerminal } from '../terminal'
-import { helm } from './bridge'
+import { desktop } from './bridge'
 import type { PeekGrid } from './peek'
 import { PEEK_FONT_SIZE, fitPeekScreen, type PeekCell } from './peekFit'
 import { terminalPrefs } from './termprefs'
@@ -102,7 +102,7 @@ export function PeekTerminal({ attach, grid, room, windowsBuild }: PeekTerminalP
         onInput: () => undefined,
         onResize: () => undefined,
         readClipboard: () => Promise.resolve({ refused: true }),
-        writeClipboard: async (text) => (await helm.invoke('clipboard:write', text)).outcome,
+        writeClipboard: async (text) => (await desktop.invoke('clipboard:write', text)).outcome,
         openLink: () => undefined
       },
       // The screen only: what scrolled off is not this view's to keep.

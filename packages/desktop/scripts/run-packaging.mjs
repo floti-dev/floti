@@ -2,7 +2,7 @@
 // three different things.
 //
 // Phase 1 is about this machine: the grep audit over the checkout, and whether
-// the CLI Helm would launch is the one that is actually installed here.
+// the CLI the desktop would launch is the one that is actually installed here.
 //
 // Phase 2 is about a machine that does not exist yet. "A fresh ~/.claude and no
 // workspace at all" is not a state the developer's own profile can enter, and
@@ -17,8 +17,8 @@
 // the portable exe to a path with spaces, and runs --selftest out of it.
 //
 // It does **not** install anything. Verifying the NSIS package means installing
-// it over the Helm on this machine and uninstalling it again, which ends the
-// Claude Code sessions Helm is hosting - so that is `scripts/verify-installer.mjs`,
+// it over the desktop on this machine and uninstalling it again, which ends the
+// Claude Code sessions the desktop is hosting - so that is `scripts/verify-installer.mjs`,
 // a tool run by name with --yes, and not a group this suite can reach. PKG-2
 // stands open in the report rather than passing, so "packaging-check green"
 // cannot come to mean "the installer works".
@@ -59,7 +59,7 @@ const groups = onlyArg ? onlyArg.slice('--only='.length).split(',') : null
  * Every group here is safe to run on the machine you work on.
  *
  * That is a property of this file now, not a list to keep. The one destructive
- * thing this repository has - installing the NSIS package over the Helm on this
+ * thing this repository has - installing the NSIS package over the desktop on this
  * machine and uninstalling it again - **is not a group of this suite and cannot
  * be reached from it**. It lives in `scripts/verify-installer.mjs` and is run by
  * name, deliberately, with `--yes`.
@@ -195,7 +195,7 @@ if (FIRSTRUN_GROUPS.some(wants)) {
   const sandbox = sandboxArg
     ? (mkdirSync(sandboxArg.slice('--sandbox='.length), { recursive: true }),
       sandboxArg.slice('--sandbox='.length))
-    : mkdtempSync(join(tmpdir(), 'helm-packaging-'))
+    : mkdtempSync(join(tmpdir(), 'floti-packaging-'))
   // A path with a space in it, deliberately: CLAUDE.md requires those to work
   // and this is the one place a fresh install's own data directory is created.
   const portableDir = join(sandbox, 'Portable Install')
@@ -205,8 +205,8 @@ if (FIRSTRUN_GROUPS.some(wants)) {
   mkdirSync(fixtures, { recursive: true })
 
   const appDataBefore = existsSync(realDataDir) ? readdirSync(realDataDir).sort() : []
-  const dbBefore = existsSync(join(realDataDir, 'helm.db'))
-    ? statSync(join(realDataDir, 'helm.db')).mtimeMs
+  const dbBefore = existsSync(join(realDataDir, 'desktop.db'))
+    ? statSync(join(realDataDir, 'desktop.db')).mtimeMs
     : null
 
   const passThrough = groups ? [`--only=${groups.join(',')}`] : []
@@ -223,7 +223,7 @@ if (FIRSTRUN_GROUPS.some(wants)) {
   )
   if (status !== 0) say(`(phase 2 exited with ${String(status)}; the report decides, not this)`)
 
-  const firstRunReport = join(portableDir, 'helm-data', 'packaging-firstrun-report.json')
+  const firstRunReport = join(portableDir, 'floti-data', 'packaging-firstrun-report.json')
   if (!existsSync(firstRunReport)) {
     console.error(`FAIL  phase 2 wrote no report to ${firstRunReport}`)
     process.exit(1)
@@ -232,15 +232,15 @@ if (FIRSTRUN_GROUPS.some(wants)) {
 
   // The isolation, checked from outside the process that claimed it.
   const appDataAfter = existsSync(realDataDir) ? readdirSync(realDataDir).sort() : []
-  const dbAfter = existsSync(join(realDataDir, 'helm.db'))
-    ? statSync(join(realDataDir, 'helm.db')).mtimeMs
+  const dbAfter = existsSync(join(realDataDir, 'desktop.db'))
+    ? statSync(join(realDataDir, 'desktop.db')).mtimeMs
     : null
   const added = appDataAfter.filter((f) => !appDataBefore.includes(f))
   checks.push({
     id: 'PKG-F1',
     criterion: 'setup: the first-run phase left the real profile alone',
     title: 'A whole first run happened and %LOCALAPPDATA%\\Floti\\desktop did not change',
-    ok: added.length === 0 && dbBefore === dbAfter && existsSync(join(portableDir, 'helm-data')),
+    ok: added.length === 0 && dbBefore === dbAfter && existsSync(join(portableDir, 'floti-data')),
     detail: {
       realDataDir,
       entriesBefore: appDataBefore.length,
@@ -248,9 +248,9 @@ if (FIRSTRUN_GROUPS.some(wants)) {
       entriesAdded: added,
       databaseMtimeBefore: dbBefore,
       databaseMtimeAfter: dbAfter,
-      sandboxDataDir: join(portableDir, 'helm-data'),
-      sandboxFiles: existsSync(join(portableDir, 'helm-data'))
-        ? readdirSync(join(portableDir, 'helm-data')).sort()
+      sandboxDataDir: join(portableDir, 'floti-data'),
+      sandboxFiles: existsSync(join(portableDir, 'floti-data'))
+        ? readdirSync(join(portableDir, 'floti-data')).sort()
         : []
     },
     notes: [
@@ -401,7 +401,7 @@ function portableChecks(exe) {
     ]
   }
 
-  const sandbox = mkdtempSync(join(tmpdir(), 'helm-portable-'))
+  const sandbox = mkdtempSync(join(tmpdir(), 'floti-portable-'))
   // A path with spaces, no install, nowhere near the build directory.
   const runDir = join(sandbox, 'Floti Test With Spaces')
   mkdirSync(runDir, { recursive: true })
@@ -409,12 +409,12 @@ function portableChecks(exe) {
   cpSync(exe, copied)
 
   /*
-   * Whether `%APPDATA%\Helm` can be read as evidence at all.
+   * Whether `%LOCALAPPDATA%\Floti\desktop` can be read as evidence at all.
    *
    * "The portable exe wrote nothing beside the installed app" is measured by
    * listing that directory either side of the run - which is only a statement
    * about the portable exe while nothing *else* is writing there. The installed
-   * Helm writes there whenever it is open, so with one running this read is
+   * Floti writes there whenever it is open, so with one running this read is
    * about two processes and attributable to neither.
    *
    * It is asked rather than assumed because this phase is now in the default
@@ -427,7 +427,7 @@ function portableChecks(exe) {
   say(`running the portable exe from ${runDir}`)
   const run = spawnSync(copied, ['--selftest'], { stdio: 'inherit', timeout: 300_000 })
 
-  const dataDir = join(runDir, 'helm-data')
+  const dataDir = join(runDir, 'floti-data')
   const reportFile = join(dataDir, 'spike-report.json')
   const report = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null
   const appDataAfter = existsSync(realDataDir) ? readdirSync(realDataDir).sort() : []
@@ -442,7 +442,7 @@ function portableChecks(exe) {
         report !== null &&
         report.pass === true &&
         report.mode === 'portable' &&
-        existsSync(join(dataDir, 'helm.db')) &&
+        existsSync(join(dataDir, 'desktop.db')) &&
         (installedRunning > 0 || leaked.length === 0),
       detail: {
         exe: copied,
@@ -457,14 +457,14 @@ function portableChecks(exe) {
         dataFiles: existsSync(dataDir) ? readdirSync(dataDir).sort() : [],
         appDataEntriesAdded: leaked,
         appDataReadIsEvidence: installedRunning === 0,
-        installedHelmProcessesRunning: installedRunning,
+        installedFlotiProcessesRunning: installedRunning,
         elevated: false
       },
       notes: [
         'Run as the ordinary user this script is running as - no elevation is requested anywhere, and the exe writes only inside its own directory.',
         'The selftest is Spike B\'s: a SQLite WAL roundtrip, an interactive pwsh through ConPTY, renderer-synthesized keystrokes, a resize verified inside the shell, and the real claude TUI reaching its version banner.',
-        '"Beside the exe" is checked twice: helm.db exists in the run directory, and %LOCALAPPDATA%\\Floti\\desktop gained no files while it ran.',
-        'The second of those is dropped when an installed Helm is running, because that app writes to %LOCALAPPDATA%\\Floti\\desktop itself and the read would then be about two processes. appDataReadIsEvidence says which run this was; the first half - helm.db beside the exe - holds either way.'
+        '"Beside the exe" is checked twice: desktop.db exists in the run directory, and %LOCALAPPDATA%\\Floti\\desktop gained no files while it ran.',
+        'The second of those is dropped when an installed Floti is running, because that app writes to %LOCALAPPDATA%\\Floti\\desktop itself and the read would then be about two processes. appDataReadIsEvidence says which run this was; the first half - desktop.db beside the exe - holds either way.'
       ]
     }
   ]
@@ -491,7 +491,7 @@ function portableChecks(exe) {
  * Not a pass and not a failure - a record that this suite does not answer the
  * question, so "packaging-check green" cannot quietly come to mean "the
  * installer works". The suite has no way to answer it: installing the package
- * means removing the Helm somebody is using, which is why that lives in a tool
+ * means removing the desktop somebody is using, which is why that lives in a tool
  * and not here.
  */
 function installerNotVerifiedHere(setupExe) {

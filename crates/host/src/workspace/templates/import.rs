@@ -79,12 +79,16 @@ pub fn resolve_import(
 }
 
 /// Where `file` lands in a template: under `.claude/` when it is in the
-/// scope's `.claude` folder, at the top when it sits directly in the
-/// scope's folder (`CLAUDE.md`, `.mcp.json`), and nowhere otherwise.
+/// scope's `.claude` folder, under `.agents/` when it is in the shared
+/// shape's `.agents` folder, at the top when it sits directly in the scope's
+/// folder (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`), and nowhere otherwise.
 fn target_for(file: &ConfigFile, claude_dir: &Path, base: &Path) -> Option<String> {
     let path = Path::new(&file.path);
     if let Some(parts) = below(claude_dir, path) {
         return Some(format!(".claude/{}", parts.join("/")));
+    }
+    if let Some(parts) = below(&base.join(".agents"), path) {
+        return Some(format!(".agents/{}", parts.join("/")));
     }
     match below(base, path) {
         Some(parts) if parts.len() == 1 => parts.into_iter().next(),

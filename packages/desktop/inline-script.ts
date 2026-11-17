@@ -6,17 +6,17 @@ import type { Plugin } from 'vite'
  * `import source from './file.ts?script'`: the file bundled into one classic
  * script, as a string.
  *
- * For code Helm serves to a page rather than runs itself - the plugin bridge,
- * which every plugin page loads from Helm under `/__helm/bridge.js`. It is
+ * For code the desktop serves to a page rather than runs itself - the plugin bridge,
+ * which every plugin page loads from the desktop under `/__floti/bridge.js`. It is
  * TypeScript checked against the SDK's types like the rest of the app, and it
  * has to arrive as one self-contained IIFE: a classic script in the page's
- * `<head>`, so `window.helm` is there before the plugin's own modules run.
+ * `<head>`, so `window.floti` is there before the plugin's own modules run.
  * Building it here, inside the main bundle, keeps that to one build step.
  */
 export function inlineScript(): Plugin {
   const SUFFIX = '?script'
   return {
-    name: 'helm-inline-script',
+    name: 'floti-inline-script',
     enforce: 'pre',
     async resolveId(source, importer) {
       if (!source.endsWith(SUFFIX)) return null

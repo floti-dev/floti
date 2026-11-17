@@ -45,7 +45,7 @@ export interface RemoteHost {
   name: string
   transport: HostTransport
   /**
-   * The full path of the floti Helm installed there, on that computer, for a
+   * The full path of the floti the desktop installed there, on that computer, for a
    * login whose non-interactive shell does not have its folder on `PATH`.
    * Every line run there starts with it (`floti bridge --floti`). Absent for
    * a floti found on that login's `PATH`.
@@ -53,8 +53,8 @@ export interface RemoteHost {
   floti?: string
   /**
    * That computer's OS and CPU, as its floti's version line or the check said
-   * them when the host was added, and again after Helm installed or updated
-   * floti there. Absent for a host added before Helm kept it, whose row then
+   * them when the host was added, and again after the desktop installed or updated
+   * floti there. Absent for a host added before the desktop kept it, whose row then
    * names no OS.
    */
   system?: HostSystem
@@ -131,15 +131,15 @@ export function flotiLine(floti: string | undefined, rest: string): string {
  * - `missing`: the login answered, but has no floti to run; `lastLine` is
  *   what its shell said.
  * - `tooOld` and `newer`: the host refused this device's hello (P6). `host`
- *   is the protocol version its floti speaks and `client` this Helm's. Too
- *   old is updated there; newer means updating Helm on this PC.
- * - `startsAtSignIn`: Helm installed floti there, nobody is signed in, and
+ *   is the protocol version its floti speaks and `client` this desktop's. Too
+ *   old is updated there; newer means updating the desktop on this PC.
+ * - `startsAtSignIn`: the desktop installed floti there, nobody is signed in, and
  *   the host starts at the next sign-in. Not a failure.
  */
 export type RemoteHostConnection =
   /**
    * `version` is the host's floti version, as its welcome said it.
-   * `olderThan` is this Helm's version when the host's floti is older than
+   * `olderThan` is this desktop's version when the host's floti is older than
    * it, and Update floti is offered there; absent otherwise.
    */
   | { state: 'connected'; version?: string; olderThan?: string }
@@ -152,10 +152,10 @@ export type RemoteHostConnection =
   | { state: 'startsAtSignIn' }
 
 /**
- * A host whose floti is not this Helm's, as the sidebar and the Sessions page
+ * A host whose floti is not this desktop's, as the sidebar and the Sessions page
  * say it beside its name: `tooOld` and `newer` name both protocol versions,
  * `older` (connected, on an older floti) both floti versions; `host` is the
- * host's and `client` this Helm's.
+ * host's and `client` this desktop's.
  */
 export interface HostFlotiVerdict {
   verdict: 'tooOld' | 'newer' | 'older'
@@ -163,7 +163,7 @@ export interface HostFlotiVerdict {
   client: string
 }
 
-/** Where a host's floti stands against this Helm's, or null when there is nothing to say. */
+/** Where a host's floti stands against this desktop's, or null when there is nothing to say. */
 export function hostFlotiVerdict(connection: RemoteHostConnection | null): HostFlotiVerdict | null {
   if (connection?.state === 'tooOld' || connection?.state === 'newer') {
     return { verdict: connection.state, host: connection.host, client: connection.client }
@@ -323,7 +323,7 @@ export function distroNameProblem(name: unknown): string | null {
 export interface WslDistroList {
   /** The ssh target of the PC, or null for this PC. */
   through: string | null
-  /** `this PC`, or the Windows host's name in Helm. */
+  /** `this PC`, or the Windows host's name in Floti. */
   pcName: string
   distros: readonly string[]
   /** With no distros: the last line wsl.exe or ssh wrote, as written, which says why. */
@@ -339,7 +339,7 @@ export function sameDistro(transport: HostTransport, distro: Extract<HostTranspo
   )
 }
 
-/** The name a distro's host gets in Helm unless the user types another: `Ubuntu`, or `Ubuntu on win-box` for another PC's. */
+/** The name a distro's host gets in Floti unless the user types another: `Ubuntu`, or `Ubuntu on win-box` for another PC's. */
 export function wslHostName(distro: string, pcName?: string): string {
   return pcName === undefined ? distro : `${distro} on ${pcName}`
 }
@@ -347,9 +347,9 @@ export function wslHostName(distro: string, pcName?: string): string {
 /**
  * The line to try by hand in a terminal when a host cannot be reached: the
  * transport as typed, then the line it runs there (`ssh build-box floti
- * connect`, `wsl.exe -d Ubuntu -- floti connect`, or the path Helm installed
+ * connect`, `wsl.exe -d Ubuntu -- floti connect`, or the path the desktop installed
  * floti at in place of `floti`). Running it shows what ssh or the command
- * needs, in the user's own terminal, where it can ask; Helm never answers it.
+ * needs, in the user's own terminal, where it can ask; the desktop never answers it.
  */
 export function lineToTryByHand(host: Pick<RemoteHost, 'transport' | 'floti'>): string {
   // wsl.exe runs what follows `--` in the distro.

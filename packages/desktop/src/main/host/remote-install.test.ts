@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { FLOTI_TARGETS, SYSTEM_LINE, standaloneProbeLine, type HostTransport } from '@helm/core/types'
+import { FLOTI_TARGETS, SYSTEM_LINE, standaloneProbeLine, type HostTransport } from '@floti/core/types'
 import { RELEASE_TARGETS } from '../../../scripts/floti-release.mjs'
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
@@ -62,7 +62,7 @@ function world(rules: [prefix: string, answer: Answer][], options: Partial<Remot
     arch: 'x64',
     version: '2.6.0',
     protocol: { major: 1, minor: 2 },
-    ownBuild: async () => ({ path: '/opt/Helm/resources/floti', sha256: OWN_SHA }),
+    ownBuild: async () => ({ path: '/opt/Floti/resources/floti', sha256: OWN_SHA }),
     sums: async () => new Map([['floti-2.6.0-linux-arm64', LINUX_SHA]]),
     script: async (os) => (os === 'windows' ? '# install.ps1\nInstall-Floti @args\n' : '# install.sh\nfloti_install "$@"\n'),
     releaseBase: (version) => `https://github.com/floti-dev/floti/releases/download/v${version}`,
@@ -143,7 +143,7 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     expect(outcome).toEqual({ ok: true, floti: '/home/me/.local/bin/floti', startsAtNextSignIn: false })
     const [put, setup] = w.runs.slice(3)
     expect(put?.argv.slice(0, 4)).toEqual(BATCH)
-    expect(put?.stdinFile).toBe('/opt/Helm/resources/floti')
+    expect(put?.stdinFile).toBe('/opt/Floti/resources/floti')
     expect(put?.line).toBe(
       `sh -c '# install.sh\nfloti_install "$@"\n' floti-install '2.6.0' 'floti-2.6.0-linux-x64' '${OWN_SHA}' '-'`
     )
@@ -263,7 +263,7 @@ describe('installing floti on a host’s computer, from the desktop', () => {
       kind: 'newer',
       found: { version: '3.0.0', protocol: '2.0' },
       ours: '1.2',
-      helm: '2.6.0'
+      desktop: '2.6.0'
     })
   })
 
@@ -327,6 +327,19 @@ describe('installing floti on a host’s computer, from the desktop', () => {
       lastLine: 'floti install: floti-2.6.0-linux-x64 did not match its SHA-256, so it was not installed.'
     })
     expect(w.lines().some((line) => line.endsWith(' setup'))).toBe(false)
+  })
+
+  it('S17: a download that fails keeps everything the script wrote, so a 404 before its last line is seen', async () => {
+    const stderr =
+      'curl: (22) The requested URL returned error: 404\nfloti install: could not download https://example.test/floti-2.6.0-linux-x64.\n'
+    const w = world([NO_FLOTI, [SYSTEM_LINE, { stdout: 'Linux x86_64\n' }], ['sh -c ', { code: 1, stderr }]])
+    await w.installer.check({ transport: SSH })
+    expect(await w.installer.install('offer-1')).toEqual({
+      ok: false,
+      step: 'install',
+      lastLine: 'floti install: could not download https://example.test/floti-2.6.0-linux-x64.',
+      said: stderr.trim()
+    })
   })
 
   it('S15: a setup that fails there says its last line', async () => {
@@ -642,8 +655,8 @@ const GRACE = 15_000
 
 /**
  * An added host's Update floti, with its connection, its login and the clock
- * faked: a floti older than this Helm's is offered an update even while this
- * Helm can talk to it, and one with `floti update` runs that, over the
+ * faked: a floti older than this desktop's is offered an update even while this
+ * desktop can talk to it, and one with `floti update` runs that, over the
  * host's connection when its channel has a newer floti and over its login
  * otherwise.
  */

@@ -94,7 +94,7 @@ fn the_typescript_declares_every_channel_message_and_payload_type() {
         "\"stub:changed\": { event: StubChange; snapshot: StubState; capability: null };",
         "\"stub:data\": { open: StubOpen; capability: \"terminal\" };",
         "{ name: \"stub:data\", kind: \"stream\", capability: \"terminal\" },",
-        "export const PROTOCOL_VERSION = { major: 4, minor: 1 } as const;",
+        "export const PROTOCOL_VERSION = { major: 4, minor: 2 } as const;",
         "export const KEEPER_LINK_VERSION = 1;",
         "export type RestartAsk = ",
         "export type Restart = ",
@@ -114,30 +114,22 @@ fn the_typescript_declares_every_channel_message_and_payload_type() {
 }
 
 #[test]
-fn the_typescript_lists_every_client_only_and_host_internal_entry_with_its_reason() {
-    use floti_protocol::channels::boundary::{CLIENT_ONLY, HOST_INTERNAL};
+fn the_typescript_lists_every_client_only_entry_with_its_reason() {
+    use floti_protocol::channels::boundary::CLIENT_ONLY;
     let ts = typescript(&Catalogue::protocol());
-    let section = |name: &str| -> String {
-        let start = ts
-            .find(&format!("export const {name}: readonly OutsideEntry[] = ["))
-            .unwrap_or_else(|| panic!("no {name} in the TypeScript"));
-        let end = start + ts[start..].find("];").expect("the list ends");
-        ts[start..end].to_owned()
-    };
-    for (name, list) in [
-        ("CLIENT_ONLY", CLIENT_ONLY),
-        ("HOST_INTERNAL", HOST_INTERNAL),
-    ] {
-        let section = section(name);
-        for entry in list {
-            let line = format!(
-                "{{ channels: {:?}, reason: {:?} }},",
-                entry.channels, entry.reason
-            );
-            assert!(section.contains(&line), "{name} is missing `{line}`");
-        }
-        assert_eq!(section.matches("{ channels:").count(), list.len(), "{name}");
+    let start = ts
+        .find("export const CLIENT_ONLY: readonly OutsideEntry[] = [")
+        .expect("no CLIENT_ONLY in the TypeScript");
+    let end = start + ts[start..].find("];").expect("the list ends");
+    let section = &ts[start..end];
+    for entry in CLIENT_ONLY {
+        let line = format!(
+            "{{ channels: {:?}, reason: {:?} }},",
+            entry.channels, entry.reason
+        );
+        assert!(section.contains(&line), "CLIENT_ONLY is missing `{line}`");
     }
+    assert_eq!(section.matches("{ channels:").count(), CLIENT_ONLY.len());
     // The coverage check is `Outside::covers`: a `family:*` entry covers its
     // family by prefix, any other entry only its own name.
     assert!(ts.contains(
@@ -165,7 +157,7 @@ fn the_json_schema_defines_every_message_and_payload_type_and_lists_the_channels
         assert!(defs.contains_key(name), "$defs lacks {name}");
     }
     assert_eq!(schema["$ref"], "#/$defs/Message");
-    assert_eq!(schema["x-protocolVersion"], "4.1");
+    assert_eq!(schema["x-protocolVersion"], "4.2");
 
     let channels = schema["x-channels"].as_array().unwrap();
     let data = channels

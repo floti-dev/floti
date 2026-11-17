@@ -18,8 +18,8 @@ let probes: string
 let temp: string
 
 beforeEach(() => {
-  probes = mkdtempSync(join(tmpdir(), 'helm compile cache probe-'))
-  temp = mkdtempSync(join(tmpdir(), 'helm compile cache temp-'))
+  probes = mkdtempSync(join(tmpdir(), 'floti compile cache probe-'))
+  temp = mkdtempSync(join(tmpdir(), 'floti compile cache temp-'))
 })
 
 afterEach(() => {

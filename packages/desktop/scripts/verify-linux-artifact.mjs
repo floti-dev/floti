@@ -18,7 +18,7 @@
 //   Hosts sends and the window icon;
 // - no ELF file anywhere in it needs a glibc newer than GLIBC_FLOOR. A native
 //   module compiled on a newer system than that is one the app cannot load
-//   on an older one, and Helm then dies at start; the release builds it in an
+//   on an older one, and the desktop then dies at start; the release builds it in an
 //   old enough container, and this is what proves it did;
 // - its menu entry (`floti-desktop.desktop`) starts it without `--no-sandbox`, so
 //   launching it from a desktop integration keeps Chromium's sandbox.
@@ -51,7 +51,7 @@ export const UNPACKED = [
 
 /**
  * The newest glibc any file in the AppImage may need: better-sqlite3's Linux
- * prebuild already needs 2.34, so that is the oldest Linux Helm runs on
+ * prebuild already needs 2.34, so that is the oldest Linux Floti runs on
  * (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9).
  */
 export const GLIBC_FLOOR = '2.34'
@@ -270,7 +270,7 @@ function main(args) {
   if (problems.length === 0) {
     const facts = binaryFacts(readFileSync(file))
     if (facts.os !== 'linux' || facts.cpu !== 'x64') problems.push(`${basename(file)} is not an x64 Linux executable`)
-    const work = mkdtempSync(join(tmpdir(), 'helm-appimage-'))
+    const work = mkdtempSync(join(tmpdir(), 'floti-appimage-'))
     try {
       const root = extract(file, work)
       problems.push(...appProblems(root, { floti: readFileSync(floti), sums: readFileSync(sums), origin: basename(file) }))

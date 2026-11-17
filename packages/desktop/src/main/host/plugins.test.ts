@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { SettingValue } from '@floti-dev/plugin-sdk'
-import type { PluginFolder } from '@helm/core'
-import type { PluginBackgroundReport } from '../../shared/ipc'
-import type { ToolAnswer, ToolCallRequest } from '../plugins/tools'
+import type { PluginFolder } from '@floti/core'
 import { FakeConnection, fakeLink, reconnectingLink } from '../../../test/host-connection'
 import { HostRequestError } from './client'
 import type * as P from './protocol'
-import { createHostPlugins, NOT_OFFERING, type HostPluginsDeps } from './plugins'
+import { createHostPlugins, type HostPluginsDeps } from './plugins'
 
 const DIR = 'C:\\plugins\\my sample'
 
@@ -22,10 +20,10 @@ const hostPlugin = (patch: Partial<P.PluginInfo> = {}): P.PluginInfo => ({
   revision: 1,
   icon: null,
   rail: { title: 'Sample', panel: 'main' },
-  panels: { main: { title: 'Sample', url: 'helm-plugin://sample/dist/panel.html', actions: [] } },
+  panels: { main: { title: 'Sample', url: 'floti-plugin://sample/dist/panel.html', actions: [] } },
   tabs: {},
   pageStrip: false,
-  background: { url: 'helm-plugin://sample/dist/background.html', state: 'stopped', error: null },
+  background: { url: 'floti-plugin://sample/dist/background.js', state: 'running', error: null },
   commands: [],
   settings: [{ type: 'text', key: 'greeting', label: 'Greeting' }],
   settingValues: { greeting: 'hello' },
@@ -53,7 +51,7 @@ const folder = (path: string, patch: Partial<PluginFolder> = {}): PluginFolder =
 interface Options {
   /** The host's plugins to begin with. */
   hosted?: P.PluginInfo[]
-  /** Helm's own folders and setting values, by plugin id. */
+  /** The desktop's own folders and setting values, by plugin id. */
   own?: PluginFolder[]
   ownSettings?: Record<string, Record<string, SettingValue>>
   copied?: boolean
@@ -66,7 +64,7 @@ function world(options: Options = {}) {
   const idOf = (path: string): string => path.split('\\').pop()!.replace(/\s+/g, '-')
   connection.answer('plugins:list', () => [...hosted])
   connection.answer('plugins:add', ({ path }) => {
-    if (path.includes('broken')) return { path, error: 'There is no helm-plugin.json in that folder.', plugins: [...hosted] }
+    if (path.includes('broken')) return { path, error: 'There is no floti-plugin.json in that folder.', plugins: [...hosted] }
     hosted.push(hostPlugin({ path, id: idOf(path), name: idOf(path), settingValues: {} }))
     return { path, error: null, plugins: [...hosted] }
   })
@@ -87,26 +85,11 @@ function world(options: Options = {}) {
     return [...hosted]
   })
   const link = fakeLink(connection)
-  const told: PluginBackgroundReport[][] = []
   const logged: string[] = []
-  const synced: boolean[] = []
   const marks: number[] = []
-  const toolRuns: Array<{ request: ToolCallRequest; signal: AbortSignal; answer: (answer: ToolAnswer) => void }> = []
-  const toolRunMade: Array<() => void> = []
-  let toolsChanged = 0
   let copied = options.copied ?? true
   const plugins = createHostPlugins({
-    ...quietDeps(link),
-    reportsChanged: (reports) => told.push(reports),
-    runTool: (request, signal) =>
-      new Promise<ToolAnswer>((resolve) => {
-        toolRuns.push({ request, signal, answer: resolve })
-        toolRunMade.shift()?.()
-      }),
-    onToolsChanged: () => {
-      toolsChanged += 1
-    },
-    background: { sync: (needed) => synced.push(needed) },
+    link,
     copyOwn: {
       folders: () => options.own ?? [],
       settings: (id) => options.ownSettings?.[id] ?? {},
@@ -118,32 +101,12 @@ function world(options: Options = {}) {
     },
     log: (line) => logged.push(line)
   })
-  return {
-    connection,
-    hosted,
-    link,
-    plugins,
-    told,
-    logged,
-    synced,
-    marks,
-    toolRuns,
-    /** Resolves once the next tool call reaches the background page. */
-    nextToolRun: () => new Promise<void>((resolve) => toolRunMade.push(resolve)),
-    toolsChanged: () => toolsChanged
-  }
+  return { connection, hosted, link, plugins, logged, marks }
 }
 
 /** Deps that do nothing, for a test that looks at one thing. */
 function quietDeps(link: HostPluginsDeps['link']): HostPluginsDeps {
-  return {
-    link,
-    reportsChanged: () => undefined,
-    runTool: () => Promise.resolve({ ok: true, text: 'Done.' }),
-    onToolsChanged: () => undefined,
-    background: { sync: () => undefined },
-    log: () => undefined
-  }
+  return { link, log: () => undefined }
 }
 
 describe('plugins in the local host', () => {
@@ -152,149 +115,6 @@ describe('plugins in the local host', () => {
     const plugins = createHostPlugins(quietDeps(fakeLink(null, sentence)))
     await expect(plugins.serves('sample')).rejects.toThrow(sentence)
     await expect(plugins.file('sample', 'dist/panel.html')).rejects.toThrow(sentence)
-  })
-
-  it('tells the window what the hidden window reports of each background page, and opens the hidden window while one needs it', async () => {
-    const w = world({ hosted: [hostPlugin()] })
-    await w.link.connect()
-    w.connection.snapshot('plugins:changed', [hostPlugin()])
-    expect(w.connection.subscriptions.has('plugins:changed')).toBe(true)
-    // Main hears only the list: the window and the hidden window hear the rest themselves.
-    expect([...w.connection.subscriptions.keys()]).toEqual(['plugins:changed'])
-    expect(w.synced.at(-1)).toBe(true)
-    expect(w.plugins.reports()).toEqual([])
-
-    w.plugins.backgroundState('sample', 1, 'running', null)
-    expect(w.told.at(-1)).toEqual([{ plugin: 'sample', revision: 1, state: 'running', error: null }])
-    // A report about a read the host has moved on from changes nothing.
-    w.plugins.backgroundState('sample', 0, 'crashed', 'old')
-    expect(w.plugins.reports()).toEqual([{ plugin: 'sample', revision: 1, state: 'running', error: null }])
-
-    // A new read starts the page again, and the old report goes.
-    w.connection.push('plugins:changed', [hostPlugin({ revision: 2 })])
-    expect(w.plugins.reports()).toEqual([])
-    expect(w.told.at(-1)).toEqual([])
-    w.plugins.backgroundGone('crashed')
-    expect(w.told.at(-1)).toEqual([
-      { plugin: 'sample', revision: 2, state: 'crashed', error: 'the background host stopped (crashed)' }
-    ])
-    expect(w.synced.at(-1)).toBe(false)
-
-    // Switched off, nothing needs the window.
-    w.connection.push('plugins:changed', [hostPlugin({ revision: 3, enabled: false })])
-    expect(w.synced.at(-1)).toBe(false)
-  })
-
-  it('keeps a report the hidden window made for a read main’s list has not caught up with', async () => {
-    const w = world({ hosted: [hostPlugin()] })
-    await w.link.connect()
-    w.connection.snapshot('plugins:changed', [hostPlugin()])
-    w.plugins.backgroundState('sample', 2, 'running', null)
-    w.connection.push('plugins:changed', [hostPlugin({ revision: 2 })])
-    expect(w.plugins.reports()).toEqual([{ plugin: 'sample', revision: 2, state: 'running', error: null }])
-  })
-
-  describe('a page’s calls', () => {
-    const TOOLS: P.PluginAgentInfo = {
-      enabled: true,
-      server: 'floti-plugin-sample',
-      instructions: 'Find before you write.',
-      tools: [
-        { name: 'find', description: 'Finds things.', inputSchema: { type: 'object', properties: { q: { type: 'string' } } }, readOnly: true },
-        { name: 'write', description: 'Writes a thing.', inputSchema: { type: 'object', properties: {} }, readOnly: false }
-      ]
-    }
-
-    it('offers the tools the host lists, and offers again only when they move', async () => {
-      const w = world({ hosted: [hostPlugin({ agent: TOOLS })] })
-      await w.link.connect()
-      w.connection.snapshot('plugins:changed', [hostPlugin({ agent: TOOLS })])
-      expect(w.plugins.toolServers()).toEqual([
-        {
-          plugin: 'sample',
-          name: 'Sample',
-          server: 'floti-plugin-sample',
-          instructions: 'Find before you write.',
-          tools: [
-            { name: 'find', description: 'Finds things.', inputSchema: { type: 'object', properties: { q: { type: 'string' } } }, readOnly: true },
-            { name: 'write', description: 'Writes a thing.', inputSchema: { type: 'object', properties: {} }, readOnly: false }
-          ]
-        }
-      ])
-      const offers = w.toolsChanged()
-      w.connection.push('plugins:changed', [hostPlugin({ agent: TOOLS })])
-      expect(w.toolsChanged()).toBe(offers)
-      w.connection.push('plugins:changed', [hostPlugin({ agent: { ...TOOLS, enabled: false } })])
-      expect(w.plugins.toolServers()).toEqual([])
-      expect(w.toolsChanged()).toBe(offers + 1)
-    })
-
-    /** A version 2 plugin: its background is a module the host's engine runs, not a page. */
-    const moduleBackground = (id: string): Partial<P.PluginInfo> => ({
-      path: `C:\\plugins\\${id}`,
-      id,
-      name: id,
-      background: { url: `floti-plugin://${id}/dist/background.js`, state: 'running', error: null },
-      agent: { ...TOOLS, server: `floti-plugin-${id}` }
-    })
-
-    it('S9: given only version 2 plugins with backgrounds, opens no hidden plugin host window and offers the host no tool server', async () => {
-      const list = [hostPlugin(moduleBackground('trackr')), hostPlugin(moduleBackground('almanac'))]
-      const w = world({ hosted: list })
-      await w.link.connect()
-      w.connection.snapshot('plugins:changed', list)
-      expect(w.synced.length).toBeGreaterThan(0)
-      expect(w.synced.every((needed) => !needed)).toBe(true)
-      expect(w.plugins.toolServers()).toEqual([])
-      expect(w.toolsChanged()).toBe(0)
-      expect(await w.plugins.callTool({ plugin: 'trackr', tool: 'find', args: {}, session: { id: 'minted', name: 'alpha', cwd: 'C:\\work' } }, new AbortController().signal)).toEqual({
-        ok: false,
-        message: NOT_OFFERING
-      })
-      expect(w.toolRuns).toEqual([])
-    })
-
-    it('S9: a version 1 plugin with a background page and tools beside version 2 ones is still offered and still opens the hidden window', async () => {
-      const list = [hostPlugin(moduleBackground('trackr')), hostPlugin({ agent: TOOLS }), hostPlugin(moduleBackground('almanac'))]
-      const w = world({ hosted: list })
-      await w.link.connect()
-      w.connection.snapshot('plugins:changed', list)
-      expect(w.synced.at(-1)).toBe(true)
-      expect(w.plugins.toolServers().map((server) => server.plugin)).toEqual(['sample'])
-      expect(w.toolsChanged()).toBe(1)
-    })
-
-    it('answers a tool call with the background page once it runs, and ends it when the plugin’s tools are switched off', async () => {
-      const w = world({ hosted: [hostPlugin({ agent: TOOLS })] })
-      await w.link.connect()
-      w.connection.snapshot('plugins:changed', [hostPlugin({ agent: TOOLS })])
-      const session = { id: 'minted', name: 'alpha', cwd: 'C:\\work' }
-      const request = { plugin: 'sample', tool: 'find', args: { q: 'x' }, session }
-
-      // Starting: the call waits for the page.
-      const ran = w.nextToolRun()
-      const answered = w.plugins.callTool(request, new AbortController().signal)
-      w.plugins.backgroundState('sample', 1, 'running', null)
-      await ran
-      expect(w.toolRuns[0]?.request).toEqual(request)
-      w.toolRuns[0]?.answer({ ok: true, text: 'found 1' })
-      expect(await answered).toEqual({ ok: true, text: 'found 1' })
-
-      expect(await w.plugins.callTool({ ...request, tool: 'nope' }, new AbortController().signal)).toEqual({
-        ok: false,
-        message: 'Sample has no tool called "nope". It has: find, write.'
-      })
-
-      const second = w.nextToolRun()
-      const pending = w.plugins.callTool(request, new AbortController().signal)
-      await second
-      const run = w.toolRuns[1]!
-      w.connection.push('plugins:changed', [hostPlugin({ agent: { ...TOOLS, enabled: false } })])
-      expect(run.signal.aborted).toBe(true)
-      run.answer({ ok: false, message: 'The call was cancelled.' })
-      expect(await pending).toEqual({ ok: false, message: NOT_OFFERING })
-      expect(await w.plugins.callTool(request, new AbortController().signal)).toEqual({ ok: false, message: NOT_OFFERING })
-    })
   })
 
   describe('page files', () => {
@@ -443,7 +263,7 @@ describe('plugins in the local host', () => {
       ])
       expect(w.logged).toEqual([
         'host: the setting “gone” of C:\\plugins\\quiet was not copied into the local host (quiet has no setting "gone".)',
-        'host: the plugin folder C:\\plugins\\broken was not copied into the local host (There is no helm-plugin.json in that folder.)'
+        'host: the plugin folder C:\\plugins\\broken was not copied into the local host (There is no floti-plugin.json in that folder.)'
       ])
       expect(w.marks).toEqual([1])
     })

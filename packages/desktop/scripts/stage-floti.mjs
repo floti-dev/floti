@@ -1,5 +1,5 @@
 // Builds the `floti` host in release and copies it to `dist-host/`, where
-// electron-builder.yml's `extraResources` picks it up. A packaged Helm runs it
+// electron-builder.yml's `extraResources` picks it up. A packaged desktop runs it
 // from `process.resourcesPath` (`flotiBinary` in src/main/host/launcher.ts).
 // Beside it goes the pinned Node
 // runtime the host runs plugin services on, fetched here, at build time only,

@@ -1,4 +1,4 @@
-import { COPY_REFUSED, PASTE_REFUSED, REFUSED_SHOWN_MS } from '@helm/ui'
+import { COPY_REFUSED, PASTE_REFUSED, REFUSED_SHOWN_MS } from '@floti/ui'
 import type { ClipboardRead, ClipboardWriteOutcome } from '../../shared/ipc'
 
 /**

@@ -17,8 +17,8 @@ import {
 
 /**
  * The desktop's side of a connection to the host: the protocol over a byte
- * transport. In Helm's main process that is `floti bridge`'s standard output
- * (the host's frames) and standard input (the desktop's); in a Helm page it is
+ * transport. In the desktop's main process that is `floti bridge`'s standard output
+ * (the host's frames) and standard input (the desktop's); in a desktop page it is
  * the same pair, piped unread by main over the page's `hostLink:*` channels.
  * Nothing here depends on Node or the DOM, so both builds share it.
  *
@@ -31,7 +31,7 @@ import {
  * starts with `DEFAULT_INITIAL_CREDIT`, the desktop never sends past what the
  * host granted, and it returns credit as the bytes it was sent are consumed.
  *
- * Stream bytes are handed on as they came. Nothing here reads them: Helm
+ * Stream bytes are handed on as they came. Nothing here reads them: the desktop
  * renders nothing for a live session.
  */
 
@@ -62,7 +62,7 @@ export interface ByteTransport {
 
 export interface ConnectOptions {
   transport: ByteTransport
-  /** Helm's own version, for the `hello`'s client name. */
+  /** The desktop's own version, for the `hello`'s client name. */
   appVersion: string
   /**
    * What this side says it can do; the host ignores names it does not know.
@@ -71,11 +71,11 @@ export interface ConnectOptions {
    */
   capabilities: readonly Capability[]
   /**
-   * The name of the computer Helm runs on, for the `hello`'s device name:
+   * The name of the computer the desktop runs on, for the `hello`'s device name:
    * what every client's list of attached devices calls this device.
    */
   deviceName?: string
-  /** A line for Helm's log. Never given a payload, a frame or stream bytes. */
+  /** A line for the desktop's log. Never given a payload, a frame or stream bytes. */
   log?: (line: string) => void
   /**
    * The protocol the `hello` names: `PROTOCOL_VERSION` when absent. Only a
@@ -194,7 +194,7 @@ export function connectHost(options: ConnectOptions): Promise<HostConnection> {
 
 export interface RestartFrameOptions {
   transport: ByteTransport
-  /** Helm's own version, for the frame's client name. */
+  /** The desktop's own version, for the frame's client name. */
   appVersion: string
   deviceName?: string
   /** False asks what a restart would mean (`restartAsk`); true restarts the host (`restart`). */
@@ -205,7 +205,7 @@ export interface RestartFrameOptions {
  * Sends `restartAsk` or `restart` in place of a `hello` and resolves with the
  * host's `restartState`, after which the host closes the connection. These
  * frames are frozen across protocol versions, so they reach a host that
- * would refuse this Helm's `hello`. Rejects with the sentence saying why when
+ * would refuse this desktop's `hello`. Rejects with the sentence saying why when
  * the host answers anything else or the connection ends first.
  */
 export function restartFrame(options: RestartFrameOptions): Promise<RestartState> {

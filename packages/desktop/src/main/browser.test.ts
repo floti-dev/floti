@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, BrowserWindowConstructorOptions, WebContents } from 'electron'
-import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings, type BrowserHistory, type Store } from '@helm/core'
+import { DEFAULT_SETTINGS, openBrowserHistory, openStore, type AppSettings, type BrowserHistory, type Store } from '@floti/core'
 import {
   FakeBrowserWindow,
   FakeIncomingMessage,
@@ -36,10 +36,10 @@ vi.mock('electron', async () => ({
  * The browser pane's main-process half, against a fake Electron.
  *
  * The host is real; Chromium is played by the test (`test/browser-electron.ts`).
- * So every claim here is about what **Helm** does with what Chromium reports -
+ * So every claim here is about what **the desktop** does with what Chromium reports -
  * which is exactly the part a real page cannot isolate. A refused connection
- * that later loads proves nothing about Helm's retry when Chromium may have held
- * the socket open itself; here nothing but Helm can ask for the page again.
+ * that later loads proves nothing about the desktop's retry when Chromium may have held
+ * the socket open itself; here nothing but the desktop can ask for the page again.
  */
 
 /** The sessions a workspace can share a page with, by id: what `sessions.browserOpener` would answer. */
@@ -150,7 +150,7 @@ const handedOver = (guest?: FakeWebContents): BrowserWindowConstructorOptions =>
   (guest === undefined ? {} : { webContents: guest as unknown as WebContents }) as BrowserWindowConstructorOptions
 
 const partition = (): FakeSession => {
-  const found = fakeBrowser.partitions.get('persist:helm-browser')
+  const found = fakeBrowser.partitions.get('persist:floti-browser')
   if (found === undefined) throw new Error('the browser partition was never configured')
   return found
 }
@@ -256,8 +256,8 @@ describe('browser host - navigation and the address bar', () => {
     expect(wc.loads.at(-1)).toBe('http://localhost:3000/')
 
     h.patch({ browserSearch: 'duckduckgo' })
-    h.host.navigate(id, 'helm')
-    expect(wc.loads.at(-1)).toBe('https://duckduckgo.com/?q=helm')
+    h.host.navigate(id, 'floti')
+    expect(wc.loads.at(-1)).toBe('https://duckduckgo.com/?q=floti')
 
     h.patch({ browserSearch: 'off' })
     const loaded = wc.loads.length
@@ -269,7 +269,7 @@ describe('browser host - navigation and the address bar', () => {
   it('holds a search to the reach rule: on "This machine only" the results page is refused', () => {
     const h = workspace({ browserReach: 'local' })
     const { id, wc } = openTab(h)
-    const state = h.host.navigate(id, 'helm desktop')
+    const state = h.host.navigate(id, 'floti desktop')
     expect(state?.problem).toContain('This machine only')
     expect(wc.loads).toEqual([])
   })
@@ -719,7 +719,7 @@ describe('browser host - the console', () => {
     ])
     expect(stateOf(h, id).errors).toBe(2)
 
-    // An event in a shape Helm does not know is recorded, not dropped.
+    // An event in a shape the desktop does not know is recorded, not dropped.
     wc.emit('console-message', { message: 'no level' })
     expect(messages(h, id).at(-1)).toContain('does not recognise')
 
@@ -1050,7 +1050,7 @@ describe('browser host - the keyboard inside a page', () => {
       { id, command: 'reload' },
       { id, command: 'reopen-page' }
     ])
-    // A command drawn in Helm's chrome takes the keyboard back to the window
+    // A command drawn in the desktop's chrome takes the keyboard back to the window
     // first; a reload leaves it in the page.
     expect(h.window.webContents.focused).toBe(2)
 

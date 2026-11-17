@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS, familyRoom, gridOf, PARENT_GUTTER_PX, type SessionRecord } from '@helm/core/types'
+import { DEFAULT_SETTINGS, familyRoom, gridOf, PARENT_GUTTER_PX, type SessionRecord } from '@floti/core/types'
 import { bridge, remoteBridge } from './bridge.testkit'
 import { FakeResizeObserver, layout, Terminal } from './terminal.testkit'
 import { TerminalPane } from './TerminalPane'

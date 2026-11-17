@@ -1,10 +1,10 @@
 import type { NormalizedManifest } from './manifest.js'
 
-export const MANIFEST_FILE: 'helm-plugin.json'
+export const MANIFEST_FILE: 'floti-plugin.json'
 export const MANIFEST_MAX_BYTES: number
 
 /**
- * A plugin folder, checked as Helm checks it on load. `dir` is the folder with
+ * A plugin folder, checked as Floti checks it on load. `dir` is the folder with
  * links resolved, or null when it could not be read. `manifest` is set when
  * the manifest itself passed, even if a file it names is missing.
  */

@@ -43,9 +43,9 @@ fn config(dirs: &TestDirs, agent: &FakeAgent) -> HostConfig {
     }
 }
 
-/// Helm's client folder, with a device key of its own. The host key is
+/// The desktop's client folder, with a device key of its own. The host key is
 /// pinned once the host has made one ([`pin_host`]).
-fn helm_client(dirs: &TestDirs) -> PathBuf {
+fn desktop_client(dirs: &TestDirs) -> PathBuf {
     let folder = dirs.root().join("Floti data").join("host-client");
     ClientKeys::open(&folder).expect("set up Floti's client keys");
     folder
@@ -120,7 +120,7 @@ async fn running(client: &mut TestClient) -> Vec<SessionRecord> {
 async fn with_sessions_running_it_says_how_many_end_and_its_stop_ends_them_for_an_update() {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
-    let folder = helm_client(&dirs);
+    let folder = desktop_client(&dirs);
     let host = RunningHost::start(config(&dirs, &agent));
     pin_host(&dirs, &folder);
     let endpoint = local_endpoint(&dirs.folders());
@@ -165,7 +165,7 @@ async fn with_sessions_running_it_says_how_many_end_and_its_stop_ends_them_for_a
 async fn with_no_session_running_it_asks_nothing() {
     let dirs = TestDirs::new();
     let agent = fake_agent!(&dirs);
-    let folder = helm_client(&dirs);
+    let folder = desktop_client(&dirs);
     let host = RunningHost::start(config(&dirs, &agent));
     pin_host(&dirs, &folder);
 

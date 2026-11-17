@@ -7,10 +7,10 @@ import {
   type BrowserHistoryEntry,
   type BrowserSearch,
   type BrowserSuggestions
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { overlayMounted, overlayOpen } from '../lib/overlay'
 import { fakeMenuLayer, type FakeMenuLayer } from '../lib/menuLayer.testkit'
-import { BrowserPane, type BrowserPaneProps, type BrowserPaneState } from './BrowserPane'
+import { BrowserEmpty, BrowserPane, browserPageBlank, type BrowserPaneProps, type BrowserPaneState } from './BrowserPane'
 
 const STATE: BrowserPaneState = {
   id: 7,
@@ -595,6 +595,33 @@ describe('BrowserPane - the address bar', () => {
     renderPane({ state: { ...STATE, url: '', refusedUrl: null } })
     expect(address().value).toBe('')
     expect(screen.getByRole('button', { name: 'Open in your own browser' })).toHaveProperty('disabled', true)
+  })
+
+  it('on an empty tab, says No pages open where the page would be, and Open a page puts the caret in the address bar', async () => {
+    renderPane({ state: { ...STATE, url: '', title: '' } })
+    const empty = document.querySelector<HTMLElement>('[data-empty-state="browser"]')!
+    expect(within(empty).getByText('No pages open')).toBeTruthy()
+    expect(within(empty).getByText('Type an address, or let an agent open one.')).toBeTruthy()
+    await userEvent.click(within(empty).getByRole('button', { name: 'Open a page' }))
+    expect(document.activeElement).toBe(address())
+  })
+
+  it('says No pages open only while the tab is going nowhere: not loading, refused or in trouble', () => {
+    expect(browserPageBlank({ ...STATE, url: '' })).toBe(true)
+    expect(browserPageBlank(STATE)).toBe(false)
+    expect(browserPageBlank({ ...STATE, url: '', pendingUrl: 'http://localhost:5173/' })).toBe(false)
+    expect(browserPageBlank({ ...STATE, url: '', loading: true })).toBe(false)
+    expect(browserPageBlank({ ...STATE, url: '', refusedUrl: 'file:///C:/x' })).toBe(false)
+    expect(browserPageBlank({ ...STATE, url: '', problem: 'Nothing is listening.' })).toBe(false)
+    renderPane()
+    expect(document.querySelector('[data-empty-state="browser"]')).toBeNull()
+  })
+
+  it('with no page at all, Open a page asks for one', async () => {
+    const onOpen = vi.fn()
+    render(<BrowserEmpty onOpen={onOpen} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Open a page' }))
+    expect(onOpen).toHaveBeenCalledOnce()
   })
 
   it('paints what is wrong with the tab as a sentence', () => {

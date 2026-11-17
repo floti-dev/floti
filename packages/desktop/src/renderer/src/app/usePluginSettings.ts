@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SettingValue } from '@floti-dev/plugin-sdk'
-import { LOCAL_HOST_KEY } from '@helm/core/types'
+import { LOCAL_HOST_KEY } from '@floti/core/types'
 import type { PluginLogLine, PluginMetrics, SecretInput, SecretsState } from '../../../shared/ipc'
 import { bridgeFor } from './bridge'
 import { readable } from './errors'
@@ -37,7 +37,7 @@ export interface PluginSettingsState {
  * every process, and nobody reads a log that is not in front of them.
  */
 export function usePluginSettings(watching: string | null, host: string = LOCAL_HOST_KEY): PluginSettingsState {
-  const helm = bridgeFor(host)
+  const desktop = bridgeFor(host)
   /** The secrets read, and the host they are on: never shown for another. */
   const [secretsRead, setSecretsRead] = useState<{ host: string; state: SecretsState } | null>(null)
   const secrets = secretsRead !== null && secretsRead.host === host ? secretsRead.state : null
@@ -54,11 +54,11 @@ export function usePluginSettings(watching: string | null, host: string = LOCAL_
 
   useEffect(() => {
     let takeRead = true
-    const off = helm.on('secrets:changed', (next) => {
+    const off = desktop.on('secrets:changed', (next) => {
       takeRead = false
       setSecrets(next)
     })
-    void helm.invoke('secrets:list').then(
+    void desktop.invoke('secrets:list').then(
       (first) => {
         if (takeRead) setSecrets(first)
       },
@@ -68,7 +68,7 @@ export function usePluginSettings(watching: string | null, host: string = LOCAL_
       takeRead = false
       off()
     }
-  }, [helm, setSecrets])
+  }, [desktop, setSecrets])
 
   useEffect(() => {
     if (watching === null) return undefined
@@ -78,8 +78,8 @@ export function usePluginSettings(watching: string | null, host: string = LOCAL_
     // slow walk never stacks reads behind it.
     const read = (): void => {
       void Promise.all([
-        helm.invoke('plugins:metrics').catch(() => null),
-        helm.invoke('plugins:log', { path: watching }).catch(() => null)
+        desktop.invoke('plugins:metrics').catch(() => null),
+        desktop.invoke('plugins:log', { path: watching }).catch(() => null)
       ]).then(([metrics, log]) => {
         if (!live) return
         setWatched({
@@ -96,79 +96,79 @@ export function usePluginSettings(watching: string | null, host: string = LOCAL_
       live = false
       if (timer !== null) clearTimeout(timer)
     }
-  }, [watching, helm, host])
+  }, [watching, desktop, host])
 
   const add = useCallback(
     (path?: string) => {
-      void helm.invoke('plugins:add', path === undefined ? {} : { path }).then(
+      void desktop.invoke('plugins:add', path === undefined ? {} : { path }).then(
         (result) => setAddError(result.error),
         (error: unknown) => setAddError(readable(error))
       )
     },
-    [helm, setAddError]
+    [desktop, setAddError]
   )
 
   const setEnabled = useCallback(
     (path: string, enabled: boolean) => {
-      void helm.invoke('plugins:setEnabled', { path, enabled })
+      void desktop.invoke('plugins:setEnabled', { path, enabled })
     },
-    [helm]
+    [desktop]
   )
 
   const setTools = useCallback(
     (path: string, enabled: boolean) => {
-      void helm.invoke('plugins:setTools', { path, enabled })
+      void desktop.invoke('plugins:setTools', { path, enabled })
     },
-    [helm]
+    [desktop]
   )
 
   const reload = useCallback(
     (path: string) => {
-      void helm.invoke('plugins:reload', { path })
+      void desktop.invoke('plugins:reload', { path })
     },
-    [helm]
+    [desktop]
   )
 
   const remove = useCallback(
     (path: string, deleteSecrets: string[]) => {
-      void helm.invoke('plugins:remove', { path, deleteSecrets })
+      void desktop.invoke('plugins:remove', { path, deleteSecrets })
     },
-    [helm]
+    [desktop]
   )
 
-  const ownSecrets = useCallback((path: string) => helm.invoke('plugins:ownSecrets', { path }), [helm])
+  const ownSecrets = useCallback((path: string) => desktop.invoke('plugins:ownSecrets', { path }), [desktop])
 
   const setSetting = useCallback(
     (plugin: string, key: string, value: SettingValue) =>
-      helm.invoke('plugins:setSetting', { plugin, key, value }).then(
+      desktop.invoke('plugins:setSetting', { plugin, key, value }).then(
         () => null,
         (error: unknown) => readable(error)
       ),
-    [helm]
+    [desktop]
   )
 
   const saveSecret = useCallback(
     (input: SecretInput) =>
-      helm.invoke('secrets:save', input).then(
+      desktop.invoke('secrets:save', input).then(
         (next) => {
           setSecrets(next)
           return null
         },
         (error: unknown) => readable(error)
       ),
-    [helm, setSecrets]
+    [desktop, setSecrets]
   )
 
   const removeSecret = useCallback(
     (key: string) =>
-      helm.invoke('secrets:remove', { key }).then(
+      desktop.invoke('secrets:remove', { key }).then(
         (next) => {
           setSecrets(next)
           return null
         },
         (error: unknown) => readable(error)
       ),
-    [helm, setSecrets]
+    [desktop, setSecrets]
   )
 
   const current = watched !== null && watched.path === watching && watched.host === host ? watched : null

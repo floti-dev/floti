@@ -1,4 +1,4 @@
-import type { RemoteHost } from '@helm/core/types'
+import type { RemoteHost } from '@floti/core/types'
 import type { HostConnection } from './client'
 
 /**
@@ -6,11 +6,11 @@ import type { HostConnection } from './client'
  *
  * WSL stops a distro shortly after the last Windows process attached to it
  * through `wsl.exe` exits, and a process inside the distro does not keep it
- * running, so a WSL host's sessions would end once Helm's last bridge to it
- * did: every window closed, or Helm quit keeping its sessions. The Windows
+ * running, so a WSL host's sessions would end once the desktop's last bridge to it
+ * did: every window closed, or the desktop quit keeping its sessions. The Windows
  * host on the distro's PC holds the distro instead (`wsl:keepAwake`, one
  * `wsl.exe` per distro, let go once no session runs there), for as long as
- * that host runs, which is past Helm's exit.
+ * that host runs, which is past the desktop's exit.
  *
  * Main asks it: on this PC's own host link for a distro here, and on the link
  * of the connected host reached with the same ssh target for a distro

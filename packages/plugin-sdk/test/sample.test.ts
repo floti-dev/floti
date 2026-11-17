@@ -6,9 +6,9 @@ import { SAMPLE, SAMPLE_DIR } from './fixtures'
 
 /**
  * The sample plugin (`examples/sample-plugin`) is the worked example authors
- * copy and the plugin Helm's end-to-end tests drive, so it is a version 2
+ * copy and the plugin Floti's end-to-end tests drive, so it is a version 2
  * plugin: its background a module the host runs, its pages and that module
- * calling `floti`. Its build is checked by `pnpm --filter @helm/sample-plugin
+ * calling `floti`. Its build is checked by `pnpm --filter @floti/sample-plugin
  * build`; these read what the build starts from.
  */
 
@@ -60,15 +60,12 @@ describe('the sample plugin is a version 2 plugin', () => {
     }
   })
 
-  it('calls floti from every page and the background, and never the version 1 bridge', () => {
+  it('calls floti from every page and the background', () => {
     const files = sources(SRC)
     const scripts = files.filter((file) => !file.endsWith('.html'))
     expect(scripts.map(named)).toEqual(expect.arrayContaining(['background/main.ts', 'panels/main.tsx', 'tabs/item.tsx', 'lib/api.ts']))
     for (const file of ['background/main.ts', 'panels/main.tsx', 'tabs/item.tsx', 'lib/api.ts']) {
       expect(read(join(SRC, file)), file).toMatch(/\bfloti\./)
     }
-    // `helm-` class names are the primitives stylesheet's, not the bridge.
-    const bridgeUses = files.filter((file) => /\bhelm\.[a-z]|window\.helm\b|\bvoid helm\b/.test(read(file))).map(named)
-    expect(bridgeUses).toEqual([])
   })
 })

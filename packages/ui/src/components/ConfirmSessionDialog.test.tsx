@@ -202,7 +202,7 @@ describe('ConfirmSessionDialog closing a parent', () => {
   })
 
   it('S27: a command child is listed with its terminal glyph and, at the right in mono, command · its command line, cut with an ellipsis and whole in its title', () => {
-    const meta = 'command · pnpm test --filter @helm/ui -- --reporter verbose --coverage --run packages/ui/src/components'
+    const meta = 'command · pnpm test --filter @floti/ui -- --reporter verbose --coverage --run packages/ui/src/components'
     renderDialog({
       sessionNames: ['api-refactor', 'tests'],
       confirmLabel: 'End 2 sessions',

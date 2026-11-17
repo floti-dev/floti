@@ -14,7 +14,7 @@
  *   the `~/.ssh` folder, `~` for the home folder, and glob patterns.
  *
  * Nothing in `~/.ssh` is ever written. ssh itself works out the address, user
- * and key when it connects; Helm keeps only the name it is given.
+ * and key when it connects; Floti keeps only the name it is given.
  */
 
 /** What one config file names: its Host names and the files its Include lines name, as written. */

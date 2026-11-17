@@ -769,7 +769,7 @@ mod tests {
     ) -> SessionRecord {
         SessionRecord {
             id: 7,
-            name: "helm-7".to_owned(),
+            name: "floti-7".to_owned(),
             label: None,
             title: None,
             cwd: "C:/work".to_owned(),

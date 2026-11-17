@@ -20,7 +20,7 @@ pub(super) fn fixture(root: &Path) {
             "---",
             "type: journal",
             "date: 2026-08-10",
-            "tags: [helm, notes]",
+            "tags: [floti, notes]",
             "---",
             "",
             "# Alpha",

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, type AppSettings } from '@helm/core'
+import { DEFAULT_SETTINGS, type AppSettings } from '@floti/core'
 import { FakeConnection, fakeLink } from '../../test/host-connection'
 import type { ToolAnswer as McpToolAnswer } from '../../test/mcp-client'
 import type { BrowserHost, BrowserOpener } from './browser'
@@ -20,7 +20,7 @@ import type * as P from './host/protocol'
 import type { BrowserConsoleEntry, BrowserState } from '../shared/ipc'
 
 /**
- * Helm's browser tools, as the local host relays its sessions' calls to them
+ * The desktop's browser tools, as the local host relays its sessions' calls to them
  * over a connection the test drives: what the tools let a session do to tabs
  * it does and does not own, and where they may reach.
  *
@@ -468,7 +468,7 @@ describe('the browser tools', () => {
       expect((await alpha.call('browser_console', { cursor: 2 })).text).toBe(
         'cursor: 2\n(nothing new)'
       )
-      logged.push({ level: 'warn', message: 'third', source: 'helm', line: 0, at: Date.UTC(2026, 0, 1, 9, 30, 2) })
+      logged.push({ level: 'warn', message: 'third', source: 'floti', line: 0, at: Date.UTC(2026, 0, 1, 9, 30, 2) })
       expect((await alpha.call('browser_console', { cursor: 2 })).text).toBe(
         'cursor: 3\n[09:30:02] warn: third'
       )

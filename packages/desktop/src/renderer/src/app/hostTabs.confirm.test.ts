@@ -1,4 +1,4 @@
-import type { ChildMember, SessionRecord, UrgentState } from '@helm/core/types'
+import type { ChildMember, SessionRecord, UrgentState } from '@floti/core/types'
 import { describe, expect, it } from 'vitest'
 import { confirmChildren, confirmRows, hostQuestionMessage } from './hostTabs'
 

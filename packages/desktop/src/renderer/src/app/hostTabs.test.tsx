@@ -15,7 +15,7 @@ import {
   type PaneLayout,
   type PaneRef,
   type SessionRecord
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { FakeConnection, fakeReach, reconnectingReach } from '../../../../test/fake-connection'
 import { CLAUDE_CODE_BACKEND } from '../../../shared/host/backend'
 import type * as P from '../../../shared/host/protocol'
@@ -164,7 +164,7 @@ describe('a build-box session’s tab', () => {
     // The window answers every host's question on that host's bridge.
     const confirm = renderHook(() =>
       useSessionConfirm({
-        each: (listener) => w.bridges.each((each) => listener(each.host, each.helm)),
+        each: (listener) => w.bridges.each((each) => listener(each.host, each.desktop)),
         bridgeFor: (host) => w.bridges.bridgeFor(host)
       })
     )

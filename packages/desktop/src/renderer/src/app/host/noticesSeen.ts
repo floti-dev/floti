@@ -1,4 +1,4 @@
-import { NOTICES_SEEN_HOSTS_MAX } from '@helm/core/types'
+import { NOTICES_SEEN_HOSTS_MAX } from '@floti/core/types'
 
 /**
  * What this device has shown of a host's notices: the `since` of the newest
@@ -40,7 +40,7 @@ export function memorySeen(): NoticesSeen {
   }
 }
 
-/** Where every host's mark is kept: `noticesSeen` in this device's own settings (helm.db). */
+/** Where every host's mark is kept: `noticesSeen` in this device's own settings (desktop.db). */
 export interface SeenStorage {
   read(): Promise<Readonly<Record<string, string>>>
   write(marks: Readonly<Record<string, string>>): Promise<unknown>

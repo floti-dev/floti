@@ -1,8 +1,8 @@
-import { NOTICES_SEEN_HOSTS_MAX } from '@helm/core/types'
+import { NOTICES_SEEN_HOSTS_MAX } from '@floti/core/types'
 import { describe, expect, it, vi } from 'vitest'
 import { createSeenMarks, memorySeen, newerThan, newestOf, type SeenStorage } from './noticesSeen'
 
-/** helm.db's `noticesSeen` as the window reads and writes it, recording every write. */
+/** desktop.db's `noticesSeen` as the window reads and writes it, recording every write. */
 function device(initial: Record<string, string> = {}) {
   let kept: Readonly<Record<string, string>> = initial
   const writes: Array<Readonly<Record<string, string>>> = []
@@ -42,8 +42,8 @@ describe('what this device has shown of a host’s notices', () => {
   })
 
   it('reads every host’s mark once, and writes them all whole when one moves forward', async () => {
-    const helm = device({ 'h-lab': '2026-11-13T09:00:00Z' })
-    const marks = createSeenMarks(helm.storage)
+    const desktop = device({ 'h-lab': '2026-11-13T09:00:00Z' })
+    const marks = createSeenMarks(desktop.storage)
     const build = marks.forHost('h-build')
     await expect(build.read()).resolves.toBeNull()
     expect(marks.forHost('h-lab').read()).toBe('2026-11-13T09:00:00Z')
@@ -51,17 +51,17 @@ describe('what this device has shown of a host’s notices', () => {
     build.mark('2026-11-14T12:00:00Z')
     build.mark('2026-11-14T11:00:00Z')
     build.mark('2026-11-14T12:30:00Z')
-    await vi.waitFor(() => expect(helm.writes).toHaveLength(2))
-    expect(helm.kept()).toEqual({ 'h-lab': '2026-11-13T09:00:00Z', 'h-build': '2026-11-14T12:30:00Z' })
-    expect(helm.reads()).toBe(1)
+    await vi.waitFor(() => expect(desktop.writes).toHaveLength(2))
+    expect(desktop.kept()).toEqual({ 'h-lab': '2026-11-13T09:00:00Z', 'h-build': '2026-11-14T12:30:00Z' })
+    expect(desktop.reads()).toBe(1)
     expect(build.read()).toBe('2026-11-14T12:30:00Z')
   })
 
   it('marks a host before its marks were read without losing another host’s', async () => {
-    const helm = device({ local: '2026-11-13T09:00:00Z' })
-    createSeenMarks(helm.storage).forHost('h-build').mark('2026-11-14T12:00:00Z')
+    const desktop = device({ local: '2026-11-13T09:00:00Z' })
+    createSeenMarks(desktop.storage).forHost('h-build').mark('2026-11-14T12:00:00Z')
     await vi.waitFor(() =>
-      expect(helm.kept()).toEqual({ local: '2026-11-13T09:00:00Z', 'h-build': '2026-11-14T12:00:00Z' })
+      expect(desktop.kept()).toEqual({ local: '2026-11-13T09:00:00Z', 'h-build': '2026-11-14T12:00:00Z' })
     )
   })
 
@@ -72,12 +72,12 @@ describe('what this device has shown of a host’s notices', () => {
         new Date(Date.UTC(2026, 10, 1, 0, at)).toISOString()
       ])
     )
-    const helm = device(many)
-    const marks = createSeenMarks(helm.storage)
+    const desktop = device(many)
+    const marks = createSeenMarks(desktop.storage)
     await marks.forHost('new').read()
     marks.forHost('new').mark('2026-11-14T12:00:00Z')
-    await vi.waitFor(() => expect(helm.writes).toHaveLength(1))
-    const kept = helm.kept()
+    await vi.waitFor(() => expect(desktop.writes).toHaveLength(1))
+    const kept = desktop.kept()
     expect(Object.keys(kept)).toHaveLength(NOTICES_SEEN_HOSTS_MAX)
     expect(kept['h0']).toBeUndefined()
     expect(kept['h1']).toBeDefined()

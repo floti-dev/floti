@@ -1,34 +1,23 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { isClientOnly, isHostInternal } from '../../../crates/floti-protocol/generated/floti-protocol.generated'
+import { isClientOnly } from '../../../crates/floti-protocol/generated/floti-protocol.generated'
 import type { RecordedChannel } from '../src/main/ipc-recorder'
 import { bearerOf, callTool, readMcpConfig } from '../test/mcp-client'
 import { startBrowserFixture } from './browser-fixture'
-import {
-  CLASSIC,
-  TOKEN,
-  inVersion1Background,
-  installSample,
-  installVersion1Plugin,
-  pluginFrame,
-  startServer,
-  type SampleFixture
-} from './plugin-fixture'
-import { claudeRunIn, expect, openHistory, startSession, terminalText, test as base, typeLine, type Helm } from './helm'
+import { TOKEN, installSample, pluginFrame, startServer, type SampleFixture } from './plugin-fixture'
+import { claudeRunIn, expect, openHistory, startSession, terminalText, test as base, typeLine, type Desktop } from './desktop'
 
 /**
- * Electron IPC carries only what `boundary.rs` lists as client-only: the browser pane, clipboard, window,
- * theme, dialogs and each Helm page's own connection to the host. Everything
- * else reaches the host over that connection, in the protocol's types.
+ * Electron IPC carries only what `boundary.rs` lists as client-only: the
+ * browser pane, clipboard, window, theme, dialogs and the window's own
+ * connection to the host. Everything else reaches the host over that
+ * connection, in the protocol's types.
  *
  * Main records every channel used and which page used it (`ipc-recorder.ts`);
  * after each workflow the test fails naming any channel the generated
- * client-only list does not cover. A host-internal channel passes only on the
- * hidden window version 1 plugins' background pages run in, inside the
- * desktop; a version 2 background is a module the host runs, and the sample
- * is one. A small version 1 plugin beside it keeps the hidden window in the
- * workflow. Main registers nothing else, so a channel it does not
- * list could only show up here as one main answered.
+ * client-only list does not cover. A plugin's background is a module the
+ * host runs, and the sample's is one. Main registers nothing else, so a
+ * channel it does not list could only show up here as one main answered.
  */
 
 const test = base.extend<{ sample: SampleFixture }>({
@@ -43,7 +32,6 @@ const test = base.extend<{ sample: SampleFixture }>({
   ],
   world: async ({ world, sample }, use) => {
     sample.dir = installSample(world, sample.server)
-    installVersion1Plugin(world)
     const notes = join(world.projects.alpha, 'notes')
     mkdirSync(notes, { recursive: true })
     writeFileSync(join(notes, 'first.md'), '# First note\n\nWritten for the boundary.\n')
@@ -53,37 +41,36 @@ const test = base.extend<{ sample: SampleFixture }>({
 })
 
 /** Every channel main recorded so far, and which page used it. */
-const recorded = (helm: Helm): Promise<RecordedChannel[]> =>
-  helm.app.evaluate(() => (globalThis as unknown as { __helmIpcChannels: () => RecordedChannel[] }).__helmIpcChannels())
+const recorded = (desktop: Desktop): Promise<RecordedChannel[]> =>
+  desktop.app.evaluate(() => (globalThis as unknown as { __flotiIpcChannels: () => RecordedChannel[] }).__flotiIpcChannels())
 
 /** What crossed Electron IPC that `boundary.rs` does not keep on the client, named. */
 function strays(channels: readonly RecordedChannel[]): string[] {
   return channels
     .filter(
-      ({ channel, page }) =>
-        !isClientOnly(channel) && !(isHostInternal(channel) && page === 'background')
+      ({ channel }) => !isClientOnly(channel)
     )
     .map(({ channel, kind, page }) => `${channel} (${kind}, ${page})`)
     .sort()
 }
 
-/** Fails naming every stray channel, and any page but Helm's own that used a page's connection. */
-async function expectOnlyClientChannels(helm: Helm): Promise<void> {
-  const channels = await recorded(helm)
+/** Fails naming every stray channel, and any page but the desktop's own that used a page's connection. */
+async function expectOnlyClientChannels(desktop: Desktop): Promise<void> {
+  const channels = await recorded(desktop)
   expect(channels.length).toBeGreaterThan(0)
   expect(strays(channels)).toEqual([])
   const foreign = channels.filter(({ channel, page }) => channel.startsWith('hostLink:') && page === 'other')
   expect(foreign).toEqual([])
 }
 
-const destination = (helm: Helm, name: string | RegExp) =>
-  helm.window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name, exact: typeof name === 'string' })
+const destination = (desktop: Desktop, name: string | RegExp) =>
+  desktop.window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name, exact: typeof name === 'string' })
 
 test('the launcher, a session and its terminal, and a project’s terminal use only client channels', async ({
-  helm,
+  desktop,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   const pane = window.getByRole('region', { name: 'First pane' })
   await window.getByRole('button', { name: 'alpha main' }).click()
   await expect(pane.getByRole('textbox', { name: 'Terminal input' })).toBeAttached()
@@ -91,11 +78,11 @@ test('the launcher, a session and its terminal, and a project’s terminal use o
   await typeLine(pane, 'hello boundary')
   await expect.poll(() => terminalText(window, id)).toContain('You said: hello boundary')
   await claudeRunIn(world, world.projects.alpha)
-  await expectOnlyClientChannels(helm)
+  await expectOnlyClientChannels(desktop)
 })
 
-test('history comes over the window’s own connection', async ({ helm }) => {
-  const { window } = helm
+test('history comes over the window’s own connection', async ({ desktop }) => {
+  const { window } = desktop
   const id = await startSession(window, 'alpha')
   const pane = window.getByRole('region', { name: 'First pane' })
   await typeLine(pane, 'plan the boundary')
@@ -110,15 +97,15 @@ test('history comes over the window’s own connection', async ({ helm }) => {
   await expect(palette).toHaveCount(0)
   await expect(window.locator('[data-transcript]')).toContainText('You said: plan the boundary')
 
-  const channels = await recorded(helm)
+  const channels = await recorded(desktop)
   // Read over the window's connection: main was asked none of it.
   expect(channels.filter(({ channel }) => /^(history:(summary|sessions|changed)|archive:)/.test(channel))).toEqual([])
   expect(channels).toContainEqual({ channel: 'hostLink:open', kind: 'invoke', page: 'window' })
-  await expectOnlyClientChannels(helm)
+  await expectOnlyClientChannels(desktop)
 })
 
-test('the Files view, a note and the profile form use only client channels', async ({ helm }) => {
-  const { window } = helm
+test('the Files view, a note and the profile form use only client channels', async ({ desktop }) => {
+  const { window } = desktop
   await window.locator('[data-rail="files"]').click()
   const picker = window.getByRole('button', { name: 'Project', exact: true })
   if ((await picker.textContent()) !== 'alpha') {
@@ -130,29 +117,29 @@ test('the Files view, a note and the profile form use only client channels', asy
   await files.getByRole('button', { name: /^first\.md/ }).click()
   await expect(window.getByRole('heading', { level: 1, name: 'First note' })).toBeVisible()
 
-  await destination(helm, 'Profiles').click()
+  await destination(desktop, 'Profiles').click()
   await window.getByRole('button', { name: 'New profile' }).click()
   const dialog = window.getByRole('dialog', { name: 'New profile' })
   await dialog.getByRole('textbox', { name: 'Profile name' }).fill('boundary')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
-  await expectOnlyClientChannels(helm)
+  await expectOnlyClientChannels(desktop)
 })
 
-test('plugin pages of both versions, a version 1 background page, a tool called by a session, and the Browser tab use only client channels', async ({
-  helm,
+test('plugin pages, a tool called by a session, and the Browser tab use only client channels', async ({
+  desktop,
   sample,
   world
 }) => {
-  const { window } = helm
+  const { window } = desktop
   await startSession(window, 'alpha')
   await window.evaluate(
     ({ token, host }) =>
       (
-        window as unknown as { __helmRouted: { invoke: (channel: string, payload: unknown) => Promise<unknown> } }
-      ).__helmRouted.invoke('secrets:save', { key: 'sample-token', value: token, hosts: [host], plugins: ['sample'] }),
+        window as unknown as { __flotiRouted: { invoke: (channel: string, payload: unknown) => Promise<unknown> } }
+      ).__flotiRouted.invoke('secrets:save', { key: 'sample-token', value: token, hosts: [host], plugins: ['sample'] }),
     { token: TOKEN, host: sample.server.url }
   )
-  await destination(helm, /^Sample/).click()
+  await destination(desktop, /^Sample/).click()
   const panel = await pluginFrame(window, 'dist/panels/main.html')
   await panel.locator('[data-sample-item="2"]').click()
   const item = await pluginFrame(window, 'dist/tabs/item.html')
@@ -162,26 +149,6 @@ test('plugin pages of both versions, a version 1 background page, a tool called 
   // channel: the sample's background module heard it through the host and
   // counted again.
   await expect(window.locator('[data-status-plugin="sample"]')).toHaveText('1 unread')
-
-  // The version 1 plugin: its background page is running in the hidden window,
-  // and a post from its panel reaches it, through the host and the hidden
-  // window's own connection.
-  await expect(window.locator(`[data-status-plugin="${CLASSIC.id}"]`)).toHaveText('Classic: running')
-  await destination(helm, new RegExp(`^${CLASSIC.name}`)).click()
-  const classic = await pluginFrame(window, 'panel.html', CLASSIC.origin)
-  // Its page has the version 1 bridge and no other.
-  expect(await classic.evaluate('[window.helm.apiVersion, typeof window.floti]')).toEqual([1, 'undefined'])
-  const sent = { from: 'the panel' }
-  await expect
-    .poll(() =>
-      inVersion1Background(
-        helm,
-        `(() => { window.__heard = []; new BroadcastChannel('boundary').onmessage = (event) => window.__heard.push(event.data); return true })()`
-      ).catch(() => false)
-    )
-    .toBe(true)
-  await classic.evaluate(`(() => { new BroadcastChannel('boundary').postMessage(${JSON.stringify(sent)}); return true })()`)
-  await expect.poll(() => inVersion1Background(helm, 'window.__heard')).toEqual([sent])
 
   const run = await claudeRunIn(world, world.projects.alpha)
   const config = readMcpConfig(run.argv[run.argv.indexOf('--mcp-config') + 1] ?? '')
@@ -194,13 +161,13 @@ test('plugin pages of both versions, a version 1 background page, a tool called 
 
   const fixture = await startBrowserFixture()
   try {
-    await destination(helm, 'Browser').click()
+    await destination(desktop, 'Browser').click()
     const address = window.getByRole('combobox', { name: 'Address' })
     await address.fill(`${fixture.http}/`)
     await address.press('Enter')
-    await expect(window.getByRole('tab', { name: /^Helm fixture one/ })).toBeVisible()
+    await expect(window.getByRole('tab', { name: /^Floti fixture one/ })).toBeVisible()
   } finally {
     await fixture.close()
   }
-  await expectOnlyClientChannels(helm)
+  await expectOnlyClientChannels(desktop)
 })

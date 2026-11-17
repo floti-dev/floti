@@ -1,32 +1,22 @@
 //! What a first start writes into the templates folder: a README that says
-//! how to write a template, and one example that shows every part of the
-//! format.
+//! how to make a template, and nothing else. The one template Floti ships,
+//! Starter, is code (`workspace.rs`), so it reaches people whose templates
+//! folder already exists.
 //!
 //! The trigger is the folder being absent, not a stamp or a hash. The host
 //! keeps no record of what it wrote there, so it cannot tell an edited file
-//! from an untouched one, and an improved example overwriting somebody's
+//! from an untouched one, and an improved README overwriting somebody's
 //! edited copy is the one failure this must not have. So a better shipped
-//! example never reaches an existing folder, and deleting the folder brings
-//! the originals back at the next start.
+//! README never reaches an existing folder, nothing already there (an example
+//! an older Floti seeded included) is ever changed or removed, and deleting
+//! the folder brings the README back at the next start.
 
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 /// The shipped files, by path relative to the templates folder.
-pub const SHIPPED_TEMPLATES: &[(&str, &str)] = &[
-    ("README.md", README),
-    (
-        "example/template.yaml",
-        "label: \"Example\"\ndescription: \"A CLAUDE.md naming the workspace, an empty repos/ and an empty .claude/skills/.\"\norder: 10\n",
-    ),
-    (
-        "example/CLAUDE.md.tpl",
-        "# {{NAME}}\n\nCreated {{CREATED_AT}} from the {{TEMPLATE}} template.\n\nReplace this file with whatever the agents working here need to know.\n",
-    ),
-    ("example/dot-claude/skills/.gitkeep", ""),
-    ("example/repos/.gitkeep", ""),
-];
+pub const SHIPPED_TEMPLATES: &[(&str, &str)] = &[("README.md", README)];
 
 const README: &str = r#"# Workspace templates
 
@@ -35,13 +25,25 @@ folder's contents into the new workspace, and that is the whole mechanism.
 
     templates/
       README.md          <- this file
-      example/           <- one template, named by its folder
+      client-work/       <- one template, named by its folder
         template.yaml    <- what the picker shows
         ...              <- everything else is copied as-is
 
+## Making one
+
+- **Save a folder as a template.** A workspace's page has Save as template,
+  and the template manager (Manage templates in the New workspace dialog or
+  in Settings) has Import folder... for any other folder. Both list what will
+  be copied, with `repos/` left out unless you tick it, before anything is;
+  `.git` and `node_modules` are never copied.
+- **Start an empty one.** New, in the template manager, makes a folder here
+  with a `template.yaml`, to fill in from there.
+- **Or write the folder yourself.** Any folder you put in this directory is a
+  template, and the picker reads this directory each time it opens.
+
 ## template.yaml
 
-    label: "Example"
+    label: "Client work"
     description: "One sentence, shown under the label in the picker."
     order: 10
 
@@ -55,7 +57,7 @@ rest of the picker working.
 Copied verbatim into the new workspace, with five rules:
 
 - **`.tpl` files are filled in and the extension is dropped.**
-  `CLAUDE.md.tpl` is written as `CLAUDE.md` with `{{NAME}}`,
+  `AGENTS.md.tpl` is written as `AGENTS.md` with `{{NAME}}`,
   `{{CREATED_AT}}`, `{{TEMPLATE}}` and `{{PATH}}` substituted. There
   are no other placeholders, and no conditionals or loops.
 - **`{{PATH}}` is the new workspace's folder, with forward slashes** -
@@ -79,17 +81,18 @@ Absolute paths, anything that climbs out of the workspace with `..`, and
 junctions or symlinks. `workspace.yaml` too - Floti writes that one, because
 `template:` in it records which template a workspace came from.
 
-## Minimal
+## Starter
 
 The first row of the picker is built in and is not a folder here. It writes a
-manifest, an empty `repos/` and an empty `.claude/`, and nothing you put in
-this directory can change or break it.
+manifest, an empty `repos/` and an `AGENTS.md` with the basics of working in
+the workspace, and nothing you put in this directory can change or break it.
+A folder here named `starter` (or `minimal`, its old name) is not offered.
 
 ## Editing
 
-These files are written once, when this directory does not exist. Nothing here
-is ever overwritten, so anything you change stays changed - and deleting the
-whole directory puts the originals back at the next start.
+This file is written once, when this directory does not exist. Nothing here is
+ever overwritten, so anything you change stays changed - and deleting the
+whole directory puts this README back at the next start.
 "#;
 
 /// What seeding did.
@@ -103,8 +106,7 @@ pub struct Seeded {
     pub problem: Option<String>,
 }
 
-/// Writes the shipped README and example into `dir`, only when `dir` is
-/// absent. The folder itself is made by a call that fails when it exists,
+/// Writes the shipped README into `dir`, only when `dir` is absent. The folder itself is made by a call that fails when it exists,
 /// and every file is written create-new, so of two hosts starting at once
 /// only one seeds, and nothing already there is ever written over.
 pub fn seed_templates(dir: &Path) -> Seeded {

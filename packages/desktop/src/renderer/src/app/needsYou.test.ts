@@ -10,7 +10,7 @@ import {
   type PaneLayout,
   type PlaceScope,
   type StandingNotice
-} from '@helm/core/types'
+} from '@floti/core/types'
 import { describe, expect, it } from 'vitest'
 import { noticeKey, type NoticesView } from './host/notices'
 import { needsYouAlerts, needsYouKeys, needsYouToasts, pruneClosed, type HostAttention } from './needsYou'

@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { DEFAULT_SETTINGS } from '@helm/core/types'
-import { COPY_REFUSED, PASTE_REFUSED } from '@helm/ui'
+import { DEFAULT_SETTINGS } from '@floti/core/types'
+import { COPY_REFUSED, PASTE_REFUSED } from '@floti/ui'
 import type { ClipboardRead, ClipboardWriteOutcome } from '../../shared/ipc'
 import { CLIPBOARD_NOTICE_MS } from './clipboardNotice'
 import {
@@ -195,7 +195,7 @@ describe('terminalFontStack', () => {
     }
     const terminal = families(terminalFontStack(null))
     expect(families(declared('../../../../ui/src/styles/theme.css', '--font-mono'))).toEqual(terminal)
-    expect(families(declared('../plugin-runtime/helm.css', '--helm-font-mono'))).toEqual(terminal)
+    expect(families(declared('../plugin-runtime/floti.css', '--floti-font-mono'))).toEqual(terminal)
   })
 })
 

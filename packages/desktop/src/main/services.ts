@@ -1,16 +1,15 @@
 import {
-  cleanStaleShims,
   openStore,
   readSettings,
   reconcileRunningSessions,
-  settleUpgradeNote,
+  settleWalkthrough,
   writeSettings,
   type AppSettings,
   type LostSession,
   type SavedPaneLayout,
   type Store
-} from '@helm/core'
-import { dbFile, shimRoot } from './paths'
+} from '@floti/core'
+import { dbFile } from './paths'
 
 /**
  * The main process's stateful bits, in one object rather than module-level
@@ -32,39 +31,17 @@ export interface Services {
    * longer see - and that layout is the only record of where they were.
    */
   lost: { sessions: LostSession[]; layout: SavedPaneLayout | null }
-  /**
-   * Overlay shim directories left behind by the previous run. Counted for the
-   * same reason lost sessions are: it is evidence of how the last run ended.
-   */
-  staleShims: number
 }
 
 export function createServices(): Services {
   const store = openStore({ file: dbFile })
-  settleUpgradeNote(store)
+  // The open that made the database is a first start: the walkthrough begins.
+  settleWalkthrough(store)
   const settings = readSettings(store)
   return {
     store,
     settings,
-    lost: { sessions: reconcileRunningSessions(store), layout: settings.paneLayout },
-    /*
-     * The shims no live process is holding.
-     *
-     * This used to sweep *every* shim, reasoning that at this point in startup
-     * nothing is hosting a session and therefore nothing is reading a plugin
-     * directory. That reasoning was wrong, and wrong in the way that matters:
-     * it is a statement about this process, and the directory belongs to the
-     * machine. A second Helm - the dev build beside the installed one, a
-     * portable copy beside an install, two installs - starting while the first
-     * has a live session unlinked that session's `--plugin-dir` out from under
-     * it. The session kept running and silently lost its skills.
-     *
-     * So a shim now records the processes holding it and `cleanStaleShims`
-     * asks the kernel about each one, removing only what it can positively
-     * establish is dead. This is still the only place they are swept: doing it
-     * per launch would churn directories a session in *this* app is reading.
-     */
-    staleShims: cleanStaleShims(shimRoot).length
+    lost: { sessions: reconcileRunningSessions(store), layout: settings.paneLayout }
   }
 }
 

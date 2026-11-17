@@ -1,19 +1,18 @@
-import { agentReach, browserReachAllows, resolveBrowserAddress, type AppSettings } from '@helm/core'
+import { agentReach, browserReachAllows, resolveBrowserAddress, type AppSettings } from '@floti/core'
 import type { BrowserHost, BrowserOpener } from './browser'
-import type { ToolAnswer as PluginToolAnswer, ToolServer } from './plugins/tools'
 import { pairTools, type ToolSpec, type ToolTable } from './tool-table'
 import type { BrowserConsoleEntry, BrowserState } from '../shared/ipc'
 import browserToolTable from '../../../../crates/host/src/server/browser_tools.json'
 
 /**
- * Helm's browser tools, run for the sessions the local host runs.
+ * The desktop's browser tools, run for the sessions the local host runs.
  *
  * The host serves its sessions' agent tools on its own listener
  * (`crates/host/src/agent_tools`). It has no browser, so each browser call goes
  * over `agentBrowser:call` to the client that declared one, and this is that
  * client's answer (`host/browser-tools.ts`): the tool run against the browser
  * pane for the session's identity, under the same tab rule and reach rule the
- * host's route names. Helm itself binds no port, mints no token and writes no
+ * host's route names. The desktop itself binds no port, mints no token and writes no
  * `--mcp-config`.
  *
  * - **A session drives only its own tabs**, and a tab of the user's only once
@@ -98,25 +97,6 @@ export interface BrowserMcpOptions {
   browsers: BrowserHost
   /** Read through a function: both reach settings can change while a tab is open. */
   settings: () => AppSettings
-}
-
-/**
- * What a session is told about a plugin's tools before the plugin's own words,
- * offered to the local host as it is.
- */
-export function pluginInstructions(server: ToolServer): string {
-  const provenance = `These tools come from "${server.name}", a plugin the user added to Floti, the app hosting this session. The plugin answers every call; Floti passes it on.`
-  return server.instructions === null ? provenance : `${provenance}\n\n${server.instructions}`
-}
-
-/**
- * The tool result a session reads for a plugin's answer: its text, or why
- * there is none as an error, for a call the local host relays.
- */
-export function pluginToolResult(answer: PluginToolAnswer): BrowserToolResult {
-  return answer.ok
-    ? { content: [{ type: 'text', text: answer.text }] }
-    : { content: [{ type: 'text', text: answer.message }], isError: true }
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +345,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
         tab.id,
         onTarget(
           args,
-          `const el = __helmTarget(); if (!el) return JSON.stringify({ missing: true });
+          `const el = __flotiTarget(); if (!el) return JSON.stringify({ missing: true });
            return JSON.stringify({ text: el.innerText ?? el.textContent ?? '', url: location.href })`
         )
       )
@@ -467,7 +447,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
           tab.id,
           inPage(
             args,
-            `const el = __helmTarget(); if (!el) return 'missing';
+            `const el = __flotiTarget(); if (!el) return 'missing';
              el.scrollIntoView({ block: 'center', inline: 'center' });
              el.focus();
              ${args.clear === true ? 'if (typeof el.select === "function") el.select();' : ''}
@@ -548,7 +528,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
           tab.id,
           inPage(
             args,
-            `const el = __helmTarget(); if (!el) return 'missing';
+            `const el = __flotiTarget(); if (!el) return 'missing';
              el.scrollIntoView({ block: 'center', inline: 'nearest' });
              return JSON.stringify([Math.round(window.scrollX), Math.round(window.scrollY)])`
           )
@@ -770,7 +750,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
       id,
       inPage(
         args,
-        `const el = __helmTarget(); if (!el) return JSON.stringify({ missing: true });
+        `const el = __flotiTarget(); if (!el) return JSON.stringify({ missing: true });
          el.scrollIntoView({ block: 'center', inline: 'center' });
          const b = el.getBoundingClientRect();
          return JSON.stringify({ x: b.x + b.width / 2, y: b.y + b.height / 2,
@@ -851,20 +831,20 @@ const missingElement = (args: Args): string =>
     : `Nothing in the page matches ${JSON.stringify(String(args.selector))}. Take a browser_snapshot to see what is there.`
 
 /**
- * One expression, run in the page, with `__helmTarget` in scope.
+ * One expression, run in the page, with `__flotiTarget` in scope.
  *
  * **Everything is inside an arrow function**, and that is not style: a
  * top-level `const` in a classic script creates a binding in the *global*
  * lexical environment that outlives the call, so the second
  * `executeJavaScript` carrying the same declaration throws "Identifier
- * '__helmTarget' has already been declared" - and the model would read that as
- * the page being broken rather than as Helm having declared a variable twice.
+ * '__flotiTarget' has already been declared" - and the model would read that as
+ * the page being broken rather than as the desktop having declared a variable twice.
  *
  * A `ref` is an index path from `documentElement` - `"1.3.0"` is
  * `documentElement.children[1].children[3].children[0]` - resolved by walking,
  * at the moment of the click, rather than by anything left behind in the page.
  * Playwright's equivalent stamps an attribute on every element it lists; that
- * would mean Helm writing into somebody's page in order to read it, and this is
+ * would mean the desktop writing into somebody's page in order to read it, and this is
  * already the milestone that has to be careful about what it does to a page
  * nobody is looking at. A walk leaves nothing at all.
  *
@@ -875,12 +855,12 @@ function inPage(args: Args, body: string): string {
   const ref = str(args.ref)
   const resolver =
     ref !== null
-      ? `const __helmTarget = () => {
+      ? `const __flotiTarget = () => {
            const parts = ${JSON.stringify(ref)}.split('.').filter((p) => p !== '');
            let el = document.documentElement;
            for (const part of parts) { el = el && el.children[Number(part)]; if (!el) return null }
            return el ?? null };`
-      : `const __helmTarget = () => document.querySelector(${JSON.stringify(
+      : `const __flotiTarget = () => document.querySelector(${JSON.stringify(
           String(args.selector ?? '')
         )});`
   return `(() => { ${resolver}\n${body} })()`
@@ -892,7 +872,7 @@ function inPage(args: Args, body: string): string {
  */
 function onTarget(args: Args, body: string): string {
   if (str(args.ref) !== null || str(args.selector) !== null) return inPage(args, body)
-  return `(() => { const __helmTarget = () => document.body ?? document.documentElement;\n${body} })()`
+  return `(() => { const __flotiTarget = () => document.body ?? document.documentElement;\n${body} })()`
 }
 
 /** Rendered text, with the runs of blank lines a layout leaves cut to one. */
@@ -923,7 +903,7 @@ interface SelectResult {
  * its shown text second, so either thing a snapshot shows works.
  */
 function selectBody(values: string[]): string {
-  return `const el = __helmTarget(); if (!el) return JSON.stringify({ missing: true });
+  return `const el = __flotiTarget(); if (!el) return JSON.stringify({ missing: true });
     if (el.tagName !== 'SELECT') return JSON.stringify({ notSelect: el.tagName.toLowerCase() });
     const options = Array.from(el.options);
     const label = (o) => (o.label || o.text || '').trim();
@@ -1113,14 +1093,14 @@ function renderSnapshot(id: number, snapshot: SnapshotResult): string {
 
 const consoleLine = (entry: BrowserConsoleEntry): string =>
   `[${new Date(entry.at).toISOString().slice(11, 19)}] ${entry.level}: ${entry.message}${
-    entry.source === '' || entry.source === 'helm' ? '' : `  (${entry.source}:${String(entry.line)})`
+    entry.source === '' || entry.source === 'floti' ? '' : `  (${entry.source}:${String(entry.line)})`
   }`
 
 /**
  * The page walk, as one expression.
  *
  * Kept as a string rather than a bundled module because it runs in *somebody
- * else's page*: there is no preload, nothing of Helm's is loaded in there, and
+ * else's page*: there is no preload, nothing of the desktop's is loaded in there, and
  * the only route in is the same `executeJavaScript` the console panel already
  * uses. So this is written to leave no trace - no attribute, no global, no
  * listener - and to answer with JSON that crosses the process boundary.

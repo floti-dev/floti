@@ -248,15 +248,18 @@ mod tests {
 
     #[test]
     fn a_name_is_made_unique_against_the_names_taken_ignoring_case() {
-        assert_eq!(unique_session_name("helm", []), "helm");
-        assert_eq!(unique_session_name("helm", ["helm"]), "helm 2");
+        assert_eq!(unique_session_name("floti", []), "floti");
+        assert_eq!(unique_session_name("floti", ["floti"]), "floti 2");
         assert_eq!(
-            unique_session_name("helm", ["helm", "helm 2", "helm 3"]),
-            "helm 4"
+            unique_session_name("floti", ["floti", "floti 2", "floti 3"]),
+            "floti 4"
         );
         // The first number free, not one past the highest.
-        assert_eq!(unique_session_name("helm", ["helm", "helm 3"]), "helm 2");
-        assert_eq!(unique_session_name("Helm", ["helm"]), "Helm 2");
+        assert_eq!(
+            unique_session_name("floti", ["floti", "floti 3"]),
+            "floti 2"
+        );
+        assert_eq!(unique_session_name("Floti", ["floti"]), "Floti 2");
     }
 
     #[test]
