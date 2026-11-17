@@ -599,16 +599,26 @@ mod tests {
     #[test]
     fn it_takes_a_client_folder_and_one_step() {
         assert_eq!(
-            parse(&args(&["C:\\Users\\a user\\Floti\\desktop\\host-client", "--ask"])),
+            parse(&args(&[
+                "C:\\Users\\a user\\Floti\\desktop\\host-client",
+                "--ask"
+            ])),
             Some((
-                Asker::Client(PathBuf::from("C:\\Users\\a user\\Floti\\desktop\\host-client")),
+                Asker::Client(PathBuf::from(
+                    "C:\\Users\\a user\\Floti\\desktop\\host-client"
+                )),
                 Step::Ask
             ))
         );
         assert_eq!(
-            parse(&args(&["/home/me/.local/share/floti/desktop/host-client", "--stop"])),
+            parse(&args(&[
+                "/home/me/.local/share/floti/desktop/host-client",
+                "--stop"
+            ])),
             Some((
-                Asker::Client(PathBuf::from("/home/me/.local/share/floti/desktop/host-client")),
+                Asker::Client(PathBuf::from(
+                    "/home/me/.local/share/floti/desktop/host-client"
+                )),
                 Step::Stop
             ))
         );
