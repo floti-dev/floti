@@ -638,7 +638,10 @@ async fn a_launchs_first_message_is_its_opening_prompt_over_the_profiles_and_a_b
         })
         .await
         .expect("launch with a blank first message");
-    assert_eq!(world.run_in(&blank)["openingPrompt"], "the profile's prompt");
+    assert_eq!(
+        world.run_in(&blank)["openingPrompt"],
+        "the profile's prompt"
+    );
     host.stop(HostStopReason::Stop).await;
 }
 

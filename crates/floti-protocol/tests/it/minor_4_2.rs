@@ -30,7 +30,8 @@ fn record_of(version: ProtocolVersion) -> Value {
 }
 
 #[test]
-fn protocol_4_2_adds_only_the_inventorys_shared_shape_fields_the_agents_md_kind_and_a_launchs_first_message() {
+fn protocol_4_2_adds_only_the_inventorys_shared_shape_fields_the_agents_md_kind_and_a_launchs_first_message()
+ {
     assert!(PROTOCOL_VERSION >= V4_2);
     let found = differences(&record_text(V4_1), &record_text(V4_2)).unwrap();
     assert_eq!(
