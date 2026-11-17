@@ -25,7 +25,7 @@ import { Overlay } from './Overlay'
  *
  * Both fields used to be free text, and both questions a person asked of them -
  * "is this subagent going to resolve", "will this server be available" - already
- * had an answer Helm computes and was not showing. This is that answer, narrowed
+ * had an answer Floti computes and was not showing. This is that answer, narrowed
  * to the two lists.
  */
 export interface ProfilePrediction {

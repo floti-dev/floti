@@ -9,10 +9,10 @@ export interface OwnDataBannerProps {
 }
 
 /**
- * Says that copying what only Helm's own database holds into the local host
+ * Says that copying what only Floti's own database holds into the local host
  * stopped part way, as a strip above the tabs like the version guard.
  *
- * Nothing is lost: Helm's database is never written by the copy, and the host
+ * Nothing is lost: Floti's database is never written by the copy, and the host
  * keeps every whole batch it was sent, so this is a fact to know rather than
  * something to fix. Dismissible for the session; it does not come back once
  * a later attempt finishes.

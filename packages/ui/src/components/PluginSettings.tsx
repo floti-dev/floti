@@ -24,7 +24,7 @@ import { Action, Divider, Fact, Group, Row, Select, SettingsPage, Verdict, useDr
  *
  * A plugin is a folder on this computer, registered by its path. The list says
  * which are on and which failed to load; a plugin's own page is everything
- * Helm knows about it - its settings, the secrets and hosts and programs its
+ * Floti knows about it - its settings, the secrets and hosts and programs its
  * manifest asks for, the tools it offers sessions, what it is costing, and its
  * log - and the controls that switch it off, reload it and remove it.
  */
@@ -232,7 +232,7 @@ export interface PluginPageProps {
   log: PluginLogLine[] | null
   secrets: SecretsState | null
   onSetEnabled: (enabled: boolean) => void
-  /** Whether the sessions Helm starts are offered the plugin's tools. */
+  /** Whether the sessions Floti starts are offered the plugin's tools. */
   onSetTools: (enabled: boolean) => void
   onReload: () => void
   /** The secrets only this plugin may use, for the remove dialog to offer. */
@@ -502,7 +502,7 @@ export function PluginPage({
 }
 
 /**
- * The tools the plugin offers the sessions Helm starts, and the switch for them.
+ * The tools the plugin offers the sessions Floti starts, and the switch for them.
  * Said with what follows from them: what the plugin answers is read by the
  * session, so it reaches the conversation the way anything the session reads
  * does.

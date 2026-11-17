@@ -240,7 +240,7 @@
   min-height: 1lh;
 }
 
-/* Shiki's own background is the theme's, and Helm's chrome is Helm's: the
+/* Shiki's own background is the theme's, and Floti's chrome is Floti's: the
  * island's fill is `--floti-surface-sunken` and nothing shiki emits may
  * override it. Only the text colours come from the grammar. */
 .floti-editor .shiki,

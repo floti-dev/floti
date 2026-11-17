@@ -450,7 +450,7 @@ function Header({
  *
  *   - `sandbox="allow-scripts"` and *not* `allow-same-origin`. The document
  *     gets an opaque origin, so it cannot read this window, its storage, or
- *     anything Helm has. Scripts are allowed because a generated report is
+ *     anything Floti has. Scripts are allowed because a generated report is
  *     usually a chart.
  *   - The source is a `floti-content://` URL bound to a token the main process
  *     minted for this file. The frame cannot name a path; it can only ask for
@@ -594,7 +594,7 @@ function ArtifactFrame({
 
 // ---------------------------------------------------------------------------
 
-/** Every version Helm has taken of this file - the same list the config
+/** Every version Floti has taken of this file - the same list the config
  * console's editor shows, over the same table, because it is the same snapshot
  * mechanism. */
 function History({

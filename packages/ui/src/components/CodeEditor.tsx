@@ -16,7 +16,7 @@ import { caretAt, editorKeyAction, findMatchesIn, lineStarts, syntaxFor } from '
 import { CaretIcon, CloseIcon, SearchIcon } from './icons'
 
 /**
- * The one editor. Both of Helm's edit surfaces are this component.
+ * The one editor. Both of Floti's edit surfaces are this component.
  *
  * It is a `<textarea>` with a highlighted `<pre>` underneath it rather than a
  * code-editor framework, and SPEC records the four reasons and the condition

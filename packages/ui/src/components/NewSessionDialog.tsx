@@ -142,7 +142,7 @@ interface Cursor {
  * Ctrl+N: a folder, an agent, a profile, a model, an effort and a permission
  * mode, or a conversation to reopen there - and Enter.
  *
- * Starting sessions is most of what Helm is used for, so this is built for the
+ * Starting sessions is most of what Floti is used for, so this is built for the
  * keyboard: type to narrow the folders, the arrows to move, Tab to the agent,
  * then the profile and the rest, Enter to start and Ctrl+Enter to start beside. Nothing here
  * launches on a click; a click highlights, which is what puts the launch

@@ -128,7 +128,7 @@ export function profilesInOrder(profiles: readonly Profile[]): Profile[] {
 
 /**
  * A path from `~` where it is under the home directory, for a row with no room
- * for the rest. Shown only - every path Helm acts on stays absolute.
+ * for the rest. Shown only - every path Floti acts on stays absolute.
  */
 export function homePath(path: string, home: string | null): string {
   if (home === null || home === '') return path
@@ -181,7 +181,7 @@ export interface SentenceWorktree {
 
 /**
  * The launch disclosure (DESIGN.md 5): what Enter will run, in words, with the
- * program, the folder and every flag Helm supplies in mono.
+ * program, the folder and every flag Floti supplies in mono.
  *
  * Built from the same profile fields main composes argv from, and in the same
  * terms: overlays by their folder's name, which is how their skills are typed

@@ -24,7 +24,7 @@ export interface HostLostBannerProps {
  * reach nothing until the link is back. Reconnect now tries at once rather
  * than after the wait. When ssh or the command could not get in, it shows
  * the last line it wrote, unedited, and the line to try by hand, where ssh
- * can ask for what it needs: Helm never answers it.
+ * can ask for what it needs: the desktop never answers it.
  *
  * It goes by itself once the host is connected again, so it has no close.
  */

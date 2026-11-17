@@ -5,7 +5,7 @@
  * generated in the main process and arrives as a string, so there is no call
  * site to put a class on. A `prose` plugin would work too and would bring a
  * type scale, a colour set and a set of opinions that are not this app's -
- * every value below is one of Helm's own tokens.
+ * every value below is one of Floti's own tokens.
  *
  * The measure is the decision everything else follows from. Body text is capped
  * at 74 characters; wide things - tables, code, callouts - are allowed past it,
@@ -284,7 +284,7 @@
  * properties, and the rules below pick a side. That is what lets the theme
  * toggle recolour every open document instantly instead of re-highlighting it.
  *
- * The block's own background is overridden to Helm's sunken surface: shiki's
+ * The block's own background is overridden to Floti's sunken surface: shiki's
  * themes bring their own, and two greys a shade apart inside one pane look like
  * a rendering mistake rather than a choice.
  * ------------------------------------------------------------------------ */

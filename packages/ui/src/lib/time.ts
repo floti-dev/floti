@@ -16,7 +16,7 @@ const YEAR = 365 * DAY
 export function formatAge(at: number, now = Date.now()): string {
   const ms = now - at
   // Clock skew, or a machine whose time stepped back between the CLI writing
-  // the record and Helm reading it. "in 3 minutes" would be nonsense; "now" is
+  // the record and Floti reading it. "in 3 minutes" would be nonsense; "now" is
   // at least not wrong by much.
   if (ms < MINUTE) return 'now'
   if (ms < HOUR) return `${String(Math.floor(ms / MINUTE))}m`

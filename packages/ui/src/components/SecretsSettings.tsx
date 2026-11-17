@@ -34,7 +34,7 @@ import { Action, Group, SettingsPage, Verdict } from './SettingsKit'
 export interface SecretPluginChoice {
   id: string
   name: string
-  /** The origins its `helm.fetch` may reach: the hosts offered for its secrets. */
+  /** The origins its `floti.fetch` may reach: the hosts offered for its secrets. */
   network: readonly string[]
   /** The keys its manifest declares. */
   secrets: readonly string[]

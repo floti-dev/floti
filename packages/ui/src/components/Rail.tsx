@@ -36,7 +36,7 @@ export interface RailItem {
 }
 
 /**
- * How a rail icon is drawn: Helm's glyphs spread these, a plugin's icon takes
+ * How a rail icon is drawn: Floti's glyphs spread these, a plugin's icon takes
  * the width, so the two cannot drift apart.
  *
  * 20px in a 40px button, half the button as at every size the rail has had.

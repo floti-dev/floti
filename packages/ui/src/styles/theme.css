@@ -36,7 +36,7 @@
  * `hover:` is a plain `:hover`, not one gated on `@media (hover: hover)`.
  *
  * Tailwind v4 wraps every hover utility in that query so a phone does not get
- * a hover state stuck to the last thing tapped. Helm is a desktop shell driven
+ * a hover state stuck to the last thing tapped. Floti is a desktop shell driven
  * by a pointer and has no touch story, so the gate can only ever cost - and it
  * did: measured on a Windows 11 machine where Chromium answers `(hover: hover)`
  * false, `(pointer: fine)` false and `(any-pointer: fine)` false, which it will
@@ -305,7 +305,7 @@ select:focus-visible {
   -webkit-app-region: no-drag;
 }
 
-/* Every native <select> draws its list as Helm does (DESIGN.md "Menus").
+/* Every native <select> draws its list as Floti does (DESIGN.md "Menus").
  *
  * Left to the platform, Chromium painted the open list white with the theme's
  * light text on it - in every theme, since what it reads is the control's own
@@ -519,7 +519,7 @@ select option[data-agent-bad]::after {
 /**
  * A session row is isolated from every other row's layout.
  *
- * The session list is the one place in Helm where the number of rows is the
+ * The session list is the one place in Floti where the number of rows is the
  * user's history rather than a screenful of anything. Measured on a machine
  * with 964 of them: 8,516 DOM nodes and a 45,718px scroll height in a 649px
  * viewport. Changing the width the list lays out against - which is what a
