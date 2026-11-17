@@ -17,7 +17,7 @@ describe('what went wrong reaching a host, one row of the design’s table each'
       title: 'Floti could not find ssh on this PC',
       line: 'Floti could not run ssh on this PC (ENOENT).'
     })
-    expect(failure.fix).toContain('Install the OpenSSH client (on Windows, Settings > System > Optional features)')
+    expect(failure.fix).toBe('Install the OpenSSH client (on Windows, Settings > System > Optional features).')
   })
 
   it('S9, S10: a command whose program is not on this PC names that program', () => {
@@ -34,7 +34,7 @@ describe('what went wrong reaching a host, one row of the design’s table each'
     const line = 'ssh: Could not resolve hostname build-box: Name or service not known'
     const failure = classify(line)
     expect(failure).toMatchObject({ kind: 'unresolved', title: 'ssh does not know build-box', saidBy: 'ssh said', line })
-    expect(failure.fix).toContain('add a Host for it to ~/.ssh/config')
+    expect(failure.fix).toBe('Check the name, or add a Host for it to ~/.ssh/config.')
   })
 
   it('S12: timed out, refused or no route', () => {
@@ -45,22 +45,21 @@ describe('what went wrong reaching a host, one row of the design’s table each'
     ]) {
       const failure = classify(line)
       expect(failure).toMatchObject({ kind: 'unreachable', title: 'Can’t reach build-box', line, chip: 'Unreachable' })
-      expect(failure.fix).toContain('its SSH server is running')
-      expect(failure.fix).toContain('ssh build-box')
+      expect(failure.fix).toBe('Check it is on and its SSH server is running (on Windows, OpenSSH Server).')
     }
   })
 
   it('S13: ssh wants a password, passphrase or code', () => {
     const failure = classify('build-box: Permission denied (publickey,password).')
     expect(failure).toMatchObject({ kind: 'password', title: 'build-box wants a password', chip: 'Needs a key' })
-    expect(failure.fix).toContain('loaded into the SSH agent, so ssh build-box gets in without asking')
+    expect(failure.fix).toBe('Set up key sign-in, so ssh build-box gets in without asking.')
   })
 
   it('S14: ssh has not seen the host’s key', () => {
     const said = 'No ED25519 host key is known for build-box and you have requested strict checking.\nHost key verification failed.'
     const failure = classify('Host key verification failed.', { said })
     expect(failure).toMatchObject({ kind: 'unknownKey', title: 'ssh does not trust build-box yet', line: 'Host key verification failed.' })
-    expect(failure.fix).toBe('Run ssh build-box once in a terminal and check the fingerprint it shows. Floti never accepts a host key for you.')
+    expect(failure.fix).toBe('Run ssh build-box once in a terminal and check the key it shows.')
   })
 
   it('S14: the host’s key changed, told from the lines before the last', () => {
@@ -73,22 +72,44 @@ describe('what went wrong reaching a host, one row of the design’s table each'
       kind: 'hostKeyChanged',
       title: 'build-box’s host key changed'
     })
+    expect(classify('Host key verification failed.', { said }).fix).toBe(
+      'Run ssh build-box once in a terminal and check the key it shows.'
+    )
   })
 
   it('S15: the login prints text before the command runs', () => {
     const failure = classify('Welcome to build-box!', { cause: { kind: 'loginOutput' } })
     expect(failure).toMatchObject({
       kind: 'loginOutput',
-      title: 'build-box’s login printed text where floti’s connection goes',
+      title: 'build-box’s shell prints text at login',
       saidBy: 'The login printed',
       line: 'Welcome to build-box!'
     })
-    expect(failure.fix).toContain('run only for interactive shells')
+    expect(failure.fix).toBe('Make its start-up files print only in interactive shells.')
   })
 
   it('S16: no build for its OS or CPU', () => {
-    const failure = classify('There is no floti for FreeBSD · arm64 yet.', { cause: { kind: 'noBuild', system: 'FreeBSD arm64' } })
-    expect(failure).toMatchObject({ kind: 'noBuild', title: 'There is no floti for FreeBSD arm64 yet' })
+    const failure = classify('There is no floti for FreeBSD · arm64 yet.', { cause: { kind: 'noBuild', system: 'FreeBSD · arm64' } })
+    expect(failure).toMatchObject({
+      kind: 'noBuild',
+      title: 'There is no floti for FreeBSD on arm64 yet',
+      fix: 'That computer can’t be a host yet.'
+    })
+  })
+
+  it('S17: a download that answers 404 says that version has no published floti, and to update Floti here', () => {
+    const said = 'curl: (22) The requested URL returned error: 404\ncould not download https://example.test/floti-3.0.0-linux-x64.'
+    const failure = classify('could not download https://example.test/floti-3.0.0-linux-x64.', {
+      cause: { kind: 'install', step: 'install', folder: '~/.local/bin', said, version: '3.0.0' }
+    })
+    expect(failure).toMatchObject({
+      kind: 'installFailed',
+      title: 'floti 3.0.0 has no published build to download',
+      saidBy: 'The install script said',
+      line: 'could not download https://example.test/floti-3.0.0-linux-x64.',
+      fix: 'Update Floti on this PC, then try again.'
+    })
+    expect(JSON.stringify(failure)).not.toMatch(/github|reaches/i)
   })
 
   it('S17: the install failed, with the script’s last line', () => {
@@ -101,7 +122,17 @@ describe('what went wrong reaching a host, one row of the design’s table each'
       saidBy: 'The install script said',
       line: 'floti-install: the SHA-256 does not match'
     })
-    expect(failure.fix).toBe('Run the install command in a terminal there to see all of its output, then try again.')
+    expect(failure.fix).toBe('Run the install command there to see its full output.')
+  })
+
+  it('S17: a 404 in the only line written, as on Windows, says the same', () => {
+    const line = 'Exception calling "DownloadFile": "The remote server returned an error: (404) Not Found."'
+    const failure = classify(line, { cause: { kind: 'install', step: 'install', folder: '%LOCALAPPDATA%\\Programs\\Floti\\bin', version: '3.0.0' } })
+    expect(failure).toMatchObject({
+      title: 'floti 3.0.0 has no published build to download',
+      line,
+      fix: 'Update Floti on this PC, then try again.'
+    })
   })
 
   it('S18: its floti is newer than this Floti, naming both versions', () => {

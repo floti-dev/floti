@@ -329,6 +329,19 @@ describe('installing floti on a host’s computer, from the desktop', () => {
     expect(w.lines().some((line) => line.endsWith(' setup'))).toBe(false)
   })
 
+  it('S17: a download that fails keeps everything the script wrote, so a 404 before its last line is seen', async () => {
+    const stderr =
+      'curl: (22) The requested URL returned error: 404\nfloti install: could not download https://example.test/floti-2.6.0-linux-x64.\n'
+    const w = world([NO_FLOTI, [SYSTEM_LINE, { stdout: 'Linux x86_64\n' }], ['sh -c ', { code: 1, stderr }]])
+    await w.installer.check({ transport: SSH })
+    expect(await w.installer.install('offer-1')).toEqual({
+      ok: false,
+      step: 'install',
+      lastLine: 'floti install: could not download https://example.test/floti-2.6.0-linux-x64.',
+      said: stderr.trim()
+    })
+  })
+
   it('S15: a setup that fails there says its last line', async () => {
     const w = world([
       ['/home/me/.local/bin/floti setup', { code: 1, stderr: 'floti setup: schtasks: Access is denied.\n' }],

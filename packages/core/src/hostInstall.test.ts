@@ -25,6 +25,7 @@ import {
   restartHostConfirmTone,
   restartHostDetail,
   restartHostQuestion,
+  saysDownloadNotFound,
   saysNotFound
 } from './hostInstall'
 import type { InstallOffer } from './hostInstall'
@@ -167,13 +168,74 @@ describe('which floti goes to a computer', () => {
   it('S15: names the step that failed, and says a floti that was there still works', () => {
     expect(describeInstallFailure('install', 'build-box', '~/.local/bin')).toEqual({
       title: 'Installing floti on build-box failed',
-      fix: 'Nothing replaced a floti that was there. Check that ~/.local/bin there can be written to and, for a download, that build-box reaches github.com, then try again.'
+      fix: 'Nothing replaced a floti that was there. Check that ~/.local/bin there can be written to, then try again.'
     })
     expect(describeInstallFailure('stop', 'build-box', '~/.local/bin').fix).toContain('its sessions are still running')
     expect(describeInstallFailure('update', 'build-box', '~/.local/bin')).toEqual({
       title: 'floti update failed on build-box',
       fix: 'floti update replaces nothing until every download has passed its checks, and its sessions keep running. Run floti update in a terminal there to see all of its output, then try again.'
     })
+  })
+})
+
+describe('a download that answers 404', () => {
+  const folder = '~/.local/bin'
+
+  it('says that version has no published floti and to update Floti on this PC, never to check the network', () => {
+    const said = [
+      'curl: (22) The requested URL returned error: 404',
+      'could not download https://github.com/floti-dev/floti/releases/download/v3.0.0/floti-3.0.0-linux-x64.'
+    ].join('\n')
+    const words = describeInstallFailure('install', 'build-box', folder, { said, version: '3.0.0' })
+    expect(words).toEqual({
+      title: 'floti 3.0.0 has no published build to download',
+      fix: 'Update Floti on this PC, then try again.'
+    })
+    expect(JSON.stringify(words)).not.toMatch(/github|reaches/i)
+  })
+
+  it('reads PowerShell’s 404 the same way', () => {
+    const said = 'Exception calling "DownloadFile": "The remote server returned an error: (404) Not Found."'
+    expect(describeInstallFailure('install', 'win-box', folder, { said, version: '3.0.0' }).title).toBe(
+      'floti 3.0.0 has no published build to download'
+    )
+  })
+
+  it('reads the last line when nothing more was written, as install.ps1 writes one line on Windows', () => {
+    const lastLine = 'Exception calling "DownloadFile": "The remote server returned an error: (404) Not Found."'
+    expect(describeInstallFailure('install', 'win-box', folder, { lastLine, version: '3.0.0' })).toEqual({
+      title: 'floti 3.0.0 has no published build to download',
+      fix: 'Update Floti on this PC, then try again.'
+    })
+    // What was said wins over the last line.
+    expect(
+      describeInstallFailure('install', 'win-box', folder, { said: 'curl: (6) no', lastLine, version: '3.0.0' }).title
+    ).toBe('Installing floti on win-box failed')
+  })
+
+  it('reads wget’s 404, GNU’s ERROR 404 and busybox’s 404 Not Found', () => {
+    expect(saysDownloadNotFound('2026-11-16 12:00:00 ERROR 404: Not Found.')).toBe(true)
+    expect(saysDownloadNotFound('wget: server returned error: HTTP/1.1 404 Not Found')).toBe(true)
+    expect(saysDownloadNotFound('Connecting to example.test (1.2.3.4:443)\nwget: server returned error: HTTP/1.1 404 Not Found')).toBe(true)
+    expect(saysDownloadNotFound('wget: unable to resolve host address ‘github.com’')).toBe(false)
+  })
+
+  it('is told apart from a download that failed for another reason', () => {
+    expect(saysDownloadNotFound('curl: (6) Could not resolve host: github.com')).toBe(false)
+    expect(saysDownloadNotFound('floti was installed, but /opt/404/floti is not where it should be.')).toBe(false)
+    expect(saysDownloadNotFound('curl: (22) The requested URL returned error: 404')).toBe(true)
+    const other = describeInstallFailure('install', 'build-box', folder, {
+      said: 'curl: (6) Could not resolve host: github.com',
+      version: '3.0.0'
+    })
+    expect(other.title).toBe('Installing floti on build-box failed')
+  })
+
+  it('applies to the install step only', () => {
+    const said = 'curl: (22) The requested URL returned error: 404'
+    expect(describeInstallFailure('setup', 'build-box', folder, { said, version: '3.0.0' }).title).toBe(
+      'floti is installed on build-box, but its setup failed'
+    )
   })
 })
 
