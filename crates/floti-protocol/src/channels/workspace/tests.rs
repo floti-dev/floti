@@ -262,6 +262,8 @@ fn inventory() -> ClaudeInventory {
         settings: true,
         claude_md: true,
         mcp: false,
+        agents_md: true,
+        agents_dir: true,
     }
 }
 
@@ -722,6 +724,28 @@ fn a_scan_request_may_leave_out_include_git() {
     let request = Payload::serialized(&BTreeMap::<String, bool>::new()).unwrap();
     let decoded: ScanRequest = from_payload(&request).unwrap();
     assert_eq!(decoded.include_git, None);
+}
+
+#[test]
+fn an_inventory_without_the_shared_shape_is_read_and_sent_as_before_protocol_4_2() {
+    // What a host before 4.2 sends, and a cached row it wrote, reads as no
+    // `AGENTS.md` and no `.agents/`.
+    let before = serde_json::json!({
+        "skills": 2, "commands": 0, "agents": 0,
+        "hooks": false, "settings": false, "claudeMd": true, "mcp": false
+    });
+    let read: ClaudeInventory = serde_json::from_value(before.clone()).unwrap();
+    assert!(!read.agents_md && !read.agents_dir);
+    // A folder with neither is sent in the shape an older client knows.
+    assert_eq!(serde_json::to_value(read).unwrap(), before);
+    let shared = ClaudeInventory {
+        agents_md: true,
+        agents_dir: true,
+        ..read
+    };
+    let sent = serde_json::to_value(shared).unwrap();
+    assert_eq!(sent["agentsMd"], true);
+    assert_eq!(sent["agentsDir"], true);
 }
 
 #[test]

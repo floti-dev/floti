@@ -1,7 +1,7 @@
 // Generated from the floti-protocol crate by `cargo run -p floti-protocol --bin generate`. Do not edit.
 
 /** The protocol version these declarations describe. */
-export const PROTOCOL_VERSION = { major: 4, minor: 1 } as const;
+export const PROTOCOL_VERSION = { major: 4, minor: 2 } as const;
 
 /** The link version of the session keeper a host of this build takes back. */
 export const KEEPER_LINK_VERSION = 1;
@@ -906,10 +906,27 @@ text: string,
 at: string, };
 
 /**
- * What a project's `.claude/` folder holds, counted the way Claude Code
- * resolves it.
+ * What a project holds in either shape a workspace is written in: Claude's
+ * (`CLAUDE.md` and `.claude/`) and the shared one (`AGENTS.md` and
+ * `.agents/skills`), counted the way a launch composes them.
  */
-export type ClaudeInventory = { skills: number, commands: number, agents: number, hooks: boolean, settings: boolean, claudeMd: boolean, mcp: boolean, };
+export type ClaudeInventory = { 
+/**
+ * The skills in `.claude/skills` and `.agents/skills`, a skill folder
+ * in both counted once.
+ */
+skills: number, commands: number, agents: number, hooks: boolean, settings: boolean, claudeMd: boolean, mcp: boolean, 
+/**
+ * An `AGENTS.md` in the project: the shared shape's instructions file.
+ * Absent reads false, as it does from a host before protocol 4.2.
+ */
+agentsMd?: boolean, 
+/**
+ * A `.agents/` folder in the project: the shared shape's, beside
+ * `.claude/`. Absent reads false, as it does from a host before
+ * protocol 4.2.
+ */
+agentsDir?: boolean, };
 
 export type ClientInfo = { 
 /**
