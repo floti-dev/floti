@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { cn } from '../lib/cn'
 import { shortcutLabel } from '../lib/platform'
-import { HelmMarkIcon, TerminalIcon } from './icons'
+import { FlotiMarkIcon, TerminalIcon } from './icons'
 
 export interface WelcomePaneProps {
   roots: string[]
@@ -32,7 +32,7 @@ export function WelcomePane({
       <div className="max-w-md text-center">
         {/* The mark at watermark scale, standing in for the wordmark that used
             to head this pane - the same argument the title bar's comment makes,
-            with more force here: "Helm" set above a Helm wheel says the name
+            with more force here: "Floti" set above the Floti mark says the name
             twice to someone already looking at the app.
 
             Hairline weight, because this is the empty state of the workspace
@@ -40,31 +40,21 @@ export function WelcomePane({
             what to do next. A watermark that wins that contest has become a
             splash screen.
 
-            The alpha is on the **element**, not in the colour, and that is the
-            part to leave alone. `HelmMarkIcon` is spokes, handles, a rim and
-            a hub painted as separate shapes, so a semi-transparent
-            `currentColor` composites each one over the last: measured at
-            `text-border-strong`, a spoke came out at R=59 as intended, the rim
-            at 87 where two shapes cross, and the hub - where all eight spokes
-            converged under a solid boss, in the wheel before this one - at
-            **188**, three times the value asked
-            for, and near-black on white the other way. The mark had a hot bead
-            in the middle of it. CSS `opacity` renders the subtree to a buffer
-            first and composites it once, so the wheel is flat at any size.
+            The alpha is on the **element**, not in the colour. CSS `opacity`
+            composites the mark once, so it stays flat at any size whatever it
+            is drawn from; a semi-transparent `currentColor` would be painted
+            per shape, and a mark of overlapping shapes would darken where they
+            cross. The mark is one path today, and this keeps it from mattering.
 
             Which leaves the colour opaque, and `fg-subtle` is the one token
             carrying the same value in both modes (#75798C, theme.css) - so a
-            single opacity lands on the same composite either side. Measured off
-            the design shot at 35%: rgb(58 60 77) on the dark island against
-            border-strong's own rgb(59 60 74), and rgb(207 208 215) on the light
-            one against its rgb(208 209 212). The hairline the rest of the app
-            draws its edges with, arrived at without the stacking.
+            single opacity lands on the same composite either side: at 35%, the
+            hairline the rest of the app draws its edges with.
 
-            Vector, so it is the taskbar icon's own drawing at 192px rather than
-            a bitmap resampled to it (see `HelmMarkIcon`) - the one size where a
-            192px .ico entry does not exist and a resampled 256 would be the
-            softest thing on the pane. */}
-        <HelmMarkIcon
+            Vector, so at 192px it is drawn at 192px rather than resampled from
+            the icon file's 256px image, which would be the softest thing on
+            the pane. */}
+        <FlotiMarkIcon
           width={192}
           height={192}
           role="img"

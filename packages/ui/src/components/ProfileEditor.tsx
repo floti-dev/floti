@@ -17,7 +17,7 @@ import {
 } from '@helm/core/types'
 import { cn } from '../lib/cn'
 import { Checkbox } from './Checkbox'
-import { CaretIcon, CloseIcon, HelmMarkIcon } from './icons'
+import { CaretIcon, CloseIcon, FlotiMarkIcon } from './icons'
 import { Overlay } from './Overlay'
 
 /**
@@ -295,7 +295,7 @@ export function ProfileEditor({
       onDismiss={onCancel}
     >
       <header className="flex shrink-0 items-center gap-[9px] px-[22px] pt-[18px]">
-        <HelmMarkIcon width={13} height={13} className="shrink-0 text-accent" />
+        <FlotiMarkIcon width={16} height={16} className="shrink-0 text-accent" />
         <h2 className="text-[15px] font-medium tracking-tight text-fg">
           {'id' in initial ? 'Edit profile' : 'New profile'}
         </h2>

@@ -860,6 +860,16 @@ overrides the gate; keep it.
     and the mark sits in its 48px column right after them. No right reserve.
   - **Linux**: the native frame stays, and the strip sits under it as on
     Windows.
+- **The mark** (`FlotiMarkIcon`): the longship in one colour, filled with
+  the text token of where it sits - `accent` in the title bar (20px) and in
+  the New workspace and profile dialogs' headers (16px), `fg-subtle` at 35%
+  opacity as the welcome pane's 192px watermark. Never under 16px: below it
+  the shields and waves close up. The app icon is the colour mark in its
+  circle (slate, sky and ember), the same for every theme because the
+  taskbar is not Floti's to theme. Those three colours are the artwork's,
+  kept with it in `assets/brand/`, and are not tokens: no component draws
+  in them. The lockup (the mark and the word) heads the README and is not
+  used in the app's chrome.
 - **The rail**: 48px of 40px icon buttons on the canvas, `rounded-well`, each
   a 20px glyph (`RAIL_ICON`) drawn with a stroke thinned to keep the 1.6px line
   of the rest of the chrome - bigger, not bolder. Ordered by how often each is

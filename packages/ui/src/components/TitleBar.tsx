@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { cn } from '../lib/cn'
 import { isMac } from '../lib/platform'
-import { HelmMarkIcon } from './icons'
+import { FlotiMarkIcon } from './icons'
 import { RAIL_ICON } from './Rail'
 
 /**
@@ -28,7 +28,7 @@ export function TitleBar(): JSX.Element {
         {/* The mark alone - a wordmark beside it would say "Floti" to someone
             already looking at Floti. The accessible name stays, because the
             mark is the only thing identifying the window. */}
-        <HelmMarkIcon
+        <FlotiMarkIcon
           width={RAIL_ICON.width}
           height={RAIL_ICON.height}
           role="img"
