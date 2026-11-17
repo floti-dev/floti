@@ -289,7 +289,7 @@ A **plugin** you add reaches the network on the terms its manifest states.
 Its pages have none of their own: every request goes through Floti, to the
 hosts the manifest names and nowhere else, with every redirect checked against
 the same list. A plugin can do that on its own schedule - that is what its
-background page is for - so "because you asked" means you added it. When it
+background is for - so "because you asked" means you added it. When it
 needs a token, you type it into **Settings → Secrets** and say which hosts and
 plugins may use it; the local host stores it sealed by your OS's own store
 for your account, refuses to store it at all when that is unavailable, fills it into

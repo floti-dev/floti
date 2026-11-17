@@ -121,16 +121,15 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   method. `term:*` (the spike page's single pty) and `session:*` (the host's
   sessions) never mix.
 - A host channel added to `shared/ipc.ts` is also declared in
-  `crates/floti-protocol`, or listed there as client-only or host-internal
-  with a reason (`channels/boundary.rs`), and the generated files are
-  rewritten with `cargo run -p floti-protocol --bin generate`. A crate test
-  reads `shared/ipc.ts` and fails naming any channel that is neither.
-- Electron IPC carries only what `channels/boundary.rs` lists as client-only,
-  and its host-internal channels from the hidden plugin window; every other
-  call goes over the page's own protocol connection to the host.
-  `e2e/boundary.spec.ts` fails naming any channel that crossed. Main runs no
-  session, terminal, config reader, content, template or scan service of its
-  own; those are the host's.
+  `crates/floti-protocol`, or listed there as client-only with a reason
+  (`channels/boundary.rs`), and the generated files are rewritten with
+  `cargo run -p floti-protocol --bin generate`. A crate test reads
+  `shared/ipc.ts` and fails naming any channel that is neither.
+- Electron IPC carries only what `channels/boundary.rs` lists as client-only;
+  every other call goes over the window's own protocol connection to the
+  host. `e2e/boundary.spec.ts` fails naming any channel that crossed. Main
+  runs no session, terminal, config reader, content, template or scan service
+  of its own; those are the host's.
 - The host never opens `helm.db` or learns Floti's data folder; what only
   `helm.db` holds, main sends it on `carry:*` (`main/host/own-data.ts`). Main
   owns the window's lifetime and `helm.db`: `will-quit` releases the database,
@@ -248,8 +247,8 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   named on its own; never a `floti agent:*` wildcard, never `run`, and a
   user's deny rule still wins.
 - A host serves a plugin's tools only for a plugin it has itself, on,
-  error-free and with its tools on (`PluginRelay::installed`), whatever a
-  client offers.
+  error-free and with its tools on (`HostPluginTools::installed`); a
+  client's `agentPlugin:*` changes nothing.
 
 ## Plugins
 
@@ -257,10 +256,10 @@ workspace (`Cargo.toml` at the root) for the Floti host; pnpm does not see it.
   with. The SDK ships what `files` in its `package.json` lists, and nothing it
   ships may reach outside its own folder: run through npx, that folder is a
   cache.
-- A plugin page's CSP has `connect-src 'none'`: `floti.fetch` (`helm.fetch` at
-  version 1) is its only way out, to origins the manifest lists and its own
-  service, checked again on every redirect hop. `helm.exec` runs only programs
-  the manifest names, with an argument array and no shell.
+- A plugin page's CSP has `connect-src 'none'`: `floti.fetch` is its only way
+  out, to origins the manifest lists and its own service, checked again on
+  every redirect hop. `floti.exec` runs only programs the manifest names, with
+  an argument array and no shell.
 - Frames live outside React (`app/pluginFrames.ts`) and move between slots
   with `moveBefore`; `appendChild` would reload them.
 - A plugin's failure shows in its own surface (`PluginFrame`), never in Floti's

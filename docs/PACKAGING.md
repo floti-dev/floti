@@ -1800,10 +1800,10 @@ installer that a firewall prompt follows is a bad first impression, and a
 loopback bind produces no prompt on Windows.
 
 **Plugins reach the hosts their manifests name.** A plugin page has no network
-of its own (`connect-src 'none'`); `helm.fetch` sends its requests from the
+of its own (`connect-src 'none'`); `floti.fetch` sends its requests from the
 local host, only to an origin the manifest lists, following redirects one
 hop at a time so that every hop is checked against the same list. A plugin's
-background page may fetch on its own schedule, which is the plugin's doing
+background may fetch on its own schedule, which is the plugin's doing
 rather than Floti's - the user added it - and is why the sentence above says
 so. A plugin never holds a secret: it writes `{{key}}`, and the host fills in
 a value the user typed into Settings > Secrets, only for an origin and a

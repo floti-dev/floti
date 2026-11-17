@@ -2,8 +2,7 @@
 
 `@floti-dev/plugin-sdk` holds the types, the manifest validator and schema,
 helpers for any framework and the `helm-plugin` command for building Floti plugins. The runtime
-itself - the bridge (`window.floti`, or `window.helm` in a version 1 plugin),
-the theme and the primitives stylesheet - comes from the Floti that runs the
+itself - the bridge (`window.floti`), the theme and the primitives stylesheet - comes from the Floti that runs the
 plugin, so a plugin never ships a copy of it.
 
 ## What a plugin is
@@ -13,8 +12,7 @@ You register the folder in Floti, and Floti reads the manifest and serves the
 folder to its pages.
 
 - Every page the plugin has is an ordinary HTML page, served at
-  `floti-plugin://<id>/<path>` (`helm-plugin://<id>/<path>` for a version 1
-  plugin). That origin is the plugin's identity: its
+  `floti-plugin://<id>/<path>`. That origin is the plugin's identity: its
   storage, its messages and its permissions are its own, and no other plugin
   or Floti page shares them.
 - Its pages run in a process of their own, separate from Helm's window. A
@@ -28,36 +26,12 @@ folder to its pages.
 
 ## API versions
 
-`apiVersion` in the manifest says which bridge the plugin was written
-against. Floti loads both; `helm-plugin create` writes version 2.
-
-| | version 2 | version 1 |
-| --- | --- | --- |
-| A page's bridge | `window.floti` | `window.helm` |
-| A page's origin | `floti-plugin://<id>/` | `helm-plugin://<id>/` |
-| `background` | a `.js` or `.mjs` module, run by the host in an isolate | a `.html` page, framed by a window |
-
-The bridge has the same calls in both: `floti.fetch` is what `helm.fetch` was.
-This guide writes `floti.`; a version 1 page writes `helm.`. A version 1
-plugin still loads and works as it did, beside version 2 ones.
-
-### Moving a version 1 plugin to version 2
-
-1. Set `"apiVersion": 2` in `helm-plugin.json`.
-2. In every page, call the bridge as `floti` rather than `helm`:
-   `helm.fetch(...)` becomes `floti.fetch(...)`, `helm.on(...)` becomes
-   `floti.on(...)`, and so on. The SDK's stores and its React and Vue helpers
-   find whichever bridge the page has, so code using them does not change.
-3. Turn the background page into a module: the script the page loaded, with
-   the HTML gone. Point `background` at it (`"background": "background/main.js"`).
-   It has no DOM, `window`, `localStorage` or IndexedDB, so anything it kept
-   there moves to the plugin's service, or to `BroadcastChannel` messages with
-   its pages. Its imports must be the plugin's own files by a relative path; a
-   bundler builds it as one ES module, or as modules whose imports are
-   relative.
-4. In TypeScript, reference `@floti-dev/plugin-sdk/background` for the
-   module and keep `@floti-dev/plugin-sdk/global` for the pages. See
-   [TypeScript](#typescript).
+`apiVersion` in the manifest says which plugin API the plugin was written
+against. Floti runs version 2, and `helm-plugin create` writes it: a page's
+bridge is `window.floti`, on the page's `floti-plugin://<id>/` origin, and
+`background` is a `.js` or `.mjs` module the host runs in an isolate. A
+manifest with any other `apiVersion` is refused, and Settings says that
+Floti runs only version 2.
 5. Run `npm run validate`, which checks the manifest at the version it names.
 
 Nothing else changes: the manifest's other fields, the tool server
@@ -70,7 +44,7 @@ and `HELM_PLUGIN_ID`, settings and secrets all stay as they are.
 npx @floti-dev/plugin-sdk create my-plugin
 ```
 
-writes a working version 2 plugin into `my-plugin/`: a rail icon, a sidebar
+writes a working plugin into `my-plugin/`: a rail icon, a sidebar
 panel, a tab and a background module that counts the tabs the panel opens on
 the rail icon, in plain HTML and JavaScript with nothing to build. Then, in
 Floti:
@@ -128,8 +102,8 @@ under `__helm/`, where Floti serves its runtime.
 
 | field | what it is |
 | --- | --- |
-| `apiVersion` | Required. `2`, or `1` for a plugin written against `window.helm`. See [API versions](#api-versions). A Floti that does not speak it refuses the plugin and says so in Settings. |
-| `id` | Required. 1-63 lower-case letters, digits and dashes, starting with a letter or digit. The plugin's origin is `floti-plugin://<id>`, or `helm-plugin://<id>` at version 1. Two loaded plugins cannot share an id. |
+| `apiVersion` | Required. `2`. See [API versions](#api-versions). A Floti that does not speak it refuses the plugin and says so in Settings. |
+| `id` | Required. 1-63 lower-case letters, digits and dashes, starting with a letter or digit. The plugin's origin is `floti-plugin://<id>`. Two loaded plugins cannot share an id. |
 | `name` | Required. What Floti calls the plugin, up to 60 characters. |
 | `version`, `description` | Shown in Settings. Up to 40 and 300 characters. |
 | `icon` | An `.svg` or `.png`, 64 KB at most. Drawn as a mask, so only its shape counts: it takes the rail's own colours. |
@@ -137,7 +111,7 @@ under `__helm/`, where Floti serves its runtime.
 | `panels` | Sidebar panels by name: `{ "title", "entry", "actions"? }`. |
 | `tabs` | Tabs by name: `{ "title", "entry" }`. |
 | `pageStrip` | `true` opens the tabs as pages in one tab of the plugin's own. See [Tabs](#tabs). |
-| `background` | Code that runs whenever the plugin is on: a `.js` or `.mjs` module at version 2, a `.html` page at version 1. See [Background](#background). |
+| `background` | Code that runs whenever the plugin is on: a `.js` or `.mjs` module. See [Background](#background). |
 | `commands` | Entries in the command palette: `{ "id", "title", "tab"? }`. |
 | `settings` | A settings page Floti draws: see [Settings](#settings). |
 | `network` | The origins `floti.fetch` may reach. |
@@ -254,7 +228,7 @@ is turned on and runs until it is turned off, whether or not any of its panels
 or tabs are open - the place to poll, to keep a badge current, to answer
 commands and to answer its [tools](#tools-for-sessions).
 
-At version 2 it is a module, `.js` or `.mjs`, and the host runs it on the
+It is a module, `.js` or `.mjs`, and the host runs it on the
 plugin's computer, in a V8 isolate of its own, with no window:
 
 ```json
@@ -298,11 +272,6 @@ What it cannot:
 
 A module that throws as it starts, or uses more than 128 MB, is stopped, and
 Settings says so. **Reload** starts it again.
-
-At version 1 the background is a page with no surface, framed by a window. It
-shares the plugin's origin, so its `localStorage`, IndexedDB and
-`BroadcastChannel`s are the same ones the panels and tabs see. If it crashes it
-stays stopped, and **Reload** starts it again.
 
 ### Status bar item and badge
 
@@ -371,23 +340,21 @@ one. `secret` settings are not among the values: a page asks
 
 ## The bridge: `window.floti`
 
-Floti puts `window.floti` on every page of a version 2 plugin it serves, before
-the page's own scripts run, and `window.helm` on every page of a version 1
-plugin: one or the other, with the same members. Calls made before it has
-connected to Floti wait for it rather than fail. It cannot be redefined, so in
-a classic (non-module) script use the global `floti` as it is: a top-level
-`const floti` or `let floti` of your own is a SyntaxError and stops the whole
-file.
+Floti puts `window.floti` on every page of a plugin it serves, before the
+page's own scripts run. Calls made before it has connected to Floti wait for
+it rather than fail. It cannot be redefined, so in a classic (non-module)
+script use the global `floti` as it is: a top-level `const floti` or
+`let floti` of your own is a SyntaxError and stops the whole file.
 
 A page's calls - `fetch`, `exec`, settings, secrets, sessions and tools - run
 on the computer the plugin is on. What concerns only the page on screen stays
 where it is drawn: its surface, the theme, writing to the clipboard and
-opening a link in the Browser tab. A version 2 background module has `floti`
+opening a link in the Browser tab. A background module has `floti`
 too, less what needs a window: see [Background](#background).
 
 | member | what it does |
 | --- | --- |
-| `apiVersion` | `2` for `window.floti`, `1` for `window.helm`. |
+| `apiVersion` | `2`. |
 | `context` | `{ plugin, surface, name, params }`: where this page is running. `surface` is `panel`, `tab` or `background`; `name` is the panel's or tab's key. It never changes for the life of the page. |
 | `theme` | The current theme. See [Theme and styling](#theme-and-styling). |
 | `visible` | Whether the surface is on screen. Always false for the background. |
@@ -988,18 +955,16 @@ stores need neither, and nothing else in the SDK needs them.
 import type { FlotiBridge, FlotiBackground, HelmContext, PluginManifest } from '@floti-dev/plugin-sdk'
 ```
 
-`FlotiBridge` is a version 2 page's bridge and `HelmBridge` a version 1
-page's, with the same calls; `ApiVersion` is `1 | 2`. For the pages, once in
+`FlotiBridge` is a page's bridge; `ApiVersion` is `2`. For the pages, once in
 the project (a `.d.ts`, or `types` in `tsconfig.json`):
 
 ```ts
 /// <reference types="@floti-dev/plugin-sdk/global" />
 ```
 
-which types `window.floti` and the global `floti`, and `window.helm` and
-`helm` for a version 1 page.
+which types `window.floti` and the global `floti`.
 
-A version 2 background module has a `floti` of its own (`FlotiBackground`),
+A background module has a `floti` of its own (`FlotiBackground`),
 whose calls that need a window are typed as promises that reject. Check it
 apart from the pages, with a `tsconfig.json` of its own whose `lib` has no
 DOM (`["ES2023", "WebWorker"]` is the closest to what it has), and:
