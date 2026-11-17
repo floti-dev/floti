@@ -262,22 +262,28 @@ jobs:
       # The artefacts carry the release's floti for Windows x64, its floti
       # for Windows on arm64 as floti-arm64.exe, which `floti install-self`
       # installs on an arm64 computer, and the release's SHA-256 list, staged
-      # by scripts/stage-floti.mjs, which checks both against the list.
+      # by scripts/stage-floti.mjs, which checks both against the list, and
+      # the app's third-party notices, ending with the release's floti notices.
       - name: Build artefacts
         env:
           FLOTI_PREBUILT: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-windows-x64.exe
           FLOTI_PREBUILT_ARM64: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-windows-arm64.exe
           FLOTI_SHA256SUMS: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-SHA256SUMS
+          FLOTI_NOTICES: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-THIRD-PARTY-NOTICES.txt
         run: pnpm dist:win
 
-      - name: Verify the app carries the release's two Windows flotis and its SHA-256 list
+      - name: Verify the app carries the release's two Windows flotis, its SHA-256 list and the third-party notices
         shell: bash
         run: |
           set -euo pipefail
-          resources=packages/desktop/dist-app/win-unpacked/resources
+          app=packages/desktop/dist-app/win-unpacked
+          resources=$app/resources
           cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-windows-x64.exe" "$resources/floti.exe"
           cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-windows-arm64.exe" "$resources/floti-arm64.exe"
           cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS" "$resources/floti-SHA256SUMS"
+          node packages/desktop/scripts/third-party-notices.mjs check "$resources/THIRD-PARTY-NOTICES.txt" "$RUNNER_TEMP/floti-release/floti-$VERSION-THIRD-PARTY-NOTICES.txt"
+          test -s "$app/LICENSE.electron.txt"
+          test -s "$app/LICENSES.chromium.html"
 
       - name: Verify the artefacts carry their unpacked native modules
         shell: bash
@@ -327,19 +333,27 @@ jobs:
       # Developer ID, and no certificate or secret is involved. The app carries
       # the release's floti for macOS arm64 and the release's SHA-256 list,
       # staged by scripts/stage-floti.mjs, which checks the one against the
-      # other.
+      # other, and the app's third-party notices, ending with the release's
+      # floti notices.
       - name: Build artefacts
         env:
           FLOTI_PREBUILT: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-macos-arm64
           FLOTI_SHA256SUMS: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-SHA256SUMS
+          FLOTI_NOTICES: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-THIRD-PARTY-NOTICES.txt
         run: pnpm dist:mac
 
-      - name: Verify the app carries the release's floti and its SHA-256 list
+      # Electron's license and Chromium's are in Resources because
+      # scripts/after-extract.mjs put them there: electron-builder deletes them
+      # from a Mac build.
+      - name: Verify the app carries the release's floti, its SHA-256 list and the third-party notices
         run: |
           set -euo pipefail
           resources=packages/desktop/dist-app/mac-arm64/Floti.app/Contents/Resources
           cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-macos-arm64" "$resources/floti"
           cmp "$RUNNER_TEMP/floti-release/floti-$VERSION-SHA256SUMS" "$resources/floti-SHA256SUMS"
+          node packages/desktop/scripts/third-party-notices.mjs check "$resources/THIRD-PARTY-NOTICES.txt" "$RUNNER_TEMP/floti-release/floti-$VERSION-THIRD-PARTY-NOTICES.txt"
+          test -s "$resources/LICENSE.electron.txt"
+          test -s "$resources/LICENSES.chromium.html"
 
       - name: Verify the artefacts are arm64, ad-hoc signed, with Floti's icon and their native modules
         run: |
@@ -408,12 +422,23 @@ jobs:
 
       # The AppImage carries the release's static floti for Linux x64 and the
       # release's SHA-256 list, staged by scripts/stage-floti.mjs, which checks
-      # the one against the other.
+      # the one against the other, and the app's third-party notices, ending
+      # with the release's floti notices.
       - name: Build artefacts
         env:
           FLOTI_PREBUILT: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-linux-x64
           FLOTI_SHA256SUMS: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-SHA256SUMS
+          FLOTI_NOTICES: ${{ runner.temp }}/floti-release/floti-${{ env.VERSION }}-THIRD-PARTY-NOTICES.txt
         run: pnpm dist:linux
+
+      # In the unpacked app the AppImage is made from, which holds the same files.
+      - name: Verify the app carries the third-party notices
+        run: |
+          set -euo pipefail
+          app=packages/desktop/dist-app/linux-unpacked
+          node packages/desktop/scripts/third-party-notices.mjs check "$app/resources/THIRD-PARTY-NOTICES.txt" "$RUNNER_TEMP/floti-release/floti-$VERSION-THIRD-PARTY-NOTICES.txt"
+          test -s "$app/LICENSE.electron.txt"
+          test -s "$app/LICENSES.chromium.html"
 
       - name: Verify the AppImage is x64 and carries the release's floti, its SHA-256 list and its native modules
         run: |
@@ -586,8 +611,8 @@ jobs:
           sha256sum --check --strict "Floti-$VERSION-desktop-SHA256SUMS"
 
       # Exactly the files the release signs - the five desktop files and
-      # their list, the protocol types, the five floti files and their list -
-      # and nothing else, no two with names equal ignoring case, which GitHub
+      # their list, the protocol types, the five floti files, their list and
+      # floti's third-party notices - and nothing else, no two with names equal ignoring case, which GitHub
       # would refuse at upload. The signing job lists them, signatures and
       # all, in the summary.
       - name: Confirm the release's files

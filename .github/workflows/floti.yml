@@ -4,9 +4,11 @@ name: floti builds
 # own native runner: Windows x64 and arm64, macOS Apple Silicon, and Linux x64
 # and arm64, statically linked. Each file is run and checked to be for its own
 # OS and CPU (packages/desktop/scripts/floti-release.mjs), then all five are
-# listed with their SHA-256s in `floti-<version>-SHA256SUMS`. The files go up
-# as workflow artifacts only: this workflow tags, releases and publishes
-# nothing. release.yml calls it and publishes what it made.
+# listed with their SHA-256s in `floti-<version>-SHA256SUMS`, and the license
+# texts of the crates they link written beside them as
+# `floti-<version>-THIRD-PARTY-NOTICES.txt`. The files go up as workflow
+# artifacts only: this workflow tags, releases and publishes nothing.
+# release.yml calls it and publishes what it made.
 #
 # The Linux files are the gnu targets built with `+crt-static`, set in RUSTFLAGS
 # here and nowhere a local build reads: V8 (deno_core) ships no musl build. An
@@ -28,6 +30,9 @@ on:
       # floti's version is the desktop's (crates/host/build.rs).
       - "packages/desktop/package.json"
       - "packages/desktop/scripts/floti-release.mjs"
+      # floti's third-party notices, and the vendored files they hold.
+      - "packages/desktop/scripts/third-party-notices.mjs"
+      - "third-party/**"
       - ".github/workflows/**"
   pull_request:
     paths:
@@ -38,6 +43,8 @@ on:
       - "packages/core/drizzle/**"
       - "packages/desktop/package.json"
       - "packages/desktop/scripts/floti-release.mjs"
+      - "packages/desktop/scripts/third-party-notices.mjs"
+      - "third-party/**"
       - ".github/workflows/**"
   workflow_call:
 
@@ -153,8 +160,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # The five files and their SHA-256 list, as one artifact: what release.yml
-  # attaches to the release and hands the desktop's jobs.
+  # The five files, their SHA-256 list and floti's third-party notices, as one
+  # artifact: what release.yml attaches to the release and hands the desktop's
+  # jobs.
   files:
     needs: build
     runs-on: ubuntu-latest
@@ -180,6 +188,27 @@ jobs:
           node packages/desktop/scripts/floti-release.mjs sums "$RUNNER_TEMP/floti-release" "$version"
           cd "$RUNNER_TEMP/floti-release"
           sha256sum --check --strict "floti-$version-SHA256SUMS"
+
+      # The crates floti links, read with cargo metadata, and their sources,
+      # whose license files the notices hold.
+      - name: Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install
+          cargo fetch --locked
+
+      # floti's third-party notices, `floti-<version>-THIRD-PARTY-NOTICES.txt`
+      # (packages/desktop/scripts/third-party-notices.mjs), written after the
+      # list, which holds the five builds alone. The release carries it beside
+      # them and every desktop build carries it inside the app. A crate with no
+      # notice fails here, on the push that adds it.
+      - name: Write floti's third-party notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./packages/desktop/package.json').version")
+          node packages/desktop/scripts/third-party-notices.mjs floti "$RUNNER_TEMP/floti-release/floti-$version-THIRD-PARTY-NOTICES.txt"
 
       - uses: actions/upload-artifact@v4
         with:

@@ -137,6 +137,7 @@ its own:
 | `floti-<version>-linux-x64` | Linux on x64, statically linked: it needs no C library of the computer's own. |
 | `floti-<version>-linux-arm64` | Linux on arm64, statically linked. |
 | `floti-<version>-SHA256SUMS` | The SHA-256 of each of the five, in `sha256sum` format; `sha256sum --check` reads it. |
+| `floti-<version>-THIRD-PARTY-NOTICES.txt` | The license texts of the Rust crates the five link (see [Third-party notices](#third-party-notices)). |
 
 `.github/workflows/floti.yml` builds them, each on its own native runner
 (`windows-latest`, `windows-11-arm`, `macos-latest`, `ubuntu-latest`,
@@ -145,7 +146,8 @@ the workflows. `scripts/floti-release.mjs check` runs and checks each file: its
 header names its own OS and CPU, a Linux file names no program interpreter and
 needs no shared library (and `file` and `ldd` agree), and `floti --version` and
 `floti version` name this version, OS and CPU. Then `floti-release.mjs sums`
-refuses anything but exactly the five and writes their list. The files go up
+refuses anything but exactly the five and writes their list, and
+`third-party-notices.mjs floti` writes the notices beside them. The files go up
 as workflow artifacts only; a branch push tags, releases and publishes nothing.
 
 The Linux files are the gnu targets built with `-C target-feature=+crt-static`
@@ -169,7 +171,8 @@ compares both Windows copies with the release's files. On macOS that holds only
 because signing the app leaves floti alone (`signIgnore` in
 `electron-builder.yml`): signing a binary rewrites its signature, and so its
 SHA-256. The linker has already signed it ad-hoc, which is all Apple Silicon
-needs to run it.
+needs to run it. The same jobs hand it the release's floti notices
+(`FLOTI_NOTICES`), which the app's own notices end with.
 
 ### The protocol types
 
@@ -568,11 +571,11 @@ hand, no button to press, no artefact built on a developer's machine.
 remote, runs the checks, builds floti for its five targets, builds the Windows
 artefacts on a clean `windows-latest` runner, the macOS ones on `macos-latest`
 and the Linux one on `ubuntu-latest`, packs the protocol types, signs every
-file, and publishes one GitHub release with twenty-six files attached: the
+file, and publishes one GitHub release with twenty-eight files attached: the
 five desktop files and their SHA-256 list (`Floti-<version>-desktop-SHA256SUMS`,
 which `floti add desktop` checks a download against), the protocol types, the
-five floti files and their SHA-256 list, and a minisign signature beside each
-of those thirteen.
+five floti files, their SHA-256 list and floti's third-party notices, and a
+minisign signature beside each of those fourteen.
 
 GitHub's release asset names ignore case, and it refuses a file whose name
 equals one already uploaded, after the draft is made. So no two files of a
@@ -607,8 +610,8 @@ after them and finishes green.
 | `check`, `floti` | `ci.yml` and `floti.yml`, called. |
 | `protocol` | The crate's `generated_files` test, then `floti-protocol-<version>.tar.gz`. |
 | `release-windows`, `release-mac`, `release-linux` | One desktop build each, verified from the inside and handed on as a workflow artifact. None publishes anything. |
-| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s, writes and checks the desktop files' SHA-256 list (`scripts/release.mjs desktop-sums`), checks that the folder holds exactly the thirteen files to sign, no two with names equal ignoring case (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. Writes floti.dev's install scripts and, for a stable release, `update.json` (`scripts/floti-dev.mjs`) as `floti-dev-unsigned`. |
-| `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, and `update.json` with the comment `floti update.json`, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-six files with their SHA-256s in the run's summary and uploads them as `release-files`, and floti.dev's files as `floti-dev`. Never runs in a dry run. |
+| `assemble` | Gathers every file into one folder, composes the notes, checks floti's SHA-256s, writes and checks the desktop files' SHA-256 list (`scripts/release.mjs desktop-sums`), checks that the folder holds exactly the fourteen files to sign, no two with names equal ignoring case (`scripts/release.mjs check --unsigned`), and uploads them as `release-unsigned`. Writes floti.dev's install scripts and, for a stable release, `update.json` (`scripts/floti-dev.mjs`) as `floti-dev-unsigned`. |
+| `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, and `update.json` with the comment `floti update.json`, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-eight files with their SHA-256s in the run's summary and uploads them as `release-files`, and floti.dev's files as `floti-dev`. Never runs in a dry run. |
 | `sign-dry-run` | A dry run's `sign`: the same signing and checks, with a key pair made in the run. Runs only in a dry run. |
 | `publish` | The only job with write access. Attests every file in `release-files`, then creates the release from them, publishes it and confirms it. Never runs in a dry run. |
 | `homebrew`, `winget` | After `publish`, for a stable release only: push `Formula/floti.rb` to floti-dev/homebrew-tap and open the winget pull request ("Homebrew and winget"). Never run for a preview or in a dry run. |
@@ -646,7 +649,7 @@ after them and finishes green.
   publish: no tag, no release, no artefacts.
 - **The release is created as a draft and published in the same job**, which is
   not an approval gate. Publishing the draft is what creates the tag, so the
-  ref and all twenty-six assets appear together rather than leaving a window where
+  ref and all twenty-eight assets appear together rather than leaving a window where
   the app announces a version whose download page is empty. A run cancelled
   mid-upload leaves an unpublished draft; the next run deletes it and starts
   over.
@@ -689,11 +692,11 @@ after them and finishes green.
   It runs on any exe: `pnpm verify:artifact -- path/to/Floti-x.y.z-setup.exe`.
   The Mac artefacts get `verify-mac-artifact.mjs` and the AppImage
   `verify-linux-artifact.mjs`, described above.
-- **The confirmation expects all twenty-six files.** After publishing a
+- **The confirmation expects all twenty-eight files.** After publishing a
   release, `publish` asks `/releases/latest` - the endpoint the in-app check
   asks - and fails unless it names this tag, is not a draft, and lists exactly
   the files `scripts/release.mjs names` gives, signatures included. A preview
-  must be published, a pre-release, carry the same twenty-six and not be what
+  must be published, a pre-release, carry the same twenty-eight and not be what
   `/releases/latest` answers.
 - **Every version downloads without a sign-in.** For a release and a preview
   alike, `publish` then fetches the setup exe and `floti-<version>-linux-x64`
@@ -705,8 +708,9 @@ after them and finishes green.
 
 ### Signatures and attestations
 
-Every file a release carries - the five desktop files, the protocol types, the
-five floti files and their SHA-256 list - has a minisign signature beside it,
+Every file a release carries - the five desktop files and their SHA-256 list,
+the protocol types, the five floti files, their SHA-256 list and floti's
+third-party notices - has a minisign signature beside it,
 `<file>.minisig`, and a GitHub build attestation.
 
 - **The trusted comment is exactly `floti <version> <file>`**, for example
@@ -973,7 +977,7 @@ every check of the files that needs no published release. `sign-dry-run` makes
 a minisign key pair in the run (`minisign -G -W` under `$RUNNER_TEMP`), signs
 every file with it through the same `scripts/minisign.mjs` a release uses,
 checks every signature against that pair's public key and uploads exactly the
-twenty-six files as the run's `release-files` artifact, kept for seven days.
+twenty-eight files as the run's `release-files` artifact, kept for seven days.
 The run's summary lists each with its SHA-256 and gives the run's public key.
 `packages-dry-run` builds the formula and the winget manifests from the run's
 SHA-256 list as a release would, preview or not, after checking the list's
@@ -1881,6 +1885,44 @@ through ConPTY, renderer-synthesized keystrokes, a resize verified inside the
 shell, and the real `claude` TUI reaching its version banner. It spawns a real
 session.
 
+## Third-party notices
+
+Every download carries the license texts of the code from other projects
+inside it. `packages/desktop/scripts/third-party-notices.mjs` writes them,
+plain text, each distinct text once after the list of packages it covers.
+
+| Where | What it holds |
+|---|---|
+| `floti-<version>-THIRD-PARTY-NOTICES.txt`, a release file | Every Rust crate floti links for a target the release carries floti for: `floti-host`'s normal dependencies, as `cargo metadata --filter-platform` resolves them for each target. Written by `floti.yml` after the SHA-256 list, so `sums` still sees the five builds alone, and signed like every release file. |
+| `THIRD-PARTY-NOTICES.txt` in the desktop app's resources | Every npm package the app carries or bundles (the production dependencies of `packages/desktop`, through the workspace packages it bundles), then floti's notices whole, since the app carries floti. `stage-floti.mjs` writes it for every build; a release build must be handed the release's floti notices (`FLOTI_NOTICES`), and each desktop job checks the packaged copy holds them (`third-party-notices.mjs check`). |
+| `LICENSE.electron.txt`, `LICENSES.chromium.html` | Electron's license and Chromium's. On Windows and Linux electron-builder leaves them beside the app; on macOS it deletes them, so `scripts/after-extract.mjs` copies them into the bundle's `Contents/Resources` first. |
+| `node/LICENSE` beside floti | Node's, staged with the pinned Node runtime (`node-runtime.mjs`). |
+
+Each package's notice is its own license files: those at its root, and those
+in its folders below that no build skips (tests, examples, benchmarks and
+docs are skipped), because a package that vendors another project's code
+keeps that project's license beside it (ring's `third_party/fiat/LICENSE`).
+A package that ships none gets, in order:
+
+1. **A vendored file**, for a crate named in `VENDORED`. The `v8` crate's
+   package leaves out every license file, and the static library it links,
+   librusty_v8, holds V8, ICU, Abseil, Highway, simdutf, FP16, fast_float,
+   Dragonbox and PartitionAlloc. `third-party/v8-<version>.txt` holds
+   rusty_v8's license files and each library's at the commits rusty_v8's tag
+   pins, written by `third-party-notices.mjs vendor-v8` from GitHub and
+   chromium.googlesource.com. libc++, libc++abi, libunwind and LLVM's libc are
+   linked too and left out: their LLVM exception waives the notice conditions
+   for compiled object code. A v8 update fails the notices until
+   `vendor-v8` has written the file for the new version.
+2. **A package from the same repository** under the same license that ships
+   its files (`@xterm/addon-serialize` takes `@xterm/xterm`'s).
+3. **The MIT License text** with the copyright its manifest's authors name,
+   when its license is a choice that offers MIT, or **this repository's
+   Apache-2.0 text** when it offers Apache-2.0.
+
+A package none of these covers fails the command, naming it, on the branch
+that adds it: `floti.yml` runs on every push that touches the crates.
+
 ## License
 
-Apache License 2.0. `LICENSE` and `NOTICE` at the repository root; the plugin SDK ships its own copies of both.
+Apache License 2.0. `LICENSE` and `NOTICE` at the repository root; the plugin SDK ships its own copies of both. Third-party code's licenses are in the notices above.
