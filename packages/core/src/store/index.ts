@@ -79,7 +79,8 @@ export {
   writeSettings,
   SettingsValidationError,
   SETTING_VALIDATORS,
-  settleUpgradeNote
+  settleUpgradeNote,
+  settleWalkthrough
 } from './settings'
 export { indexUsageFile, type UsageIndexInput } from './usage'
 export * as schema from './schema'

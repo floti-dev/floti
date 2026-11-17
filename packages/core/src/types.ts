@@ -1663,6 +1663,17 @@ export interface AppSettings {
    */
   upgradeNoteSeenAt: string | null
   /**
+   * Where the guided first run stands on this device, or null while it is not
+   * showing: done, skipped, or never due. A `helm.db` this start created is a
+   * first start and gets step 1 as it opens (`settleWalkthrough`); one moved
+   * from Helm, or any older one, stays null, so an upgrade never sees it.
+   * Steps 1 to 4 run in the setup window, before the shell exists, and 5 and
+   * 6 in the shell's main area, so closing either window resumes at the step
+   * written here. Settings > General sets it to step 1 again. Kept on this
+   * device, never on the host.
+   */
+  walkthrough: Walkthrough | null
+  /**
    * A `claude` executable the user picked by hand, for the machine where it is
    * not on PATH and not in the usual install directory. Null means "find it".
    *
@@ -1972,6 +1983,38 @@ export interface AppSettings {
   noticesSeen: Readonly<Record<string, string>>
 }
 
+/** A step of the guided first run: 1 Welcome to 6 Your first session. */
+export type WalkthroughStep = 1 | 2 | 3 | 4 | 5 | 6
+
+export const WALKTHROUGH_STEPS: readonly WalkthroughStep[] = [1, 2, 3, 4, 5, 6]
+
+/** The last step the setup window shows; the shell shows the ones after it. */
+export const WALKTHROUGH_SETUP_LAST: WalkthroughStep = 4
+
+/** Where the guided first run stands (`AppSettings.walkthrough`). */
+export interface Walkthrough {
+  step: WalkthroughStep
+  /**
+   * The workspace step 4 made or chose, which the shell opens with selected
+   * and step 6 starts its session in; null when it added scan folders, was
+   * skipped, or has not been reached.
+   */
+  workspace: string | null
+}
+
+/** The walkthrough as a first start begins it. */
+export const WALKTHROUGH_START: Walkthrough = { step: 1, workspace: null }
+
+/** Whether the walkthrough is at a step the setup window shows (1 to 4). */
+export function walkthroughInSetupWindow(walkthrough: Walkthrough | null): boolean {
+  return walkthrough !== null && walkthrough.step <= WALKTHROUGH_SETUP_LAST
+}
+
+/** Whether the walkthrough is at a step the shell shows (5 or 6). */
+export function walkthroughInShell(walkthrough: Walkthrough | null): boolean {
+  return walkthrough !== null && walkthrough.step > WALKTHROUGH_SETUP_LAST
+}
+
 /** What quitting Helm does to the sessions it started on a host. */
 export type QuitSessions = 'end' | 'keep'
 
@@ -2018,6 +2061,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   paneLayout: null,
   firstRunCompletedAt: null,
   upgradeNoteSeenAt: null,
+  // Null: a device is not in a walkthrough unless its first start put it in one.
+  walkthrough: null,
   claudePath: null,
   // The four defaults below are the values Spike C measured and `terminal.ts`
   // was built around. They are the documented baseline, not a starting point
