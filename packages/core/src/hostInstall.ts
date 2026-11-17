@@ -155,7 +155,13 @@ export type InstallOutcome =
       /** Setup registered the host, nobody is signed in there, and it starts at the next sign-in. */
       startsAtNextSignIn: boolean
     }
-  | { ok: false; step: InstallStep; lastLine: string }
+  | {
+      ok: false
+      step: InstallStep
+      lastLine: string
+      /** Everything the step wrote, when that says more than its last line (a download's 404). */
+      said?: string
+    }
   /**
    * A `floti update` Helm did not see replace floti: `lastLine` is the last
    * thing known of it, or null.
@@ -683,12 +689,40 @@ export function chooseSource(options: {
   return { how: 'download', file, sha256 }
 }
 
-/** The title and the fix the window shows for a failed install or update step. */
+/**
+ * Whether what an install wrote says its download answered 404: curl's
+ * `returned error: 404`, PowerShell's `(404) Not Found` or wget's `ERROR 404`.
+ * A 404 is not a network problem: that release has no published floti.
+ */
+export function saysDownloadNotFound(said: string): boolean {
+  return /(?:error:?|ERROR)\s*\(?404\b|\(404\)|\b404 Not Found/i.test(said)
+}
+
+/** What a failed step wrote and which floti it was fetching, which say more than the step alone. */
+export interface InstallFailureDetail {
+  /** Everything the step wrote, when more than its last line is known. */
+  said?: string | undefined
+  /** The floti version the install fetches (this Floti's own). */
+  version?: string | undefined
+}
+
+/**
+ * The title and the fix the window shows for a failed install or update step.
+ * An install whose download answered 404 says that version has no published
+ * floti and to update Floti on this PC, never to check the network.
+ */
 export function describeInstallFailure(
   step: InstallStep,
   host: string,
-  folder: string
+  folder: string,
+  detail: InstallFailureDetail = {}
 ): { title: string; fix: string } {
+  if (step === 'install' && detail.version !== undefined && saysDownloadNotFound(detail.said ?? '')) {
+    return {
+      title: `floti ${detail.version} has no published build to download`,
+      fix: 'Update Floti on this PC, then try again.'
+    }
+  }
   if (step === 'update') {
     return {
       title: `floti update failed on ${host}`,
@@ -709,6 +743,6 @@ export function describeInstallFailure(
   }
   return {
     title: `Installing floti on ${host} failed`,
-    fix: `Nothing replaced a floti that was there. Check that ${folder} there can be written to and, for a download, that ${host} reaches github.com, then try again.`
+    fix: `Nothing replaced a floti that was there. Check that ${folder} there can be written to, then try again.`
   }
 }

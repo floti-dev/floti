@@ -690,7 +690,12 @@ export function createRemoteInstaller(deps: RemoteInstallDeps): RemoteInstaller 
         args = [deps.version, plan.source.file, plan.source.sha256, deps.releaseBase(deps.version)]
       }
       const put = await runThere(transport, installLine(plan.os, script, args), stdinFile)
-      if (put.code !== 0) return { ok: false, step: 'install', lastLine: lastLineOf(put) }
+      if (put.code !== 0) {
+        // A download's 404 is curl's line, before the script's own last one.
+        const lastLine = lastLineOf(put)
+        const said = `${put.stderr}\n${put.stdout}`.trim()
+        return { ok: false, step: 'install', lastLine, ...(said !== lastLine ? { said } : {}) }
+      }
       const path = put.stdout.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '').at(-1) ?? ''
       const problem = flotiPathProblem(path)
       if (problem !== null) return { ok: false, step: 'install', lastLine: `floti was installed, but ${problem}.` }
