@@ -358,7 +358,7 @@ export interface LaunchSessionRequest {
 /** What a launcher launch composed, for anything worth saying before the TUI paints. */
 export interface LaunchedSession {
   session: SessionRecord
-  /** Plugin namespaces the session was given, e.g. `['dev', 'cashflow']`. */
+  /** Plugin namespaces the session was given, e.g. `['dev', 'ledger']`. */
   overlays: string[]
   /** Whether composed project instructions were passed. */
   composedInstructions: boolean

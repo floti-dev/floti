@@ -30,10 +30,10 @@ function project(name: string, path = `${WORKSPACE}\\repos\\${name}`): Project {
 }
 
 const dev: Project = { ...project('dev', WORKSPACE), kind: 'workspace' }
-const timeclick = project('timeclick')
-const builder = project('TimeClick-Builder')
+const timepiece = project('timepiece')
+const builder = project('TimePiece-Builder')
 const floti = project('floti')
-const PROJECTS = [dev, floti, builder, timeclick]
+const PROJECTS = [dev, floti, builder, timepiece]
 
 function profile(id: number, name: string, overlays: string[], patch: Partial<Profile> = {}): Profile {
   return {
@@ -56,16 +56,16 @@ function profile(id: number, name: string, overlays: string[], patch: Partial<Pr
 }
 
 const devProfile = profile(1, 'dev', [WORKSPACE], { permissionMode: 'auto' })
-const timeclickProfile = profile(2, 'Timeclick', [WORKSPACE, timeclick.path], {
+const timepieceProfile = profile(2, 'Timepiece', [WORKSPACE, timepiece.path], {
   permissionMode: 'bypassPermissions'
 })
-const PROFILES = [timeclickProfile, devProfile]
+const PROFILES = [timepieceProfile, devProfile]
 
 function conversation(sessionId: string, title: string, lastAt: number): HistorySession {
   return {
     sessionId,
-    project: timeclick.path,
-    projectName: 'timeclick',
+    project: timepiece.path,
+    projectName: 'timepiece',
     promptCount: 3,
     firstAt: lastAt - HOUR,
     lastAt,
@@ -89,13 +89,13 @@ function renderDialog(overrides: Partial<NewSessionDialogProps> = {}): NewSessio
     projects: PROJECTS,
     recency: new Map([
       [floti.path.toLowerCase(), NOW - HOUR],
-      [timeclick.path.toLowerCase(), NOW - 2 * HOUR]
+      [timepiece.path.toLowerCase(), NOW - 2 * HOUR]
     ]),
     live: [],
     profiles: PROFILES,
     home: HOME,
     initialPath: null,
-    resumable: new Map([[timeclick.path.toLowerCase(), [payroll, breaks]]]),
+    resumable: new Map([[timepiece.path.toLowerCase(), [payroll, breaks]]]),
     onShowing: vi.fn(),
     busy: false,
     error: null,
@@ -131,33 +131,33 @@ describe('NewSessionDialog', () => {
   it('opens on the field, with the folder it was opened on first and the rest by when they were last used', () => {
     const props = renderDialog({ initialPath: dev.path })
     expect(document.activeElement).toBe(within(dialog()).getByRole('combobox', { name: 'Folder' }))
-    expect(options().slice(0, 4)).toEqual(['dev', 'floti', 'timeclick', 'TimeClick-Builder'])
+    expect(options().slice(0, 4)).toEqual(['dev', 'floti', 'timepiece', 'TimePiece-Builder'])
     expect(highlighted()).toBe('dev')
-    expect(props.onShowing).toHaveBeenLastCalledWith([dev.path, floti.path, timeclick.path, builder.path])
+    expect(props.onShowing).toHaveBeenLastCalledWith([dev.path, floti.path, timepiece.path, builder.path])
   })
 
   it('narrows to what is typed, marks the match, and starts the first folder with the profile most about it', async () => {
     const props = renderDialog()
     await userEvent.keyboard('time')
     expect(options()).toEqual([
-      'timeclick',
+      'timepiece',
       'Resume payroll export fix',
       'Resume named breaks rollout',
-      'TimeClick-Builder'
+      'TimePiece-Builder'
     ])
-    const first = within(list()).getByRole('option', { name: 'timeclick' })
+    const first = within(list()).getByRole('option', { name: 'timepiece' })
     expect(first.querySelector('.text-accent-text')?.textContent).toBe('time')
 
-    expect(picker('Profile').selectedOptions[0]?.textContent).toBe('Timeclick')
+    expect(picker('Profile').selectedOptions[0]?.textContent).toBe('Timepiece')
     expect(picker('Permissions').value).toBe('bypassPermissions')
     expect(sentence()).toBe(
-      'Runs claude in ~\\.harness\\dev\\repos\\timeclick with the Timeclick profile, composing dev and timeclick, and --model opus --permission-mode bypassPermissions.'
+      'Runs claude in ~\\.harness\\dev\\repos\\timepiece with the Timepiece profile, composing dev and timepiece, and --model opus --permission-mode bypassPermissions.'
     )
 
     await userEvent.keyboard('{Enter}')
     expect(props.onStart).toHaveBeenCalledWith({
-      project: timeclick,
-      profileId: timeclickProfile.id,
+      project: timepiece,
+      profileId: timepieceProfile.id,
       permissionMode: 'bypassPermissions',
       resume: null,
       beside: false,
@@ -170,7 +170,7 @@ describe('NewSessionDialog', () => {
 
   it('walks into a folder’s conversations with the arrows and reopens one', async () => {
     const props = renderDialog()
-    await userEvent.keyboard('timeclick{ArrowDown}{ArrowDown}')
+    await userEvent.keyboard('timepiece{ArrowDown}{ArrowDown}')
     expect(highlighted()).toBe('Resume named breaks rollout')
     expect(within(list()).getByRole('option', { name: 'Resume named breaks rollout' }).textContent).toContain(
       '4d'
@@ -178,10 +178,10 @@ describe('NewSessionDialog', () => {
     expect(sentence()).toMatch(/^Reopens “named breaks rollout” with claude --resume in ~\\\.harness/)
 
     await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}')
-    expect(highlighted()).toBe('timeclick')
+    expect(highlighted()).toBe('timepiece')
     await userEvent.keyboard('{ArrowDown}{Enter}')
     expect(props.onStart).toHaveBeenCalledWith(
-      expect.objectContaining({ project: timeclick, resume: payroll, profileId: timeclickProfile.id })
+      expect.objectContaining({ project: timepiece, resume: payroll, profileId: timepieceProfile.id })
     )
   })
 
@@ -189,10 +189,10 @@ describe('NewSessionDialog', () => {
     renderDialog({ initialPath: floti.path })
     expect(options()).not.toContain('Resume payroll export fix')
     await userEvent.keyboard('{ArrowDown}')
-    expect(highlighted()).toBe('timeclick')
+    expect(highlighted()).toBe('timepiece')
     expect(options().slice(0, 4)).toEqual([
       'floti',
-      'timeclick',
+      'timepiece',
       'Resume payroll export fix',
       'Resume named breaks rollout'
     ])
@@ -206,18 +206,18 @@ describe('NewSessionDialog', () => {
 
     await userEvent.selectOptions(picker('Profile'), 'dev')
     expect(picker('Permissions').value).toBe('auto')
-    await userEvent.click(within(list()).getByRole('option', { name: 'timeclick' }))
+    await userEvent.click(within(list()).getByRole('option', { name: 'timepiece' }))
     expect(picker('Profile').selectedOptions[0]?.textContent).toBe('dev')
 
     await userEvent.selectOptions(picker('Permissions'), 'Plan')
-    await userEvent.selectOptions(picker('Profile'), 'Timeclick')
+    await userEvent.selectOptions(picker('Profile'), 'Timepiece')
     expect(picker('Permissions').value).toBe('plan')
 
     // Enter from a picker starts it too, with what the pickers say.
     picker('Profile').focus()
     await userEvent.keyboard('{Enter}')
     expect(props.onStart).toHaveBeenLastCalledWith(
-      expect.objectContaining({ project: timeclick, profileId: timeclickProfile.id, permissionMode: 'plan' })
+      expect.objectContaining({ project: timepiece, profileId: timepieceProfile.id, permissionMode: 'plan' })
     )
 
     await userEvent.selectOptions(picker('Profile'), 'No profile')
@@ -230,9 +230,9 @@ describe('NewSessionDialog', () => {
 
   it('starts beside with Ctrl+Enter or its button, and only highlights on a click', async () => {
     const props = renderDialog()
-    await userEvent.click(within(list()).getByRole('option', { name: 'TimeClick-Builder' }))
+    await userEvent.click(within(list()).getByRole('option', { name: 'TimePiece-Builder' }))
     expect(props.onStart).not.toHaveBeenCalled()
-    expect(highlighted()).toBe('TimeClick-Builder')
+    expect(highlighted()).toBe('TimePiece-Builder')
     // The click left the field focused, so the keyboard carries on from there.
     await userEvent.keyboard('{Control>}{Enter}{/Control}')
     expect(props.onStart).toHaveBeenLastCalledWith(expect.objectContaining({ project: builder, beside: true }))
@@ -249,7 +249,7 @@ describe('NewSessionDialog', () => {
   it('opens a terminal in the highlighted folder with Alt+Enter or its button, beside with Ctrl', async () => {
     const onTerminal = vi.fn()
     const props = renderDialog({ onTerminal })
-    await userEvent.click(within(list()).getByRole('option', { name: 'TimeClick-Builder' }))
+    await userEvent.click(within(list()).getByRole('option', { name: 'TimePiece-Builder' }))
     await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
     expect(onTerminal).toHaveBeenLastCalledWith(builder, false)
     await userEvent.keyboard('{Control>}{Alt>}{Enter}{/Alt}{/Control}')
@@ -266,12 +266,12 @@ describe('NewSessionDialog', () => {
 
   it('says what is already running in the folder, and why a launch failed', () => {
     const live = [
-      { pid: 41, cwd: timeclick.path.toUpperCase(), name: 'accruals report', hostSessionId: 3 },
-      { pid: 42, cwd: timeclick.path, name: null, hostSessionId: null }
+      { pid: 41, cwd: timepiece.path.toUpperCase(), name: 'accruals report', hostSessionId: 3 },
+      { pid: 42, cwd: timepiece.path, name: null, hostSessionId: null }
     ] as LiveSession[]
-    renderDialog({ initialPath: timeclick.path, live, error: 'Claude Code CLI not found.' })
+    renderDialog({ initialPath: timepiece.path, live, error: 'Claude Code CLI not found.' })
 
-    expect(within(list()).getByRole('option', { name: 'timeclick' }).textContent).toContain('2 running')
+    expect(within(list()).getByRole('option', { name: 'timepiece' }).textContent).toContain('2 running')
     expect(within(dialog()).getByRole('note').textContent).toBe(
       'Already running here: accruals report, pid 42. Another one means two sessions in one working tree.'
     )
@@ -419,7 +419,7 @@ describe('NewSessionDialog: the Agent picker', () => {
   })
 
   it('fills the pickers with the agent’s values, says whose they are, and starts with them and the agent', async () => {
-    const props = renderDialog({ agents: AGENTS, initialPath: timeclick.path })
+    const props = renderDialog({ agents: AGENTS, initialPath: timepiece.path })
     await userEvent.selectOptions(picker('Agent'), 'research-lead')
     expect(picker('Profile').selectedOptions[0]?.textContent).toBe('dev')
     expect(picker('Model').value).toBe('opus')
@@ -429,11 +429,11 @@ describe('NewSessionDialog: the Agent picker', () => {
       "Model, effort, permissions and profile are research-lead's. Change any of them before starting."
     )
     expect(sentence()).toBe(
-      "Runs claude in ~\\.harness\\dev\\repos\\timeclick as the research-lead agent with the dev profile, composing dev, and --model opus --effort xhigh --permission-mode plan --allowedTools Read,Grep --disallowedTools Edit,Write. Its instructions go in after the project's; nothing is typed into the terminal. It can start agents of its own."
+      "Runs claude in ~\\.harness\\dev\\repos\\timepiece as the research-lead agent with the dev profile, composing dev, and --model opus --effort xhigh --permission-mode plan --allowedTools Read,Grep --disallowedTools Edit,Write. Its instructions go in after the project's; nothing is typed into the terminal. It can start agents of its own."
     )
     await userEvent.keyboard('{Enter}')
     expect(props.onStart).toHaveBeenCalledWith({
-      project: timeclick,
+      project: timepiece,
       profileId: devProfile.id,
       permissionMode: 'plan',
       resume: null,
@@ -445,7 +445,7 @@ describe('NewSessionDialog: the Agent picker', () => {
   })
 
   it('keeps a picker the person changed, and another agent changes only the untouched ones', async () => {
-    const props = renderDialog({ agents: AGENTS, initialPath: timeclick.path })
+    const props = renderDialog({ agents: AGENTS, initialPath: timepiece.path })
     await userEvent.selectOptions(picker('Effort'), 'low')
     await userEvent.selectOptions(picker('Agent'), 'research-lead')
     expect(picker('Effort').value).toBe('low')
@@ -456,7 +456,7 @@ describe('NewSessionDialog: the Agent picker', () => {
     await userEvent.selectOptions(picker('Permissions'), 'Default')
     await userEvent.selectOptions(picker('Agent'), '')
     // Back to the folder's profile and its values, but for what was changed.
-    expect(picker('Profile').selectedOptions[0]?.textContent).toBe('Timeclick')
+    expect(picker('Profile').selectedOptions[0]?.textContent).toBe('Timepiece')
     expect(picker('Model').value).toBe('opus')
     expect(picker('Effort').value).toBe('low')
     expect(picker('Permissions').value).toBe('')
@@ -467,7 +467,7 @@ describe('NewSessionDialog: the Agent picker', () => {
   })
 
   it('offers Model and Effort for every start, and Backend only while two or more backends are installed, narrowed to the agent’s', async () => {
-    renderDialog({ agents: { ...AGENTS, backends: [CLAUDE_BACKEND] }, initialPath: timeclick.path })
+    renderDialog({ agents: { ...AGENTS, backends: [CLAUDE_BACKEND] }, initialPath: timepiece.path })
     expect(picker('Model').value).toBe('opus')
     expect(picker('Effort').value).toBe('')
     expect(within(dialog()).queryByRole('combobox', { name: 'Backend' })).toBeNull()
@@ -487,11 +487,11 @@ describe('NewSessionDialog: the Agent picker', () => {
   })
 
   it('names the new worktree of an agent that works in one, and outside git refuses with Start off', async () => {
-    const repoFolder = inGit(timeclick)
+    const repoFolder = inGit(timepiece)
     const props = renderDialog({ agents: AGENTS, projects: [repoFolder, floti], initialPath: repoFolder.path })
     await userEvent.selectOptions(picker('Agent'), 'worker')
     expect(sentence()).toBe(
-      "Runs claude in a new worktree, ~\\.harness\\dev\\repos\\timeclick\\.floti\\worktrees\\timeclick on branch agent/timeclick cut from main, as the worker agent with the Timeclick profile, composing dev and timeclick, and --model opus --permission-mode acceptEdits --disallowedTools mcp__floti-plugin-trackr__create. Its instructions go in after the project's; nothing is typed into the terminal. It gets no floti-agents tools."
+      "Runs claude in a new worktree, ~\\.harness\\dev\\repos\\timepiece\\.floti\\worktrees\\timepiece on branch agent/timepiece cut from main, as the worker agent with the Timepiece profile, composing dev and timepiece, and --model opus --permission-mode acceptEdits --disallowedTools mcp__floti-plugin-trackr__create. Its instructions go in after the project's; nothing is typed into the terminal. It gets no floti-agents tools."
     )
 
     await userEvent.click(within(list()).getByRole('option', { name: 'floti' }))
