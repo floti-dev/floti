@@ -1,4 +1,4 @@
-// A stand-in for the `claude` CLI, used by Helm's integration and end-to-end
+// A stand-in for the `claude` CLI, used by Floti's integration and end-to-end
 // tests and by the Floti host's Claude Code tests. It does what they can
 // observe of the real CLI, deterministically and with no network:
 //
