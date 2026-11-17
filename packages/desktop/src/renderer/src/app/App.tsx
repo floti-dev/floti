@@ -74,6 +74,7 @@ import {
   retitlePluginSurface,
   RAIL_DESTINATIONS,
   LOCAL_HOST_KEY,
+  walkthroughInShell,
   LOCAL_HOST_LABEL,
   failedLastLine,
   hostFlotiVerdict,
@@ -197,7 +198,6 @@ import {
   sessionTreeHostProps,
   SettingsPane,
   SettingsSections,
-  SetupPane,
   Sidebar,
   shortcutLabel,
   SidebarAction,
@@ -210,7 +210,6 @@ import {
   TemplateManager,
   TerminalIcon,
   ConsoleIcon,
-  TitleBar,
   VersionBanner,
   claudeBanner,
   OwnDataBanner,
@@ -234,9 +233,7 @@ import {
   type TreeHost,
   type LauncherHost,
   type HostChoice,
-  type HostInstallActions,
   AddHostDialog,
-  type AddHostActions,
 } from "@helm/ui";
 import { sidebarFor, type SidebarView } from "./sidebarFor";
 import { viewRailItems } from "./railViews";
@@ -352,6 +349,9 @@ import { useSessions } from "./useSessions";
 import { LocalProjectPane } from "./LocalProjectPane";
 import { sessionActivityIn } from "./useAgentWorktrees";
 import { useSetup } from "./useSetup";
+import { addHostActions, hostInstall } from "./hostActions";
+import { ShellWalkthrough, type FirstSessionRequest } from "./setup/ShellWalkthrough";
+import { useWalkthroughReveal } from "./setup/useWalkthroughReveal";
 import { useHostWorkspaces } from "./useHostWorkspaces";
 import { treeHostPhase } from "./treeHostPhase";
 import { HostProfiles } from "./HostProfiles";
@@ -414,33 +414,6 @@ const BROWSER_SANDBOX_DOC =
 /** The Browser tab's command copied to the clipboard; true once it is there. */
 const copyCommand = async (command: string): Promise<boolean> =>
   (await helm.invoke("clipboard:write", command)).outcome === "copied";
-
-/** Settings > Hosts' check, install and cancel on a host's computer: main runs them, through that host's own transport. */
-const hostInstall: HostInstallActions = {
-  check: (target) => helm.invoke("remoteHosts:check", target),
-  install: (id, host) => helm.invoke("remoteHosts:install", { id, host }),
-  cancel: (id) => void helm.invoke("remoteHosts:cancel", { id }),
-  progress: (id, listener) =>
-    helm.on("remoteHosts:installProgress", (said) => {
-      if (said.id === id) listener(said.line);
-    }),
-};
-
-/**
- * The add-a-host dialog's reads, checks and adds: main reads this computer's
- * ssh config Host names, checks and installs through the user's own ssh or
- * command, and adds a host only once it connected.
- */
-const addHostActions: AddHostActions = {
-  sshHosts: () => helm.invoke("remoteHosts:sshHosts"),
-  wslDistros: () => helm.invoke("remoteHosts:wslDistros"),
-  check: hostInstall.check,
-  install: hostInstall.install,
-  cancelInstall: hostInstall.cancel,
-  add: (request) => helm.invoke("remoteHosts:add", request),
-  cancelAdd: (attempt) =>
-    void helm.invoke("remoteHosts:cancelAdd", { attempt }),
-};
 
 /** A stable empty list, so a view with no console entries does not hand
  * `BrowserPane` a fresh array to re-render against on every render. */
@@ -2399,13 +2372,10 @@ export function App(): JSX.Element {
 
   /*
    * A workspace created whole ends in a session in it, not on a page: creating
-   * one is a step on the way to working there. Not during first run, which
-   * owns the window until it is finished.
+   * one is a step on the way to working there.
    */
-  const setupNeeded = setup.needed;
   useEffect(() => {
     workspaceCreatedRef.current = (path: string, host: string) => {
-      if (setupNeeded) return;
       void newSession
         .launch(
           {
@@ -2426,13 +2396,56 @@ export function App(): JSX.Element {
         });
     };
   }, [
-    setupNeeded,
     newSession,
     sessionState,
     adoptThere,
     placeSession,
     open.focused,
   ]);
+
+  /** Whether steps 5 and 6 of the walkthrough hold the main area. */
+  const walkthroughShown = walkthroughInShell(settings?.walkthrough ?? null);
+  /**
+   * Step 6's session: started in the workspace step 4 made, on this PC's
+   * host, with its first message as the opening prompt, and put in a tab.
+   */
+  const startFirstSession = useCallback(
+    async (request: FirstSessionRequest): Promise<void> => {
+      const { cols, rows } = estimateGrid(bodyRefs.current.get(open.focused) ?? null);
+      const launched = await bridgeFor(LOCAL_HOST_KEY).invoke("session:launch", {
+        cwd: request.cwd,
+        projectPath: request.cwd,
+        profileId: null,
+        permissionMode: null,
+        resume: null,
+        backend: request.backend,
+        ...(request.openingPrompt === "" ? {} : { openingPrompt: request.openingPrompt }),
+        cols,
+        rows,
+      });
+      sessionState.adopt(launched.session);
+      placeSession(launched.session.id, false, undefined, LOCAL_HOST_KEY);
+    },
+    [open.focused, sessionState, placeSession],
+  );
+  // The workspace the walkthrough chose is brought into view in the tree as
+  // the shell opens on it, as a click on its tab would.
+  useWalkthroughReveal(
+    settings?.walkthrough?.workspace ?? null,
+    walkthroughShown,
+    (path) => {
+      revealCount.current += 1;
+      setTreeReveal({ seq: revealCount.current, kind: "project", path });
+    },
+  );
+  /** The walkthrough is over: the workspace it chose stays selected, as its page when no session took the place. */
+  const finishWalkthrough = useCallback(
+    (workspace: string | null, started: boolean) => {
+      if (workspace !== null && !started)
+        openPane({ kind: "project", path: workspace });
+    },
+    [openPane],
+  );
 
   /** The sessions a lost tab's Restore asked for, ticked when the Restore sessions tab opens. */
   const [restoreChosen, setRestoreChosen] = useState<readonly number[] | null>(
@@ -3323,7 +3336,6 @@ export function App(): JSX.Element {
    * own process, not this window, so Ctrl+N there is the page's.
    */
   useEffect(() => {
-    if (setupNeeded) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!hasPrimaryModifier(event) || event.altKey || event.shiftKey) return;
       if (event.key.toLowerCase() !== "n") return;
@@ -3334,7 +3346,7 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [setupNeeded, openLauncher]);
+  }, [openLauncher]);
 
   /**
    * Ctrl+P, from anywhere in the window, a focused terminal included - in
@@ -3345,7 +3357,6 @@ export function App(): JSX.Element {
    * Code or a shell binds it.
    */
   useEffect(() => {
-    if (setupNeeded) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!hasPrimaryModifier(event) || event.altKey) return;
       const key = event.key.toLowerCase();
@@ -3363,14 +3374,13 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [setupNeeded, openQuickOpen]);
+  }, [openQuickOpen]);
 
   /**
    * Ctrl+Shift+P, the plugins' commands - in capture, as Ctrl+P is. Nothing in
    * Claude Code or a shell binds it.
    */
   useEffect(() => {
-    if (setupNeeded) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!hasPrimaryModifier(event) || !event.shiftKey || event.altKey) return;
       if (event.key.toLowerCase() !== "p") return;
@@ -3381,7 +3391,7 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [setupNeeded]);
+  }, []);
 
   /**
    * Ctrl+H, History - in capture, as Ctrl+P is, so a focused terminal never
@@ -3389,7 +3399,6 @@ export function App(): JSX.Element {
    * own key and still sends a terminal what it sends.
    */
   useEffect(() => {
-    if (setupNeeded) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
         return;
@@ -3401,7 +3410,7 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [setupNeeded, openHistory]);
+  }, [openHistory]);
 
   /**
    * Ctrl+Tab cycles every tab in every pane on screen as one ring, and Ctrl+\
@@ -4773,42 +4782,6 @@ export function App(): JSX.Element {
       />
     ) : null;
 
-  /**
-   * Setup owns the whole window rather than sitting in a tab: with no roots
-   * there is no tree and no content, and a launcher painted
-   * empty behind a dialog would be four broken surfaces framing one that works.
-   */
-  if (setup.needed) {
-    return (
-      <div className="flex h-full w-full flex-col bg-bg text-fg">
-        <TitleBar />
-        <div className="min-h-0 flex-1">
-          <SetupPane
-            status={setup.status}
-            statusError={setup.statusError}
-            roots={settings?.scanRoots ?? []}
-            suggestions={setup.suggestions}
-            suggestionsError={setup.suggestionsError}
-            projectCount={discovery?.projects.length ?? 0}
-            scanning={launcher.scanning}
-            checking={setup.checking}
-            onRecheck={setup.recheck}
-            onLocateClaude={setup.locateClaude}
-            onAddFolder={launcher.addRoot}
-            onAcceptSuggestion={setup.acceptSuggestion}
-            onCreateWorkspace={() => setup.openDialog("new")}
-            onConvertFolder={() => setup.openDialog("convert")}
-            onFinish={setup.finish}
-          />
-        </div>
-        {workspaceDialog}
-        {templateDialogs}
-        {confirmDialog}
-        {restartDialog}
-      </div>
-    );
-  }
-
   // ---------------------------------------------------------------------------
   // The pages
   // ---------------------------------------------------------------------------
@@ -5034,6 +5007,7 @@ export function App(): JSX.Element {
       onRecheck={setup.recheck}
       onLocateClaude={setup.locateClaude}
       onClearClaudeOverride={launcher.clearClaudePath}
+      onShowWalkthrough={() => void helm.invoke("walkthrough:open", { step: 1 })}
       roots={settings?.scanRoots ?? []}
       projectCount={discovery?.projects.length ?? 0}
       scanning={launcher.scanning}
@@ -6199,7 +6173,13 @@ export function App(): JSX.Element {
             localHostWaiting={localHostWaiting}
             localHostStarting={startupTreeStep(localStep)}
             onRelistSessions={sessionState.relist}
-            selectedPath={front?.kind === "project" ? front.path : null}
+            selectedPath={
+              walkthroughShown && settings?.walkthrough?.workspace != null
+                ? settings.walkthrough.workspace
+                : front?.kind === "project"
+                  ? front.path
+                  : null
+            }
             pinnedPaths={
               settings?.pinnedProjects ?? DEFAULT_SETTINGS.pinnedProjects
             }
@@ -6633,6 +6613,17 @@ export function App(): JSX.Element {
         ) : startup === "waiting" ? (
           <div className="h-full w-full">
             <StartupWaiting hostName={LOCAL_HOST_NAME} />
+          </div>
+        ) : walkthroughShown && settings?.walkthrough != null ? (
+          <div className="h-full w-full">
+            <ShellWalkthrough
+              walkthrough={settings.walkthrough}
+              bridge={helm}
+              hostReady={localStep?.step === "ready"}
+              write={writeSettings}
+              start={startFirstSession}
+              onDone={finishWalkthrough}
+            />
           </div>
         ) : empty ? (
           <div className="h-full w-full">

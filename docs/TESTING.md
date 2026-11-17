@@ -508,7 +508,8 @@ over the window, or Electron's own guards on a page.
   (a `.cmd` shim on Windows, an `sh` script elsewhere), two git projects, and the app's data
   directory (`PORTABLE_EXECUTABLE_DIR`). Settings are seeded through the app's
   own store before it starts: the projects folder scanned, the fake `claude`
-  chosen, first run done, the update check off. Nothing reaches the network, a
+  chosen, first run done (no walkthrough), the update check
+  off; `e2e/walkthrough.spec.ts` seeds a first start instead. Nothing reaches the network, a
   real `~/.claude` or the installed app. The world is removed only once
   everything it ran has exited (`worldProcesses` in `e2e/helm.ts`: each host
   and session keeper by the pid the host logs, each fake `claude` by its

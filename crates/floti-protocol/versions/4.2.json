@@ -6440,6 +6440,12 @@
             "null"
           ]
         },
+        "openingPrompt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "permissionMode": {
           "anyOf": [
             {

@@ -78,7 +78,8 @@ export {
   writeSetting,
   writeSettings,
   SettingsValidationError,
-  SETTING_VALIDATORS
+  SETTING_VALIDATORS,
+  settleWalkthrough
 } from './settings'
 export { indexUsageFile, type UsageIndexInput } from './usage'
 export * as schema from './schema'

@@ -18,7 +18,7 @@
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openStore, writeSettings, type AppSettings } from '@helm/core'
+import { openStore, settleWalkthrough, writeSettings, type AppSettings } from '@helm/core'
 import { FAKE_AGENTS, writeFakeAgent, type FakeBackend } from '../../../test/fake-agents/programs.mjs'
 
 /** The setting that chooses each backend's program in Helm. */
@@ -74,6 +74,10 @@ export function prepareDriveAgents(root: string, dataDir: string, options: Drive
   for (const { backend, program } of agents) patch[PROGRAM_SETTING[backend]] = program
   const store = openStore({ file: join(dataDir, 'desktop.db') })
   try {
+    // When this open makes the database (`--fresh`), it is the device's first
+    // open, not the app's, so it settles what a first start settles: the
+    // window then opens on the walkthrough.
+    settleWalkthrough(store)
     writeSettings(store, patch)
   } finally {
     store.close()

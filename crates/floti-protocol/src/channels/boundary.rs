@@ -97,6 +97,10 @@ pub const CLIENT_ONLY: &[Outside] = &[
         "the settings the client keeps for itself: its window, theme, terminal and browser preferences, the programs it picked, which its main process tells the host, and its tabs, panes and splits, which are kept per device and never reach the host",
     ),
     outside(
+        "walkthrough:*",
+        "the client's own guided first run: its main process closes the setup window and opens the shell, or opens the setup window again, and keeps the step in the client's own settings",
+    ),
+    outside(
         "ownApp:info",
         "the client's own build, data folder and runtime versions",
     ),

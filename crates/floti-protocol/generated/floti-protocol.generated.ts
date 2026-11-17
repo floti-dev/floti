@@ -2054,7 +2054,14 @@ agent?: string,
  * flag, as `permissionMode` does. Absent, the profile's and the agent's
  * apply, as they did for a client before 2.3.
  */
-chosen?: LaunchChoices, cols: number, rows: number, };
+chosen?: LaunchChoices, 
+/**
+ * The session's first message, passed to the agent at launch as its
+ * opening prompt, as a profile's is, and never typed. Present and not
+ * blank, it replaces the profile's; a resume takes none. A host before
+ * it ignores the field and starts the session with no first message.
+ */
+openingPrompt?: string, cols: number, rows: number, };
 
 /**
  * What a session was launched with, as its launch composed it.
@@ -4696,6 +4703,7 @@ export const CLIENT_ONLY: readonly OutsideEntry[] = [
   { channels: "remoteHosts:*", reason: "where each host on another computer stands with this device: connected, retrying, its key changed since the client pinned it, or its transport's last line, which the client's main process learns from its own links to those hosts and tells only its own window; and adding one, which the client's main process does by connecting to it through the user's own ssh or command, after reading the Host names of this computer's ssh config" },
   { channels: "forwards:*", reason: "a port a session on another computer listens on, forwarded to the client's own loopback: the client's main process listens there and carries each connection to that host on a sessions:port stream" },
   { channels: "ownSettings:*", reason: "the settings the client keeps for itself: its window, theme, terminal and browser preferences, the programs it picked, which its main process tells the host, and its tabs, panes and splits, which are kept per device and never reach the host" },
+  { channels: "walkthrough:*", reason: "the client's own guided first run: its main process closes the setup window and opens the shell, or opens the setup window again, and keeps the step in the client's own settings" },
   { channels: "ownApp:info", reason: "the client's own build, data folder and runtime versions" },
   { channels: "ownData:*", reason: "where the copy of the client's own database into the host stands: only the client's main process reads that database, and it sends the rows over carry:*" },
   { channels: "profileDialog:*", reason: "the client's own dialogs for exporting and importing a profile, and the file it writes or reads on its machine; the profile itself is the host's" },
