@@ -463,8 +463,8 @@ impl Host {
         let lock = lock_data_folder(&folders)?;
         // The user's own files, out of the folder Helm kept them in, once,
         // by the host that owns this data folder and may write its config
-        // folder. Only where that folder is Helm's, not one moved by
-        // FLOTI_CONFIG_DIR.
+        // folder. Only where that folder is the default one in the home,
+        // Helm's or Floti's, not one moved by FLOTI_CONFIG_DIR.
         let (folders, moved) =
             folders::after_helm_config_move(folders, run.home.as_deref(), run.config_read_only);
         if let Some(said) = moved.log_line() {

@@ -96,7 +96,7 @@ tints at the theme's own alphas. One swatch is therefore a different hex on
 Nocturne and on Daylight, by design.
 
 **User themes** are `*.json` in `~/.config/floti/themes` (`~/.config/helm/themes`
-until the host has moved Helm's folder; beside the exe for a
+only while `~/.config/floti` is not there and Helm's is; beside the exe for a
 portable build), watched while the app runs - a save repaints the window. A
 file names its `kind` (or `extends` a built-in) and only the colours it
 changes; the rest come from the built-in it extends. Grounds and text must be

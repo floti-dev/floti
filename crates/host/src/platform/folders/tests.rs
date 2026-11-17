@@ -37,7 +37,7 @@ fn windows_data_and_logs_are_in_localappdata_floti() {
 }
 
 #[test]
-fn the_config_folder_is_helms_wherever_helms_is_there_and_stays_so() {
+fn the_config_folder_is_helms_only_while_flotis_is_not_there() {
     let dirs = TestDirs::new();
     let config = dirs.home.join(".config");
     assert_eq!(config_folder(&dirs.home), config.join("floti"));
@@ -53,10 +53,39 @@ fn the_config_folder_is_helms_wherever_helms_is_there_and_stays_so() {
             config.join("helm")
         );
     }
-    // A ~/.config/floti written meanwhile switches nothing: only the move
-    // of Helm's folder does.
+    assert!(
+        is_empty(&config.join("helm").join("templates")),
+        "resolving made nothing"
+    );
+    assert!(!config.join("floti").exists(), "resolving made nothing");
+}
+
+#[test]
+fn the_config_folder_is_flotis_whenever_it_is_there_even_beside_helms() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
     std::fs::create_dir_all(config.join("floti").join("templates")).unwrap();
-    assert_eq!(config_folder(&dirs.home), config.join("helm"));
+    assert_eq!(config_folder(&dirs.home), config.join("floti"));
+    // Helm's made again beside it, by a program from Helm's days.
+    write(
+        &config
+            .join("helm")
+            .join("data")
+            .join("board")
+            .join("board.db"),
+        "",
+    );
+    assert_eq!(config_folder(&dirs.home), config.join("floti"));
+    for layout in [
+        &windows::Native as &dyn FolderLayout,
+        &macos::Native,
+        &linux::Native,
+    ] {
+        assert_eq!(
+            layout.resolve(&dirs.user_env()).unwrap().config,
+            config.join("floti")
+        );
+    }
     assert!(
         is_empty(&config.join("floti").join("templates")),
         "resolving made nothing"
@@ -366,7 +395,8 @@ fn nothing_moves_and_nothing_is_replaced_when_an_entry_is_in_both() {
         panic!("{moved:?}");
     };
     assert!(reason.contains("agents"), "{reason}");
-    assert_eq!(moved.config(), Some(config.join("helm").as_path()));
+    assert_eq!(moved.config(), Some(config.join("floti").as_path()));
+    assert_eq!(moved.config(), Some(config_folder(&dirs.home).as_path()));
     assert_eq!(
         read(&config.join("helm").join("agents").join("default.md")),
         "helm's"
@@ -435,6 +465,9 @@ fn a_rename_that_fails_leaves_helms_folder_read_where_it_is() {
 
     assert!(matches!(&moved, ConfigMove::Kept { reason, .. } if reason.contains("in use")));
     assert_eq!(moved.config(), Some(config.join("helm").as_path()));
+    assert_eq!(moved.config(), Some(config_folder(&dirs.home).as_path()));
+    let said = moved.log_line().unwrap();
+    assert!(said.contains("are read from there"), "{said}");
     assert!(
         config
             .join("helm")
@@ -527,6 +560,87 @@ fn the_host_that_may_write_helms_config_folder_moves_it_and_reads_flotis() {
         false,
     );
     assert_eq!(none, ConfigMove::Nothing);
+}
+
+#[test]
+fn a_helm_folder_made_again_beside_flotis_is_not_read_and_nothing_in_either_moves() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    let floti = config.join("floti");
+    let helm = config.join("helm");
+    write(&floti.join("themes").join("mine.json"), "floti's theme");
+    write(&floti.join("data").join("kept.txt"), "floti's data");
+    // What a plugin from Helm's days writes after the move.
+    write(
+        &helm.join("data").join("board").join("board.db"),
+        "helm's board",
+    );
+    write(&helm.join("themes").join("seeded.json"), "helm's theme");
+
+    let (folders, moved) = after_helm_config_move(
+        folders_with_config(&dirs, floti.clone()),
+        Some(&dirs.home),
+        false,
+    );
+
+    let ConfigMove::Kept { reason, .. } = &moved else {
+        panic!("{moved:?}");
+    };
+    assert!(
+        reason.contains("data") && reason.contains("themes"),
+        "{reason}"
+    );
+    assert_eq!(folders.config, floti);
+    assert_eq!(moved.config(), Some(floti.as_path()));
+    assert_eq!(
+        read(&floti.join("themes").join("mine.json")),
+        "floti's theme"
+    );
+    assert_eq!(read(&floti.join("data").join("kept.txt")), "floti's data");
+    assert_eq!(
+        read(&helm.join("data").join("board").join("board.db")),
+        "helm's board"
+    );
+    assert_eq!(
+        read(&helm.join("themes").join("seeded.json")),
+        "helm's theme"
+    );
+    assert!(!floti.join("themes").join("seeded.json").exists());
+    assert!(!floti.join("data").join("board").exists());
+    let said = moved.log_line().unwrap();
+    assert!(
+        said.contains(&format!("are read from {}", floti.display())),
+        "{said}"
+    );
+    assert!(
+        said.contains(&format!(
+            "{} is left beside it and not read",
+            helm.display()
+        )),
+        "{said}"
+    );
+}
+
+#[test]
+fn a_host_reading_flotis_folder_moves_helms_entries_into_it_when_none_is_in_both() {
+    let dirs = TestDirs::new();
+    let config = dirs.home.join(".config");
+    let floti = config.join("floti");
+    let helm = config.join("helm");
+    write(&floti.join("agents").join("default.md"), "agent");
+    write(&helm.join("themes").join("mine.json"), "theme");
+
+    let (folders, moved) = after_helm_config_move(
+        folders_with_config(&dirs, floti.clone()),
+        Some(&dirs.home),
+        false,
+    );
+
+    assert!(matches!(moved, ConfigMove::Moved { .. }), "{moved:?}");
+    assert_eq!(folders.config, floti);
+    assert!(!helm.exists());
+    assert_eq!(read(&floti.join("themes").join("mine.json")), "theme");
+    assert_eq!(read(&floti.join("agents").join("default.md")), "agent");
 }
 
 #[test]

@@ -317,8 +317,9 @@ const CONFIG_READ_ONLY = 'FLOTI_CONFIG_READ_ONLY'
 /**
  * The environment both programs run with. The installed app uses the host's
  * own folders, so it passes its environment as it is, its config folder
- * included: the host's own rule (`~/.config/helm` where Helm's is there, else
- * `~/.config/floti`) picks the same folder for the host Helm starts as for
+ * included: the host's own rule (`~/.config/floti` whenever it is there,
+ * `~/.config/helm` only while Floti's is not and Helm's is) picks the same
+ * folder for the host Helm starts as for
  * the one started at sign-in. Every other run moves the host's folders inside
  * Helm's data directory, so a dev or check run never meets the user's real
  * host, except the config folder: the folder holding Helm's templates folder.

@@ -75,11 +75,14 @@ describe("the user's config folder", () => {
   const floti = join(home, '.config', 'floti')
   const helm = join(home, '.config', 'helm')
 
-  it("is Helm's while it is there, as the host reads it, else ~/.config/floti", () => {
+  it("is Helm's only while Floti's is not there, as the host reads it, else ~/.config/floti", () => {
     expect(userConfigDirFor(home, () => false)).toBe(floti)
     expect(userConfigDirFor(home, (path) => path === floti)).toBe(floti)
     expect(userConfigDirFor(home, (path) => path === helm)).toBe(helm)
-    expect(userConfigDirFor(home, () => true)).toBe(helm)
+  })
+
+  it("is Floti's when both are there, so a ~/.config/helm made again after the move is not read", () => {
+    expect(userConfigDirFor(home, () => true)).toBe(floti)
   })
 })
 
