@@ -1,6 +1,6 @@
 // The Node runtime the local host runs plugin services on, fetched at build
 // time and staged beside `floti` by stage-floti.mjs. The app never fetches it:
-// the desktop contacts nothing on its own except the update check.
+// Floti contacts nothing on its own except the host's update check.
 //
 // node-runtime.json pins the version and, for each platform a release is built
 // on, the archive and its SHA-256 from that release's SHASUMS256.txt. A
