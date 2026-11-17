@@ -42,12 +42,12 @@ const read = (parts: readonly SentencePart[]): string =>
   parts.map((part) => (part.mono ? `\`${part.text}\`` : part.text)).join('')
 
 describe('rankProjects', () => {
-  const timeclick = project(repo('timeclick'))
-  const builder = project(repo('TimeClick-Builder'))
-  const reporting = project(repo('timeclick-reporting'))
+  const timepiece = project(repo('timepiece'))
+  const builder = project(repo('TimePiece-Builder'))
+  const reporting = project(repo('timepiece-reporting'))
   const floti = project(repo('floti'))
   const overtime = project(repo('overtime'))
-  const all = [floti, reporting, builder, timeclick, overtime]
+  const all = [floti, reporting, builder, timepiece, overtime]
 
   it('lists everything by when it was last worked in when nothing is typed, then by name', () => {
     const recency = new Map([
@@ -56,10 +56,10 @@ describe('rankProjects', () => {
     ])
     expect(rankProjects(all, '  ', recency).map((m) => m.project.name)).toEqual([
       'floti',
-      'timeclick-reporting',
+      'timepiece-reporting',
       'overtime',
-      'timeclick',
-      'TimeClick-Builder'
+      'timepiece',
+      'TimePiece-Builder'
     ])
   })
 
@@ -67,9 +67,9 @@ describe('rankProjects', () => {
     const recency = new Map([[overtime.path.toLowerCase(), 900]])
     const ranked = rankProjects(all, 'Time', recency)
     expect(ranked.map((m) => [m.project.name, m.hit])).toEqual([
-      ['timeclick', [0, 4]],
-      ['TimeClick-Builder', [0, 4]],
-      ['timeclick-reporting', [0, 4]],
+      ['timepiece', [0, 4]],
+      ['TimePiece-Builder', [0, 4]],
+      ['timepiece-reporting', [0, 4]],
       // Recency orders within a tier, never across one.
       ['overtime', [4, 8]]
     ])
@@ -84,22 +84,22 @@ describe('rankProjects', () => {
 
 describe('profileFor', () => {
   const dev = profile({ name: 'dev', overlays: [WORKSPACE] })
-  const timeclickProfile = profile({ name: 'Timeclick', root: repo('timeclick'), overlays: [WORKSPACE, repo('timeclick')] })
-  const builderProfile = profile({ name: 'Timeclick Builder', overlays: [WORKSPACE, repo('timeclick'), repo('TimeClick-Builder')] })
+  const timepieceProfile = profile({ name: 'Timepiece', root: repo('timepiece'), overlays: [WORKSPACE, repo('timepiece')] })
+  const builderProfile = profile({ name: 'Timepiece Builder', overlays: [WORKSPACE, repo('timepiece'), repo('TimePiece-Builder')] })
   const cloud = profile({
-    name: 'tc-cloud',
-    overlays: [WORKSPACE, repo('timeclick'), repo('timeclick-ui'), repo('timeclick-reporting')]
+    name: 'tp-cloud',
+    overlays: [WORKSPACE, repo('timepiece'), repo('timepiece-ui'), repo('timepiece-reporting')]
   })
-  const cash = profile({ name: 'CashApp', overlays: [WORKSPACE, `${WORKSPACE}\\tools\\cashflow`] })
-  const profiles = [cloud, builderProfile, cash, dev, timeclickProfile]
+  const cash = profile({ name: 'Ledger', overlays: [WORKSPACE, `${WORKSPACE}\\tools\\ledger`] })
+  const profiles = [cloud, builderProfile, cash, dev, timepieceProfile]
 
   it('picks the profile composing the fewest folders among those about the folder', () => {
     expect(profileFor(WORKSPACE, profiles)?.name).toBe('dev')
-    expect(profileFor(repo('timeclick'), profiles)?.name).toBe('Timeclick')
-    expect(profileFor(repo('TimeClick-Builder'), profiles)?.name).toBe('Timeclick Builder')
-    expect(profileFor(repo('timeclick-ui'), profiles)?.name).toBe('tc-cloud')
+    expect(profileFor(repo('timepiece'), profiles)?.name).toBe('Timepiece')
+    expect(profileFor(repo('TimePiece-Builder'), profiles)?.name).toBe('Timepiece Builder')
+    expect(profileFor(repo('timepiece-ui'), profiles)?.name).toBe('tp-cloud')
     // An overlay is enough: this profile runs at the workspace root.
-    expect(profileFor(`${WORKSPACE}\\TOOLS\\cashflow`, profiles)?.name).toBe('CashApp')
+    expect(profileFor(`${WORKSPACE}\\TOOLS\\ledger`, profiles)?.name).toBe('Ledger')
   })
 
   it('starts a folder no profile is about with none', () => {
@@ -108,7 +108,7 @@ describe('profileFor', () => {
   })
 
   it('breaks a tie with the profile rooted there, then the pinned order, then the name', () => {
-    const at = repo('vibecast')
+    const at = repo('sketchbook')
     const rooted = profile({ name: 'zeta', root: at, overlays: [WORKSPACE] })
     const overlaid = profile({ name: 'alpha', overlays: [at] })
     expect(profileFor(at, [overlaid, rooted])?.name).toBe('zeta')
@@ -123,7 +123,7 @@ describe('profileFor', () => {
 
 describe('homePath', () => {
   it('writes a path under the home directory from ~, and leaves anything else alone', () => {
-    expect(homePath(repo('timeclick'), 'C:\\Users\\someone')).toBe('~\\.harness\\dev\\repos\\timeclick')
+    expect(homePath(repo('timepiece'), 'C:\\Users\\someone')).toBe('~\\.harness\\dev\\repos\\timepiece')
     expect(homePath('c:\\users\\SOMEONE\\x', 'C:\\Users\\someone\\')).toBe('~\\x')
     expect(homePath('C:\\Users\\someone', 'C:\\Users\\someone')).toBe('~')
     expect(homePath('C:\\Users\\someone-else\\x', 'C:\\Users\\someone')).toBe('C:\\Users\\someone-else\\x')
@@ -145,24 +145,24 @@ describe('launchSentence', () => {
 
   it('names the profile, what it composes and grants, every flag, and the opening prompt', () => {
     const p = profile({
-      name: 'Timeclick',
-      overlays: [WORKSPACE, repo('timeclick'), repo('timeclick-ui')],
-      access: [WORKSPACE, repo('timeclick'), repo('hawkeye')],
+      name: 'Timepiece',
+      overlays: [WORKSPACE, repo('timepiece'), repo('timepiece-ui')],
+      access: [WORKSPACE, repo('timepiece'), repo('beacon')],
       model: 'opus',
       effort: 'xhigh',
       agent: 'reviewer',
       openingPrompt: ' /recap '
     })
-    expect(read(launchSentence({ cwd: repo('timeclick'), home, profile: p, permissionMode: 'auto', resume: null }))).toBe(
-      'Runs `claude` in `~\\.harness\\dev\\repos\\timeclick` with the Timeclick profile, composing `dev`, `timeclick` and `timeclick-ui`, with access to `hawkeye`, and `--model opus --effort xhigh --permission-mode auto --agent reviewer`. It opens by saying `/recap`.'
+    expect(read(launchSentence({ cwd: repo('timepiece'), home, profile: p, permissionMode: 'auto', resume: null }))).toBe(
+      'Runs `claude` in `~\\.harness\\dev\\repos\\timepiece` with the Timepiece profile, composing `dev`, `timepiece` and `timepiece-ui`, with access to `beacon`, and `--model opus --effort xhigh --permission-mode auto --agent reviewer`. It opens by saying `/recap`.'
     )
   })
 
   it('says a conversation is being reopened, and drops the opening prompt a resume does not send', () => {
     const p = profile({ name: 'dev', overlays: [WORKSPACE], openingPrompt: '/recap' })
     expect(
-      read(launchSentence({ cwd: repo('timeclick'), home, profile: p, permissionMode: null, resume: 'payroll export fix' }))
-    ).toBe('Reopens “payroll export fix” with `claude --resume` in `~\\.harness\\dev\\repos\\timeclick` with the dev profile, composing `dev`.')
+      read(launchSentence({ cwd: repo('timepiece'), home, profile: p, permissionMode: null, resume: 'payroll export fix' }))
+    ).toBe('Reopens “payroll export fix” with `claude --resume` in `~\\.harness\\dev\\repos\\timepiece` with the dev profile, composing `dev`.')
   })
 })
 

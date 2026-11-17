@@ -30,9 +30,9 @@ function project(name: string, path = `${WORKSPACE}\\repos\\${name}`): Project {
 
 const dev: Project = { ...project('dev', WORKSPACE), kind: 'workspace' }
 const floti = project('floti')
-const timeclick = project('timeclick')
+const timepiece = project('timepiece')
 const notes = project('notes')
-const PROJECTS = [dev, floti, timeclick, notes]
+const PROJECTS = [dev, floti, timepiece, notes]
 
 function profile(id: number, name: string, overlays: string[], patch: Partial<Profile> = {}): Profile {
   return {
@@ -55,8 +55,8 @@ function profile(id: number, name: string, overlays: string[], patch: Partial<Pr
 }
 
 const devProfile = profile(1, 'dev', [WORKSPACE], { permissionMode: 'auto' })
-const timeclickProfile = profile(2, 'Timeclick', [WORKSPACE, timeclick.path], { pinnedOrder: 0 })
-const PROFILES = [devProfile, timeclickProfile]
+const timepieceProfile = profile(2, 'Timepiece', [WORKSPACE, timepiece.path], { pinnedOrder: 0 })
+const PROFILES = [devProfile, timepieceProfile]
 
 function conversation(sessionId: string, title: string, lastAt: number): HistorySession {
   return {
@@ -91,7 +91,7 @@ function renderMenu(overrides: Partial<NewTabMenuProps> = {}) {
     anchor,
     projects: PROJECTS,
     recency: new Map([
-      [timeclick.path.toLowerCase(), NOW - 5 * 60_000],
+      [timepiece.path.toLowerCase(), NOW - 5 * 60_000],
       [floti.path.toLowerCase(), NOW - 2 * HOUR],
       [dev.path.toLowerCase(), NOW - 26 * HOUR],
       [notes.path.toLowerCase(), NOW - 50 * HOUR]
@@ -162,7 +162,7 @@ describe('NewTabMenu: profile session', () => {
     const { props } = renderMenu()
     await userEvent.click(screen.getByText('Profile session'))
     const menu = screen.getByRole('menu', { name: 'Start a profile' })
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Timeclickdev', 'devdev'])
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Timepiecedev', 'devdev'])
     await userEvent.click(within(menu).getByText('dev', { selector: 'span.truncate' }))
     expect(props.onProfile).toHaveBeenCalledWith(devProfile)
     expect(props.onDismiss).toHaveBeenCalledOnce()
@@ -176,7 +176,7 @@ describe('NewTabMenu: terminal', () => {
     const menu = screen.getByRole('menu', { name: 'Open a terminal in' })
     expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'dev',
-      'timeclick',
+      'timepiece',
       'floti',
       'notes'
     ])
@@ -196,20 +196,20 @@ describe('NewTabMenu: terminal', () => {
 
 describe('NewTabMenu: session', () => {
   it('opens on the folder the pane is about, with the profile most about it, and says what will run', async () => {
-    const { props } = renderMenu({ initialPath: timeclick.path })
+    const { props } = renderMenu({ initialPath: timepiece.path })
     const popover = await chooseSession()
-    expect(within(popover).getByRole('combobox', { name: 'Folder' })).toHaveProperty('value', timeclick.path)
+    expect(within(popover).getByRole('combobox', { name: 'Folder' })).toHaveProperty('value', timepiece.path)
     expect(within(popover).getByRole('combobox', { name: 'Profile' })).toHaveProperty('value', '2')
     expect(popover.querySelector('[data-launch-sentence]')?.textContent).toBe(
-      'Runs claude in ~\\.harness\\dev\\repos\\timeclick with the Timeclick profile, composing dev and timeclick.'
+      'Runs claude in ~\\.harness\\dev\\repos\\timepiece with the Timepiece profile, composing dev and timepiece.'
     )
-    expect(props.onShowing).toHaveBeenCalledWith([timeclick.path])
+    expect(props.onShowing).toHaveBeenCalledWith([timepiece.path])
   })
 
   it('opens on the most recent folder when the pane is about none', async () => {
     renderMenu({ initialPath: null })
     const popover = await chooseSession()
-    expect(within(popover).getByRole('combobox', { name: 'Folder' })).toHaveProperty('value', timeclick.path)
+    expect(within(popover).getByRole('combobox', { name: 'Folder' })).toHaveProperty('value', timepiece.path)
   })
 
   it('starts what it shows, never beside, with the profile following the folder until one is chosen', async () => {
@@ -255,8 +255,8 @@ describe('NewTabMenu: session', () => {
     const popover = await chooseSession()
     const recent = within(popover).getByRole('list', { name: 'Recent' })
     const rows = within(recent).getAllByRole('button')
-    expect(rows.map((row) => row.textContent)).toEqual(['timeclickTimeclick5m', 'floti2h', 'devdev1d'])
-    expect(rows[0]!.getAttribute('title')).toContain('with the Timeclick profile')
+    expect(rows.map((row) => row.textContent)).toEqual(['timepieceTimepiece5m', 'floti2h', 'devdev1d'])
+    expect(rows[0]!.getAttribute('title')).toContain('with the Timepiece profile')
     await userEvent.click(rows[2]!)
     expect(props.onStart).toHaveBeenCalledWith({
       project: dev,
