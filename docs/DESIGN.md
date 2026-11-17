@@ -845,8 +845,8 @@ overrides the gate; keep it.
 - **The frame**, left to right: the **rail** on the canvas, 2px, the
   **sidebar** island (256px), a gutter, then the **panes**, and a gutter
   to the window's edge. The title strip above it all, the status bar below.
-- **Title bar**: Floti draws its own 36px strip - the accent mark alone, at the
-  rail's icon size, and the drag region. Nothing else lives in it: the theme
+- **Title bar**: Floti draws its own 36px strip - the accent mark alone, at
+  24px, and the drag region. Nothing else lives in it: the theme
   toggle went to Appearance, and Settings to the rail. Each OS puts its window
   controls into it its own way (`main/chrome.ts`):
   - **Windows**: the native bar is hidden and the Window Controls Overlay
@@ -860,6 +860,19 @@ overrides the gate; keep it.
     and the mark sits in its 48px column right after them. No right reserve.
   - **Linux**: the native frame stays, and the strip sits under it as on
     Windows.
+- **The mark** (`FlotiMarkIcon`): the longship in one colour, filled with
+  the text token of where it sits - `accent` in the title bar (24px; at 20 the sail, dragon and waves crowd) and in
+  the New workspace and profile dialogs' headers (16px), `fg-subtle` at 35%
+  opacity as the welcome pane's 192px watermark. Never under 16px: below it
+  the shields and waves close up. A filled mark in accent is a glyph, not a
+  flood: at 24px it lays about 210px² of ink, under the 256 a checked 16px
+  checkbox fills solid, so it sits on the near side of §1's line as the
+  `busy` dot does. The app icon is the colour mark in its
+  circle (slate, sky and ember), the same for every theme because the
+  taskbar is not Floti's to theme. Those three colours are the artwork's,
+  kept with it in `assets/brand/`, and are not tokens: no component draws
+  in them. The lockup (the mark and the word) heads the README and is not
+  used in the app's chrome.
 - **The rail**: 48px of 40px icon buttons on the canvas, `rounded-well`, each
   a 20px glyph (`RAIL_ICON`) drawn with a stroke thinned to keep the 1.6px line
   of the rest of the chrome - bigger, not bolder. Ordered by how often each is

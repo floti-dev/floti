@@ -47,7 +47,7 @@
     "verify:mac-artifact": "node scripts/verify-mac-artifact.mjs",
     "//screenshots": "Not a test, and in no suite. Builds the local host (floti, debug, as test:e2e does: the app always runs its sessions there) and the app, launches the app in a fake-claude world (test/world.ts) through the E2E launch, and saves a screenshot of every rail destination and a session terminal in the light and the dark theme to reports/screenshots, for a person to look at. The macOS screenshot workflow runs it on macos-latest; it runs the same on Windows and Linux.",
     "screenshots": "cargo build -p floti-host --bin floti --features testkit && electron-vite build && node scripts/playwright.mjs test -c scripts/screenshots",
-    "//icon": "Draws build/icon.* and packs build/icon.ico and build/icon.icns. Both are committed, so this is not part of the build - run it when the artwork changes.",
+    "//icon": "Renders assets/brand/mark-colour-circle.svg into build/icon.* through headless Chrome and packs build/icon.ico and build/icon.icns. Both are committed, so this is not part of the build - run it when the artwork changes.",
     "icon": "node scripts/make-icon.mjs"
   },
   "dependencies": {

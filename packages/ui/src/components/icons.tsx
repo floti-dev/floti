@@ -1,5 +1,5 @@
 import type { JSX, SVGProps } from 'react'
-import WHEEL from './wheel.json'
+import { FLOTI_MARK_PATH, FLOTI_MARK_VIEWBOX } from './flotiMark'
 
 /**
  * Hand-rolled rather than an icon package: the shell needs eight glyphs, and
@@ -558,55 +558,31 @@ export function ListIcon(props: IconProps): JSX.Element {
 }
 
 
-/** The eight spokes as one path, hub to rim, and their handles as another, rim to cap. */
-const [SPOKES, HANDLES] = (() => {
-  const at = (r: number, a: number): string => `${(8 + r * Math.cos(a)).toFixed(2)} ${(8 + r * Math.sin(a)).toFixed(2)}`
-  const angles = Array.from({ length: 8 }, (_, i) => (i * 2 * Math.PI) / 8)
-  return [
-    angles.map((a) => `M${at(WHEEL.hub, a)}L${at(WHEEL.rim, a)}`).join(''),
-    angles.map((a) => `M${at(WHEEL.rim, a)}L${at(WHEEL.handleEnd, a)}`).join('')
-  ]
-})()
-
 /**
- * The brand mark: the ship's wheel the app icon is drawn from.
+ * The brand mark: the longship, in one colour.
  *
- * `wheel.json` holds its radii and widths on this 16-unit grid, and
- * `scripts/make-icon.mjs` draws the .ico from the same file, so the mark in
- * the window and the icon on the taskbar are one drawing, not two that
- * resemble each other.
- *
- * Most of it is rim: a rim at two thirds of the radius, short round-capped
- * handles and a hollow hub. The wheel it replaced had a small rim and long
- * knobbed handles, a fine ship's wheel at 256px and a snowflake at the 16-20px
- * the title bar draws it.
+ * Filled with `currentColor`, so the caller's text token colours it. The app
+ * icon is the colour mark in its circle (`assets/brand/mark-colour-circle.svg`,
+ * rasterised by `scripts/make-icon.mjs`); this is the bare ship, which holds
+ * up in one colour at 16px where the circle and its three colours do not.
  *
  * Vector rather than the .ico the window itself is given: this renders at
  * whatever the display's pixel ratio is, and a 16px bitmap on a 150% monitor is
- * the one place that artwork visibly softens.
- *
- * Stroked in `currentColor`. At the rail's 20px the rim and handles are the
- * 1.6px line every rail glyph is drawn with, so the mark heading the column
- * reads as part of it. The spokes are thinner, so the hub's ring stays open
- * between them.
+ * the one place that artwork visibly softens. Below 16px the shields and waves
+ * close up, so nothing draws it smaller.
  */
-export function HelmMarkIcon(props: IconProps): JSX.Element {
+export function FlotiMarkIcon(props: IconProps): JSX.Element {
   return (
     <svg
-      viewBox="0 0 16 16"
-      width="14"
-      height="14"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
+      viewBox={FLOTI_MARK_VIEWBOX}
+      width="16"
+      height="16"
+      fill="currentColor"
       aria-hidden="true"
       focusable="false"
       {...props}
     >
-      <path d={SPOKES} strokeWidth={WHEEL.spokeWidth} />
-      <path d={HANDLES} strokeWidth={WHEEL.handleWidth} />
-      <circle cx="8" cy="8" r={WHEEL.rim} strokeWidth={WHEEL.rimWidth} />
-      <circle cx="8" cy="8" r={WHEEL.hub} strokeWidth={WHEEL.hubWidth} />
+      <path d={FLOTI_MARK_PATH} />
     </svg>
   )
 }

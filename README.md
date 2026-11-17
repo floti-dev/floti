@@ -1,4 +1,9 @@
-# Floti
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/lockup-colour-dark.svg">
+    <img src="assets/brand/lockup-colour.svg" alt="floti" width="280">
+  </picture>
+</h1>
 
 A portable, configurable desktop shell **on top of** Claude Code. Not a client,
 not a reimplementation - Floti hosts the real `claude` TUI in an embedded terminal

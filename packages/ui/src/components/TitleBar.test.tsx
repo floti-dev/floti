@@ -40,6 +40,14 @@ describe('TitleBar', () => {
     expect(strip.firstElementChild!.querySelector('[aria-label="Floti"]')).not.toBeNull()
   })
 
+  it('draws the mark at 24px, larger than the rail icons, so the longship does not crowd', () => {
+    runningOn('Win32')
+    const { container } = render(<TitleBar />)
+    const mark = container.querySelector('[aria-label="Floti"]')!
+    expect(mark.getAttribute('width')).toBe('24')
+    expect(mark.getAttribute('height')).toBe('24')
+  })
+
   it('on Linux is drawn as on Windows, under the native frame', () => {
     runningOn('Linux x86_64')
     const { container } = render(<TitleBar />)

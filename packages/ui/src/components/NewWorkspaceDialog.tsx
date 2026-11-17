@@ -4,7 +4,7 @@ import type { TemplateChoice, TemplatePreview } from '@helm/core'
 import { cn } from '../lib/cn'
 import { ROW_SELECTED } from '../lib/rows'
 import { SEGMENT_ON } from '../lib/segmented'
-import { CloseIcon, HelmMarkIcon } from './icons'
+import { CloseIcon, FlotiMarkIcon } from './icons'
 import { Overlay } from './Overlay'
 
 export interface NewWorkspaceDialogProps {
@@ -135,7 +135,7 @@ export function NewWorkspaceDialog({
       onDismiss={onCancel}
     >
       <header className="flex shrink-0 items-center gap-[9px] px-[22px] pt-[18px]">
-        <HelmMarkIcon width={13} height={13} className="shrink-0 text-accent" />
+        <FlotiMarkIcon width={16} height={16} className="shrink-0 text-accent" />
         <h2 className="text-[15px] font-medium tracking-tight text-fg">
           {mode === 'new' ? 'New workspace' : 'Turn a folder into a workspace'}
           {host !== undefined && (
