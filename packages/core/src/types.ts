@@ -2796,18 +2796,18 @@ export interface ContentSearchResult {
 
 /** One row of the picker. */
 export interface TemplateChoice {
-  /** Directory name, and what `template:` records. `minimal` for the built-in. */
+  /** Directory name, and what `template:` records. `starter` for Starter, the built-in. */
   id: string
   label: string
   description: string | null
   /** `order:` from `template.yaml`. Sorted on before the label; null sorts last. */
   order: number | null
-  /** The built-in scaffold, which has no directory behind it. */
+  /** Starter, the built-in template, which has no directory behind it. */
   builtIn: boolean
 }
 
 export interface TemplateListing {
-  /** `minimal` first and always, then the user's by `order` then label. */
+  /** Starter first and always, then the user's by `order` then label. */
   templates: TemplateChoice[]
   /** Where the user's templates live, so the dialog can say so. */
   dir: string

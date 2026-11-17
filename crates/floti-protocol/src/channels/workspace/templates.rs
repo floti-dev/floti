@@ -10,8 +10,8 @@ use ts_rs::TS;
 use super::{Millis, WorkspaceMode};
 
 request_channel!(
-    /// The picker's rows: `minimal` first and always, then the templates
-    /// folder's.
+    /// The picker's rows: Starter (`starter`) first and always, then the
+    /// templates folder's.
     ListTemplates = "template:list", () => TemplateListing
 );
 request_channel!(
@@ -59,14 +59,14 @@ request_channel!(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TemplateChoice {
-    /// The folder name, and what a workspace records. `minimal` for the
-    /// built-in scaffold.
+    /// The folder name, and what a workspace records. `starter` for Starter,
+    /// the built-in template.
     pub id: String,
     pub label: String,
     pub description: Option<String>,
     /// `order:` from `template.yaml`; null sorts last.
     pub order: Option<i32>,
-    /// The built-in scaffold, which has no folder behind it.
+    /// Starter, the built-in template, which has no folder behind it.
     pub built_in: bool,
 }
 

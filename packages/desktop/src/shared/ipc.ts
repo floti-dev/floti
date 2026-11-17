@@ -1134,12 +1134,13 @@ export interface IpcRequests {
    * one. The new workspace becomes a scan root in the same call, because a
    * workspace the user cannot see is not one they created.
    *
-   * `template` applies in `'new'` mode only. Absent or `minimal` writes the
-   * built-in scaffold - `workspace.yaml`, `repos/`, an empty `.claude/` - and
-   * anything else names a directory in the templates directory, whose tree is
-   * written into the new workspace. Converting is deliberately template-free: it
-   * writes a manifest and a `.claude/` into a folder somebody already has, and
-   * a layout written into their work is not a scaffold.
+   * `template` applies in `'new'` mode only. Absent or `starter` writes Starter,
+   * the built-in template - `workspace.yaml`, an empty `repos/` and an
+   * `AGENTS.md` naming the workspace - and anything else names a directory in
+   * the templates directory, whose tree is written into the new workspace.
+   * Converting is deliberately template-free: it writes only a manifest into a
+   * folder somebody already has, and a layout written into their work is not a
+   * scaffold.
    */
   'workspace:create': {
     request: { mode: 'new' | 'convert'; dir: string; name?: string; template?: string }
@@ -1147,7 +1148,7 @@ export interface IpcRequests {
   }
 
   /**
-   * The picker's rows: `minimal` first and always, then whatever is in the
+   * The picker's rows: Starter first and always, then whatever is in the
    * templates directory. A template whose `template.yaml` cannot be read is
    * left out with a sentence in `problems` rather than breaking the list.
    */

@@ -2922,7 +2922,7 @@
         },
         "template": {
           "default": null,
-          "description": "For `new` only: `minimal` or absent writes the built-in scaffold, and\nanything else names a template.",
+          "description": "For `new` only: absent, `starter` or `minimal` (its old id) writes\nStarter, the built-in template, and anything else names a template.",
           "type": [
             "string",
             "null"
@@ -10237,7 +10237,7 @@
       "description": "One row of the template picker.",
       "properties": {
         "builtIn": {
-          "description": "The built-in scaffold, which has no folder behind it.",
+          "description": "Starter, the built-in template, which has no folder behind it.",
           "type": "boolean"
         },
         "description": {
@@ -10247,7 +10247,7 @@
           ]
         },
         "id": {
-          "description": "The folder name, and what a workspace records. `minimal` for the\nbuilt-in scaffold.",
+          "description": "The folder name, and what a workspace records. `starter` for Starter,\nthe built-in template.",
           "type": "string"
         },
         "label": {

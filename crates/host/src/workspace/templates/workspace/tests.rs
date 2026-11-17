@@ -259,9 +259,10 @@ fn ignores_a_template_when_converting() {
     .unwrap();
 
     assert!(result.problems.is_empty(), "{:?}", result.problems);
+    assert_eq!(result.created, ["workspace.yaml"]);
     let manifest = read(&world.root.join("workspace.yaml"));
     assert!(
-        line_matches(&manifest, "template: \"minimal\""),
+        !manifest.lines().any(|line| line.starts_with("template:")),
         "{manifest}"
     );
     assert!(!tree(&world.root).contains(&"CLAUDE.md".to_owned()));
@@ -311,42 +312,92 @@ fn project_names(roots: &[&Path]) -> (Vec<String>, Vec<String>) {
     )
 }
 
+/// Starter's AGENTS.md for a workspace called "My Work", as the onboarding
+/// design draws it. Spelt out rather than read from the embedded file, so a
+/// change to the text is a change to this test too.
+const STARTER_AGENTS_MD_FOR_MY_WORK: &str = "# My Work
+
+A Floti workspace: a folder that holds repositories and the instructions every
+agent working on them follows. Floti gives this file to each session started
+here or in a repository under it, whichever agent runs it.
+
+## Layout
+
+- `workspace.yaml` is Floti's record of this workspace.
+- `repos/` holds the repositories, one folder each. Clone new ones here.
+
+## How to work here
+
+- Work in the repository the task is about, and read its own instructions
+  (its AGENTS.md or CLAUDE.md) first. They win over this file inside it.
+- Make changes on a branch, not the default branch.
+- Ask before anything hard to undo or seen outside this computer: pushing,
+  merging, publishing, deleting or sending.
+- Run the tests for what you changed before calling it done, and say what
+  you did not check.
+- Keep to what was asked. Mention anything else you notice instead of
+  fixing it unasked.
+
+## This file
+
+Edit it to say what agents here should know: what the repositories are for,
+how they fit together, and the rules that hold across them. A skill every
+agent should have goes in `.agents/skills/<name>/SKILL.md`.
+";
+
 #[test]
-fn scaffolds_the_minimum_and_nothing_else_for_the_minimal_template() {
+fn starter_writes_the_manifest_an_empty_repos_and_agents_md_with_its_name_and_nothing_else() {
     let dirs = TestDirs::new();
     let root = dirs.folder("workspace root");
-    let result = new_workspace(&root, "work", Some("minimal"));
+    let result = new_workspace(&root, "My Work", Some("starter"));
+    let workspace = root.join("My Work");
 
     assert!(result.problems.is_empty(), "{:?}", result.problems);
-    assert_eq!(result.path.as_deref(), Some(root.join("work").as_path()));
+    assert_eq!(result.path.as_deref(), Some(workspace.as_path()));
+    assert_eq!(result.created, ["repos", "AGENTS.md", "workspace.yaml"]);
+    assert_eq!(tree(&workspace), ["AGENTS.md", "repos", "workspace.yaml"]);
     assert_eq!(
-        tree(&root.join("work")),
-        [".claude", "repos", "workspace.yaml"]
+        read(&workspace.join("AGENTS.md")),
+        STARTER_AGENTS_MD_FOR_MY_WORK
     );
+    assert!(line_matches(
+        &read(&workspace.join("workspace.yaml")),
+        "template: \"starter\""
+    ));
 }
 
 #[test]
-fn defaults_to_the_minimal_template_when_none_is_named() {
-    let dirs = TestDirs::new();
-    let root = dirs.folder("workspace root");
-    let result = new_workspace(&root, "work", None);
+fn makes_starter_when_no_template_is_named_or_the_old_built_in_is() {
+    for asked in [None, Some(""), Some("minimal"), Some("Starter")] {
+        let dirs = TestDirs::new();
+        let root = dirs.folder("workspace root");
+        let result = new_workspace(&root, "work", asked);
 
-    assert_eq!(result.created, ["repos", ".claude", "workspace.yaml"]);
-    assert_eq!(
-        tree(&root.join("work")),
-        [".claude", "repos", "workspace.yaml"]
-    );
-    assert!(line_matches(
-        &read(&root.join("work").join("workspace.yaml")),
-        "template: \"minimal\""
-    ));
+        assert!(
+            result.problems.is_empty(),
+            "{asked:?}: {:?}",
+            result.problems
+        );
+        assert_eq!(
+            tree(&root.join("work")),
+            ["AGENTS.md", "repos", "workspace.yaml"],
+            "{asked:?}"
+        );
+        assert!(
+            line_matches(
+                &read(&root.join("work").join("workspace.yaml")),
+                "template: \"starter\""
+            ),
+            "{asked:?}"
+        );
+    }
 }
 
 #[test]
 fn writes_four_keys_and_no_prose() {
     let dirs = TestDirs::new();
     let root = dirs.folder("workspace root");
-    new_workspace(&root, "work", Some("minimal"));
+    new_workspace(&root, "work", Some("starter"));
     let manifest = read(&root.join("work").join("workspace.yaml"));
 
     let keys: Vec<&str> = manifest
@@ -357,7 +408,7 @@ fn writes_four_keys_and_no_prose() {
     assert_eq!(keys, ["name", "template", "version", "created"]);
     assert!(!manifest.contains('#'));
     assert!(line_matches(&manifest, "name: \"work\""));
-    assert!(line_matches(&manifest, "template: \"minimal\""));
+    assert!(line_matches(&manifest, "template: \"starter\""));
     assert!(looks_like_iso(
         manifest_value(&manifest, "created").unwrap()
     ));
@@ -423,10 +474,17 @@ fn converts_a_folder_of_repos_in_place_without_hiding_them() {
 
     let result = convert(&root);
     assert!(result.problems.is_empty(), "{:?}", result.problems);
-    assert!(result.created.contains(&"workspace.yaml".to_owned()));
+    assert_eq!(result.created, ["workspace.yaml"]);
+    assert_eq!(tree(&root), ["alpha", "beta", "workspace.yaml"]);
 
     let manifest = read(&root.join("workspace.yaml"));
     assert!(line_matches(&manifest, "repos: \".\""), "{manifest}");
+    let keys: Vec<&str> = manifest
+        .trim()
+        .lines()
+        .map(|line| line.split(':').next().unwrap())
+        .collect();
+    assert_eq!(keys, ["name", "version", "created", "repos"]);
 
     let (workspaces, projects) = project_names(&[&root]);
     assert_eq!(workspaces.len(), 1);
@@ -450,6 +508,53 @@ fn omits_repos_when_converting_a_folder_that_already_has_repos() {
     );
     let (_, projects) = project_names(&[&root]);
     assert!(projects.contains(&"alpha".to_owned()), "{projects:?}");
+}
+
+#[test]
+fn converting_leaves_the_folders_own_instructions_and_config_as_they_are() {
+    let dirs = TestDirs::new();
+    let root = dirs.folder("workspace root");
+    write(&root.join("CLAUDE.md"), "# mine\n");
+    write(&root.join(".claude").join("settings.json"), "{}");
+    fs::create_dir_all(root.join("repos").join("alpha")).unwrap();
+
+    let result = convert(&root);
+
+    assert_eq!(result.created, ["workspace.yaml"]);
+    assert_eq!(
+        tree(&root),
+        [
+            ".claude",
+            ".claude/settings.json",
+            "CLAUDE.md",
+            "repos",
+            "repos/alpha",
+            "workspace.yaml"
+        ]
+    );
+    assert_eq!(read(&root.join("CLAUDE.md")), "# mine\n");
+    assert!(!root.join("AGENTS.md").exists());
+}
+
+#[test]
+fn a_workspace_recorded_as_minimal_still_lists_with_its_label_and_its_repositories() {
+    let dirs = TestDirs::new();
+    let root = dirs.folder("older");
+    write(
+        &root.join("workspace.yaml"),
+        "name: \"older\"\ntemplate: \"minimal\"\nversion: \"1\"\ncreated: \"2026-01-01T00:00:00.000Z\"\n",
+    );
+    fs::create_dir_all(root.join(".claude")).unwrap();
+    fs::create_dir_all(root.join("repos").join("alpha")).unwrap();
+
+    let result = scan(&[root.display().to_string()], false);
+
+    assert_eq!(result.workspaces.len(), 1);
+    assert_eq!(result.workspaces[0].name, "older");
+    assert_eq!(result.workspaces[0].template.as_deref(), Some("minimal"));
+    let mut projects: Vec<String> = result.projects.into_iter().map(|p| p.name).collect();
+    projects.sort();
+    assert_eq!(projects, ["alpha", "older"]);
 }
 
 #[test]
