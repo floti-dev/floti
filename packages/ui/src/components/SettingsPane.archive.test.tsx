@@ -36,6 +36,7 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     onRecheck: vi.fn(),
     onLocateClaude: vi.fn(),
     onClearClaudeOverride: vi.fn(),
+    onShowWalkthrough: vi.fn(),
     roots: [],
     projectCount: 0,
     scanning: false,

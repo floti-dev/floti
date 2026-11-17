@@ -1,4 +1,4 @@
-import { app, type BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell, type WebContents } from 'electron'
 import { FOREIGN_PAGE, type HelmPage, type HostPageLinks } from './host/page-link'
 import type { RemoteHostLinks } from './host/remote'
 import type { PortForwards } from './host/forwards'
@@ -8,7 +8,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
 import { pluginThemeOf, type AppSettings } from '@helm/core'
-import { remoteHostsProblem, type SshConfigHosts, type WslDistroList } from '@helm/core/types'
+import { remoteHostsProblem, type SshConfigHosts, type WalkthroughStep, type WslDistroList } from '@helm/core/types'
 import type { BrowserHost } from './browser'
 import type { MenuLayer } from './menuLayer'
 import type { BrowserMcpHost } from './browser-mcp'
@@ -175,6 +175,11 @@ export interface IpcContext {
   /** Called when the renderer reports it has mounted. */
   rendererReady: () => void
   /**
+   * The guided first run's windows: the setup window handing over to the
+   * shell, and Settings starting it again (`walkthrough:*`).
+   */
+  walkthrough: WalkthroughWindows
+  /**
    * Called when the `claude` path, the terminal shell, the archive's ceiling,
    * either browser tools setting or the session tools setting changes: the
    * local host is told all of them.
@@ -194,6 +199,22 @@ export interface IpcContext {
    */
   chooseDirectory?: ((title: string) => string | null) | undefined
   chooseFile?: ((title: string) => string | null) | undefined
+}
+
+/** What `walkthrough:*` reaches: main owns which windows are open. */
+export interface WalkthroughWindows {
+  /** Opens the shell, or brings the open one forward, and closes the setup window. */
+  openShell: () => void
+  /** Puts the walkthrough at `step` (1 to 4) and opens the setup window. */
+  open: (step: WalkthroughStep) => void
+}
+
+/**
+ * The window a page's request came from, for a picker's parent and for what
+ * only that page is waiting to hear; the shell when it was not a window.
+ */
+function windowOf(sender: WebContents, fallback: BrowserWindow | null): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(sender) ?? fallback
 }
 
 /** What Settings' Stop host reaches: main holds the link to this PC's host. */
@@ -351,10 +372,12 @@ export function registerIpc(ctx: IpcContext): void {
     'remoteHosts:cancelAdd': ({ attempt }) => {
       ctx.remoteAdd.cancel(attempt)
     },
-    'remoteHosts:install': async ({ id, host }) => {
-      // A floti update's steps, shown in the row as they come.
+    'remoteHosts:install': async ({ id, host }, event) => {
+      // A floti update's steps, shown in the row as they come, in the window
+      // that asked: the shell's, or the setup window's add-a-host dialog.
+      const asker = windowOf(event.sender, ctx.window())
       const outcome = await ctx.remoteInstall.install(id, (line) =>
-        emit(ctx.window(), 'remoteHosts:installProgress', { id, line })
+        emit(asker, 'remoteHosts:installProgress', { id, line })
       )
       if (outcome.ok === true) ctx.remoteHosts.installed(host, outcome.floti, outcome.startsAtNextSignIn)
       return outcome
@@ -369,6 +392,8 @@ export function registerIpc(ctx: IpcContext): void {
     'forwards:read': () => ctx.forwards.list(),
 
     'ownApp:info': () => ownAppInfo(),
+    'walkthrough:openShell': () => ctx.walkthrough.openShell(),
+    'walkthrough:open': ({ step }) => ctx.walkthrough.open(step),
     'ownData:state': () => ctx.ownData.state(),
     'windowSessions:lostLayout': () => services.lost.layout,
     'windowSessions:hostSessionCount': () => ctx.localHost.sessionCount(),
@@ -381,9 +406,12 @@ export function registerIpc(ctx: IpcContext): void {
     // connection and Helm's half here.
     'ownSettings:read': () => services.settings,
 
-    'ownSettings:write': (patch) => {
+    'ownSettings:write': (patch, event) => {
       const next = updateSettings(services, patch)
       emit(ctx.window(), 'ownSettings:changed', next)
+      // The setup window, writing beside the shell, hears its own write too.
+      const asker = windowOf(event.sender, null)
+      if (asker !== null && asker !== ctx.window()) emit(asker, 'ownSettings:changed', next)
       settingsWritten(patch, next)
       return next
     },
@@ -407,13 +435,13 @@ export function registerIpc(ctx: IpcContext): void {
 
     // The picker is the window's own; the folders chosen go to the host's scan
     // roots.
-    'roots:add': async () => {
+    'roots:add': async (_payload, event) => {
       const title = 'Add a folder to scan'
       if (ctx.chooseDirectory) {
         const picked = ctx.chooseDirectory(title)
         return picked === null ? (await workspace.settings()).scanRoots : workspace.acceptRoots([picked])
       }
-      const win = ctx.window()
+      const win = windowOf(event.sender, ctx.window())
       const options: Electron.OpenDialogOptions = {
         title,
         properties: ['openDirectory', 'multiSelections']
@@ -425,9 +453,9 @@ export function registerIpc(ctx: IpcContext): void {
       return workspace.acceptRoots(result.filePaths)
     },
 
-    'path:chooseDirectory': async ({ title }) => {
+    'path:chooseDirectory': async ({ title }, event) => {
       if (ctx.chooseDirectory) return { path: ctx.chooseDirectory(title ?? 'Choose a folder') }
-      const win = ctx.window()
+      const win = windowOf(event.sender, ctx.window())
       const options: Electron.OpenDialogOptions = {
         title: title ?? 'Choose a folder',
         properties: ['openDirectory', 'createDirectory']
@@ -438,10 +466,10 @@ export function registerIpc(ctx: IpcContext): void {
       return { path: result.canceled ? null : (result.filePaths[0] ?? null) }
     },
 
-    'path:chooseFile': async ({ title }) => {
+    'path:chooseFile': async ({ title }, event) => {
       const heading = title ?? 'Choose a program'
       if (ctx.chooseFile) return { path: ctx.chooseFile(heading) }
-      const win = ctx.window()
+      const win = windowOf(event.sender, ctx.window())
       const options: Electron.OpenDialogOptions = {
         title: heading,
         properties: ['openFile'],

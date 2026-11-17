@@ -22,6 +22,7 @@ import { reconcileRunningSessions } from './sessions'
 import {
   readSettings,
   settleUpgradeNote,
+  settleWalkthrough,
   validateSetting,
   writeSetting,
   writeSettings,
@@ -153,6 +154,63 @@ describe('openStore', () => {
     } finally {
       raw.close()
     }
+  })
+})
+
+describe('the walkthrough as the database opens', () => {
+  /** Opens `file` as main does: migrated, then the walkthrough settled. */
+  function openAsMain(file: string): Store {
+    const opened = openStore({ file })
+    settleWalkthrough(opened)
+    return opened
+  }
+
+  it('starts the walkthrough at step 1 on a database this open created: a first start', async () => {
+    await withFile((file, created) => {
+      created.close()
+      const fresh = openAsMain(join(dirname(file), 'fresh.db'))
+      try {
+        expect(readSettings(fresh).walkthrough).toEqual({ step: 1, workspace: null })
+      } finally {
+        fresh.close()
+      }
+    })
+  })
+
+  it('resumes the step it was closed on, and leaves a finished one finished', async () => {
+    await withFile((file, created) => {
+      created.close()
+      const fresh = join(dirname(file), 'fresh.db')
+      const first = openAsMain(fresh)
+      writeSettings(first, { walkthrough: { step: 3, workspace: null } })
+      first.close()
+
+      const again = openAsMain(fresh)
+      expect(readSettings(again).walkthrough).toEqual({ step: 3, workspace: null })
+      writeSettings(again, { walkthrough: null })
+      again.close()
+
+      const done = openAsMain(fresh)
+      try {
+        expect(readSettings(done).walkthrough).toBeNull()
+      } finally {
+        done.close()
+      }
+    })
+  })
+
+  it('never starts it on a database that was already here: that start opens the shell', async () => {
+    await withFile((file, created) => {
+      // `withFile`'s own open created it; this one finds it there.
+      created.close()
+      const existing = openAsMain(file)
+      try {
+        expect(existing.migrations.applied).toEqual([])
+        expect(readSettings(existing).walkthrough).toBeNull()
+      } finally {
+        existing.close()
+      }
+    })
   })
 })
 
@@ -288,6 +346,7 @@ describe('settings', () => {
       },
       firstRunCompletedAt: '2026-08-09T12:00:00.000Z',
       upgradeNoteSeenAt: '2026-11-13T09:00:00.000Z',
+      walkthrough: { step: 5, workspace: join(dir, 'my-work') },
       claudePath: join(dir, 'claude.exe'),
       terminalFontFamily: 'Consolas',
       terminalFontSize: 17,
@@ -892,6 +951,22 @@ describe('settings validation', () => {
       bad: ['soon', '', 1794560000000, {}]
     },
     {
+      key: 'walkthrough',
+      good: [null, { step: 1, workspace: null }, { step: 6, workspace: 'C:\\Users\\you\\Projects\\my-work' }],
+      bad: [
+        {},
+        { step: 0, workspace: null },
+        { step: 7, workspace: null },
+        { step: '2', workspace: null },
+        { step: 3 },
+        { step: 5, workspace: '' },
+        { step: 5, workspace: 42 },
+        { step: 2, workspace: null, done: true },
+        [],
+        'welcome'
+      ]
+    },
+    {
       key: 'noticesSeen',
       good: [{}, { local: '2026-11-14T20:28:05.253Z' }, { local: '2026-11-14T20:28:05Z', 'h-build': '2026-11-14T23:15:23.444Z' }],
       bad: [
@@ -1295,7 +1370,8 @@ describe('settings validation', () => {
       hosts: [{ id: 'h1', name: 'build-box', transport: { kind: 'ssh', target: 'you@build-box' } }],
       profilesCopiedToHostAt: null,
       pluginsCopiedToHostAt: null,
-      upgradeNoteSeenAt: null
+      upgradeNoteSeenAt: null,
+      walkthrough: null
     })
 
     expect(() => writeSettings(store, readSettings(store))).not.toThrow()
@@ -1351,6 +1427,7 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   profilesCopiedToHostAt: null,
   pluginsCopiedToHostAt: null,
   upgradeNoteSeenAt: null,
+  walkthrough: null,
   noticesSeen: {}
 })
 

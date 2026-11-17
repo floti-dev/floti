@@ -128,18 +128,25 @@ entire flow, and there is no login screen anywhere in this app.
 
 ### First run
 
-Three things, in the order they matter:
+The first time Floti opens, a short walkthrough sets it up and ends in a
+running session. Every step can be skipped, closing the window resumes it, and
+Settings > General shows it again.
 
-1. **Claude Code.** Floti looks on `PATH` and in the usual install directory. If
-   it is somewhere unusual, point at it by hand; the file is run with
-   `--version` before it is accepted. The tested range is 2.1.277 up to 2.2.0,
-   kept by the host's Claude Code backend - outside it you get a warning strip
-   and nothing is blocked. `floti setup` and `floti doctor` check the same
-   range and say what to run when Claude Code is missing or outside it.
-2. **Signed in.** Detected from the presence of a login, never by reading one.
-   The remedy is to run `claude` yourself.
-3. **Where your work is.** Add a folder, or create a workspace. Nothing is scanned
-   until you say what to scan.
+1. **Welcome.**
+2. **Your agents.** Whether Claude Code is installed and signed in, by its own
+   check: a login is detected from its presence, never by reading one. A
+   missing one shows the line that installs it, a signed-out one `claude` to
+   run yourself. The tested range is 2.1.277 up to 2.2.0, kept by the host's
+   Claude Code backend - outside it you get a warning strip and nothing is
+   blocked. Settings > General points at a `claude` somewhere unusual; the file
+   is run with `--version` before it is accepted. `floti setup` and
+   `floti doctor` check the same range and say what to run.
+3. **The host on this computer.** What quitting Floti does to this computer's
+   sessions (End by default), and optionally a host on another computer.
+4. **A workspace.** Create one from Starter, use a folder you have, or point
+   Floti at where yours are. Nothing is scanned until you say what to scan.
+5. **Around the window**, in the app itself.
+6. **Your first session**, with an optional first message.
 
 A folder of ordinary repositories is enough - there is no required layout, and
 Floti is useful pointed at a directory with no workspace anywhere in sight.

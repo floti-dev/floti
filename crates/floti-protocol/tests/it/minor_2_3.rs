@@ -250,6 +250,7 @@ fn a_2_3_launch_without_its_additions_is_the_frame_a_2_2_client_sends() {
         backend: None,
         agent: None,
         chosen: None,
+        opening_prompt: None,
         cols: 80,
         rows: 24,
     };

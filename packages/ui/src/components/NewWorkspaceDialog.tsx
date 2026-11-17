@@ -186,7 +186,7 @@ export function NewWorkspaceDialog({
                   : 'text-fg-muted hover:text-fg'
               )}
             >
-              {candidate === 'new' ? 'A new folder' : 'A folder I already have'}
+              {candidate === 'new' ? 'New' : 'Use a folder I have'}
             </button>
           ))}
         </div>

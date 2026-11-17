@@ -2,12 +2,20 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@helm/ui/styles.css'
 import { App } from './App'
-import { helm } from './bridge'
+import { helm, localHostStep } from './bridge'
 import { installOverlayInspector, installRoutedBridge, installTerminalInspector } from './inspect'
+import { SetupWindow } from './setup/SetupWindow'
 import { applyShape, applyTheme } from './theme'
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root is missing from index.html')
+
+/**
+ * Which window this page is: the guided first run's setup window, which main
+ * opens on this page with `?window=setup`, or the shell. One page and one
+ * bundle, so both run with the same preload, guards and IPC boundary.
+ */
+const setupWindow = new URLSearchParams(window.location.search).get('window') === 'setup'
 
 // See inspect.ts: the terminals live outside React, and so does the flag that
 // says a modal is up. This is how a check driving the real window sees either.
@@ -30,8 +38,6 @@ void Promise.allSettled([helm.invoke('theme:current'), helm.invoke('settings:rea
   })
   .finally(() => {
     createRoot(container).render(
-      <StrictMode>
-        <App />
-      </StrictMode>
+      <StrictMode>{setupWindow ? <SetupWindow bridge={helm} hostStep={localHostStep} /> : <App />}</StrictMode>
     )
   })

@@ -27,6 +27,8 @@ import {
   PINNED_PROJECTS_MAX,
   PROJECT_SHELL_HEIGHT_PCT,
   QUIT_SESSIONS,
+  WALKTHROUGH_START,
+  WALKTHROUGH_STEPS,
   RAIL_DESTINATIONS,
   REMOTE_HOST_ID_MAX,
   remoteHostsProblem,
@@ -500,6 +502,23 @@ export const SETTING_VALIDATORS: SettingValidators = {
   /** The same: when the upgrade note was closed, or null. */
   upgradeNoteSeenAt: (value) => timestampProblem(value),
 
+  /** A step of the walkthrough and the workspace it chose, or null while it is not showing. */
+  walkthrough: (value) => {
+    if (value === null) return null
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      return `expected a walkthrough step or null, got ${describe(value)}`
+    }
+    const { step, workspace, ...rest } = value as Record<string, unknown>
+    if (!(WALKTHROUGH_STEPS as readonly unknown[]).includes(step)) {
+      return `expected a step from 1 to 6, got ${describe(step)}`
+    }
+    if (workspace !== null && (typeof workspace !== 'string' || workspace.trim() === '')) {
+      return `expected a workspace folder or null, got ${describe(workspace)}`
+    }
+    const extra = Object.keys(rest)
+    return extra.length === 0 ? null : `expected only step and workspace, got ${extra.join(', ')}`
+  },
+
   /**
    * One family name, or null for the built-in stack.
    *
@@ -851,9 +870,29 @@ export function writeSettings(store: Store, patch: Partial<AppSettings>): AppSet
  * so a note still due stays due until it is closed, and one seen stays seen.
  */
 export function settleUpgradeNote(store: Store): void {
-  const { applied, alreadyApplied } = store.migrations
-  const createdNow = alreadyApplied.length === 0 && applied.length > 0
-  if (!createdNow) return
+  if (!createdByThisOpen(store)) return
   if (readSettings(store).upgradeNoteSeenAt !== null) return
   writeSettings(store, { upgradeNoteSeenAt: new Date().toISOString() })
+}
+
+/**
+ * Decides, as the database opens, whether this start is a first start, which
+ * runs the guided first run (`walkthrough`).
+ *
+ * A first start is one with no data folder, and the open that creates
+ * `helm.db` is where that shows: a database that was here before has its
+ * migrations already applied, so it opens the shell. Only a walkthrough not already written is started, and any
+ * later open changes nothing, so one that was closed halfway resumes where it
+ * was and one that was finished stays finished.
+ */
+export function settleWalkthrough(store: Store): void {
+  if (!createdByThisOpen(store)) return
+  if (readSettings(store).walkthrough !== null) return
+  writeSettings(store, { walkthrough: WALKTHROUGH_START })
+}
+
+/** Whether this open created the database: nothing was applied before it, and it applied the migrations. */
+function createdByThisOpen(store: Store): boolean {
+  const { applied, alreadyApplied } = store.migrations
+  return alreadyApplied.length === 0 && applied.length > 0
 }

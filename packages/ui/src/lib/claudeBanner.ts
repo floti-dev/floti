@@ -1,4 +1,4 @@
-import type { SetupClaudeStatus } from '../components/SetupPane'
+import type { SetupClaudeStatus } from './claudeStatus'
 
 /**
  * Why the Claude Code banner is up. `missing` is the only kind that offers

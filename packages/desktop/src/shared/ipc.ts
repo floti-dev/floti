@@ -81,6 +81,7 @@ import type {
   InstallOutcome,
   RemoteHostConnection,
   SshConfigHosts,
+  WalkthroughStep,
   WslDistroList
 } from '@helm/core/types'
 
@@ -352,6 +353,8 @@ export interface LaunchSessionRequest {
    * absent, the agent's fill what the request leaves out.
    */
   chosen?: { model: string | null; effort: EffortLevel | null }
+  /** The session's first message, passed at launch as its opening prompt and never typed; absent for none. */
+  openingPrompt?: string | null
   cols: number
   rows: number
 }
@@ -1120,6 +1123,18 @@ export interface IpcRequests {
   'setup:locateClaude': { request: void; response: ClaudeStatus }
   /** Stamps `firstRunCompletedAt`. The pane closing is a consequence of this. */
   'setup:complete': { request: void; response: AppSettings }
+
+  /**
+   * The guided first run's two windows. `openShell` is the setup window's
+   * last word, once step 4 is done or setup is skipped: main opens the shell
+   * (or brings the open one forward with the settings the setup window
+   * wrote) and closes the setup window. `open` puts the walkthrough at a
+   * step the setup window shows and opens it beside the shell: step 1 from
+   * Settings > General's Show the walkthrough, step 4 from Back on step 5.
+   * A step past 4 is read as 1. The step itself is the `walkthrough` setting.
+   */
+  'walkthrough:openShell': { request: void; response: void }
+  'walkthrough:open': { request: { step: WalkthroughStep }; response: void }
 
   /** A directory chosen by the user, without doing anything with it yet. */
   'path:chooseDirectory': { request: { title?: string }; response: { path: string | null } }
@@ -2465,6 +2480,8 @@ export const REQUEST_CHANNELS = Object.keys({
   'setup:status': true,
   'setup:locateClaude': true,
   'setup:complete': true,
+  'walkthrough:openShell': true,
+  'walkthrough:open': true,
   'path:chooseDirectory': true,
   'path:chooseFile': true,
   'workspace:create': true,

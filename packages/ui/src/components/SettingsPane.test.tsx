@@ -19,7 +19,7 @@ import {
   type SettingsPaneProps,
   type UpdateView
 } from './SettingsPane'
-import type { SetupClaudeStatus } from './SetupPane'
+import type { SetupClaudeStatus } from '../lib/claudeStatus'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './SettingsSections'
 
 const builtin = (id: string): ThemeDefinition => {
@@ -69,6 +69,7 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     onRecheck: vi.fn(),
     onLocateClaude: vi.fn(),
     onClearClaudeOverride: vi.fn(),
+    onShowWalkthrough: vi.fn(),
     roots: ['C:\\work\\my repos'],
     projectCount: 3,
     scanning: false,
@@ -166,10 +167,16 @@ function fact(container: HTMLElement, label: string): string {
 }
 
 describe('SettingsPane', () => {
+  it('opens the walkthrough again from General', async () => {
+    const { props } = renderPane()
+    await userEvent.click(within(group('Walkthrough')).getByRole('button', { name: 'Show the walkthrough' }))
+    expect(props.onShowWalkthrough).toHaveBeenCalledTimes(1)
+  })
+
   it('draws each section on its own: its title, its groups in order, and their controls', () => {
     const { rerender } = renderPane()
     const sections: Array<[SettingsSectionId, string, string[]]> = [
-      ['general', 'General', ['Claude CLI']],
+      ['general', 'General', ['Claude CLI', 'Walkthrough']],
       ['appearance', 'Appearance', ['Appearance']],
       ['terminal', 'Terminal', ['Terminal']],
       ['sessions', 'Sessions', ['Sessions']],
@@ -195,6 +202,7 @@ describe('SettingsPane', () => {
         ['button', 'Locate manually…'],
         ['button', 'Clear override']
       ],
+      Walkthrough: [['button', 'Show the walkthrough']],
       Workspace: [
         ['button', 'Stop scanning C:\\work\\my repos'],
         ['button', 'Add a folder']
