@@ -12,6 +12,14 @@ export interface UpdateManifest {
   channels: Record<string, { version: string; url: string; floti: Record<string, FileEntry>; desktop: Record<string, FileEntry> }>
 }
 
+export interface ReleaseFile {
+  /** The release's file name. */
+  name: string
+  url: string
+  /** Lower-case hex. */
+  sha256: string
+}
+
 export interface InstallScript {
   name: string
   template: string
@@ -23,6 +31,8 @@ export const MANIFEST_SCHEMA: number
 export const STABLE_CHANNEL: string
 export const DESKTOP_FILES: Readonly<Record<string, (version: string) => string>>
 export const INSTALL_SCRIPTS: readonly InstallScript[]
+export function downloadUrl(repo: string, version: string, name: string): string
+export function releaseFiles(sumsText: string, version: string, repo: string, targets: readonly string[]): Map<string, ReleaseFile>
 export function releaseUrlProblem(url: string): string | null
 export function releaseFolder(repo: string, version: string): string
 export function installFunction(text: string): string

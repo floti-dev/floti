@@ -6,9 +6,9 @@ description: >
   folder holding its own list and signature, and the public key of the pair
   sign-dry-run made, instead.
 
-# The package manager jobs build the Homebrew formula and the winget manifests
-# from this list and nothing else, so what they hand on names exactly the files
-# and SHA-256s the release published and signed. Needs node and the checkout.
+# `floti-dev` checks floti.dev's install scripts and update.json against this
+# list and nothing else, so what it pushes names exactly the files and SHA-256s
+# the release published and signed. Needs node and the checkout.
 # The minisign action it uses runs on Linux x64 only.
 inputs:
   version:

@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { describe, expect, inject, it } from 'vitest'
 import { RUN_ROOT } from '../../../../test/run-root'
-import { RELEASE_TARGETS, formatSums, releaseFileName, sumsFileName } from '../../scripts/floti-release.mjs'
+import { RELEASE_TARGETS, formatSums, releaseFileName, releaseFileNames, sumsFileName } from '../../scripts/floti-release.mjs'
 import {
   DESKTOP_FILES,
   INSTALL_SCRIPTS,
@@ -12,6 +12,7 @@ import {
   installScripts,
   manifestProblems,
   manifestText,
+  releaseFiles,
   releaseFolder,
   releaseManifest,
   releaseUrlProblem,
@@ -52,6 +53,42 @@ const script = (name: string, input: Partial<Parameters<typeof installScripts>[0
 }
 
 const lines = (text: string): string[] => text.trimEnd().split('\n')
+
+describe('the floti files a release names', () => {
+  const ALL = RELEASE_TARGETS.map((target) => target.name)
+
+  it('are the release files of the targets, at the release download URL, with the listed SHA-256', () => {
+    const files = releaseFiles(sums(), VERSION, REPO, ALL)
+    expect([...files.keys()]).toEqual(ALL)
+    expect(files.get('windows-arm64')).toEqual({
+      name: 'floti-3.0.0-windows-arm64.exe',
+      url: `${FOLDER}/floti-3.0.0-windows-arm64.exe`,
+      sha256: SHA['windows-arm64']
+    })
+    for (const file of files.values()) expect(releaseFileNames(VERSION)).toContain(file.name)
+  })
+
+  it('reads a SHA-256 list written on Windows', () => {
+    const files = releaseFiles(sums().replaceAll('\n', '\r\n'), VERSION, REPO, ['linux-x64'])
+    expect(files.get('linux-x64')?.sha256).toBe(SHA['linux-x64'])
+  })
+
+  it('refuses a list that does not name a target, naming the file', () => {
+    expect(() => releaseFiles(sums(VERSION, { without: ['linux-arm64'] }), VERSION, REPO, ALL)).toThrow(
+      'the SHA-256 list does not name floti-3.0.0-linux-arm64'
+    )
+    // Another version's list names none of this version's files.
+    expect(() => releaseFiles(sums('2.9.0'), VERSION, REPO, ['windows-x64', 'windows-arm64'])).toThrow(
+      'does not name floti-3.0.0-windows-x64.exe, floti-3.0.0-windows-arm64.exe'
+    )
+  })
+
+  it('refuses a version that is not a release version and a repository that is not owner/name', () => {
+    expect(() => releaseFiles(sums(), 'v3.0.0', REPO, ALL)).toThrow("'v3.0.0' is not a release version")
+    expect(() => releaseFiles(sums(), VERSION, 'floti', ALL)).toThrow("'floti' is not <owner>/<repository>")
+    expect(() => releaseFiles(sums(), VERSION, "floti-dev/floti'; x", ALL)).toThrow('is not <owner>/<repository>')
+  })
+})
 
 describe('the install function an install script carries', () => {
   it('is scripts/install’s function, without the comments above it and the call on its last line', async () => {

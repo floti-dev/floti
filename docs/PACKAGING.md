@@ -555,8 +555,7 @@ Nothing reads a later release's desktop list, so a release can rename its
 files without keeping the old names beside them.
 
 A stable release
-then updates the Homebrew formula and opens the winget pull request ("Homebrew
-and winget"), and copies the install scripts and the update manifest to
+then copies the install scripts and the update manifest to
 floti.dev ("floti.dev"). A merge that does
 not bump the version runs the checks and the floti builds, skips every build
 after them and finishes green.
@@ -571,9 +570,8 @@ after them and finishes green.
 | `sign` | The only job that reads the signing key, in the `release` environment (a prerequisite: "The release environment"). Signs every file, and `update.json` with the comment `floti update.json`, checks every signature against `crates/host/src/update/minisign.pub`, lists the twenty-eight files with their SHA-256s in the run's summary and uploads them as `release-files`, and floti.dev's files as `floti-dev`. Never runs in a dry run. |
 | `sign-dry-run` | A dry run's `sign`: the same signing and checks, with a key pair made in the run. Runs only in a dry run. |
 | `publish` | The only job with write access. Attests every file in `release-files`, then creates the release from them, publishes it and confirms it. Never runs in a dry run. |
-| `homebrew`, `winget` | After `publish`, for a stable release only: push `Formula/floti.rb` to floti-dev/homebrew-tap and open the winget pull request ("Homebrew and winget"). Never run for a preview or in a dry run. |
 | `floti-dev` | After `publish`, for a stable release only: commits `install.sh`, `install.ps1`, `update.json` and `update.json.minisig` to floti-dev/floti-dev.github.io ("floti.dev"). Never runs for a preview or in a dry run. |
-| `packages-dry-run`, `homebrew-dry-run`, `winget-dry-run` | A dry run's formula (and its stable form) and manifests, built from the run's signature-checked SHA-256 list and checked by Homebrew and winget. Run only in a dry run. |
+| `floti-dev-dry-run` | A dry run's floti.dev files, checked as `floti-dev` checks a release's, against the run's signature-checked SHA-256 list. Runs only in a dry run. |
 | `install-dry-run`, `install-dry-run-debian` | floti.dev's install scripts run for real against a local server holding the run's files, on Linux, macOS, Windows and in a Debian container ("A dry run"). Run only in a dry run. |
 | `sdk` | The plugin SDK's npm publish, on its own version. Never runs in a dry run. |
 
@@ -583,9 +581,8 @@ after them and finishes green.
   on any OS skips `assemble` and `publish` with it: a version is never
   published with half its downloads. Every runner is a standard GitHub-hosted
   one, and no certificate or paid account is involved: the Mac build is
-  ad-hoc signed and the Windows build unsigned. There are four secrets, each
-  read by one job: the minisign key by `sign`, the tap's deploy key by
-  `homebrew`, the winget token by `winget` and the site's deploy key by
+  ad-hoc signed and the Windows build unsigned. There are two secrets, each
+  read by one job: the minisign key by `sign` and the site's deploy key by
   `floti-dev`.
 - **The gate is whether the tag exists**, asked with `git ls-remote --tags`, not
   whether the commit changed the version. Diffing against the parent gives a
@@ -738,97 +735,6 @@ dry run's included. `gh secret list --repo floti-dev/floti` must not list it;
 `gh secret list --env release --repo floti-dev/floti` does. Until both steps
 are done, a real release fails at `sign`, before anything is published.
 
-### Homebrew and winget
-
-A stable release also goes to two package managers, with the floti binary
-only: the desktop app is not in either.
-
-- **Homebrew**: the formula `floti` in floti-dev/homebrew-tap, for macOS
-  arm64 and Linux x64 and arm64, installed with
-
-      brew trust floti-dev/tap && brew install floti-dev/tap/floti
-
-  Homebrew refuses to load any formula from a third-party tap until the user
-  trusts that tap, so `brew install` alone fails with "Refusing to load
-  formula ... from untrusted tap". `brew trust` accepts a tap that is not
-  tapped yet, and `brew install` then taps it. This is the line the install
-  page gives, and the dry run takes the same order.
-  There is no cask for the desktop app until it is signed: Homebrew
-  quarantines casks. The formula's test runs `floti version`.
-- **winget**: the package `FlotiDev.Floti`, installer type portable, run as
-  `floti`, with the Windows x64 and arm64 exes.
-
-Both are written by `scripts/package-managers.mjs` from the release's own
-download URLs and its SHA-256 list. The `homebrew` and `winget` jobs fetch
-that list from the published release with no token, as anybody does, and check
-its signature against `crates/host/src/update/minisign.pub` before using it.
-A preview updates neither: Homebrew and winget users get stable releases.
-
-- **`homebrew`** clones the tap over HTTPS, writes `Formula/floti.rb`, commits
-  it as `floti <version>` and pushes it with the deploy key, one push. A
-  formula that already says this release is left alone.
-- **`winget`** makes one commit holding the three manifests under
-  `manifests/f/FlotiDev/Floti/<version>/`, on microsoft/winget-pkgs' `master`
-  as it is at that moment, puts it on the fork's branch
-  `FlotiDev.Floti-<version>`, and opens the pull request, titled "New package"
-  the first time and "New version" after. The fork itself is never synced:
-  syncing is refused without the `workflow` scope whenever winget-pkgs has
-  changed its own workflows, and the token never gets that scope. A version
-  already in winget-pkgs is left alone. It uses gh and GitHub's API, not an
-  action: winget-releaser and komac update a package winget already has from
-  their own reading of the release, so neither can submit the first version,
-  and both would write manifests of their own rather than these.
-
-**Both run after `publish`, so a release is already published when either
-fails.** While a prerequisite below is missing, its job fails with one line
-naming what to create. Create it, then re-run the failed jobs from the run's
-page: a re-run pushes the formula only if it changed, moves the winget branch
-to a fresh commit and reuses a pull request already open, and does nothing for
-winget once the pull request is merged.
-
-The owner creates these once, in this order, each secret in the `release`
-environment ("The release environment"), never as a repository secret:
-
-    # 1. The tap: a public repository with a main branch.
-    gh repo create floti-dev/homebrew-tap --public --add-readme \
-      --description "Homebrew formula for floti"
-
-    # 2. Its deploy key, with write access; the private half is the secret.
-    ssh-keygen -t ed25519 -N "" -C "floti release" -f homebrew-tap-key
-    gh repo deploy-key add homebrew-tap-key.pub --repo floti-dev/homebrew-tap \
-      --allow-write --title "floti release workflow"
-    gh secret set HOMEBREW_TAP_DEPLOY_KEY --env release --repo floti-dev/floti <homebrew-tap-key
-    rm homebrew-tap-key homebrew-tap-key.pub
-
-    # 3. A GitHub account kept for this alone: a member of no organisation and a
-    #    collaborator on no repository, floti-dev's least of all. Signed in as
-    #    that account, fork winget-pkgs into it (a personal fork, because an
-    #    organisation's cannot let winget's maintainers edit the pull request)
-    #    and make a classic token with the public_repo scope at
-    #    https://github.com/settings/tokens/new. Then, as the owner of
-    #    floti-dev/floti, set the token as the secret.
-    gh repo fork microsoft/winget-pkgs --clone=false
-    gh secret set WINGET_TOKEN --env release --repo floti-dev/floti
-
-**The winget account must have no access to floti-dev.** A classic token's
-`public_repo` scope is not limited to the fork: it can push to, and open or
-merge pull requests in, every public repository its account can write to, and
-change that account's own public repositories' settings. On an account that
-can push to floti-dev/floti, whose `main` is what a release builds and signs,
-a leaked `WINGET_TOKEN` would be as bad as a leaked signing key. On an account
-that holds nothing but the fork it can do no more than push branches to that
-fork and open pull requests as that account. Fine-grained tokens cannot open
-a pull request in a repository their account does not own, so a classic
-token it is.
-
-The job finds the fork as `<the token's account>/winget-pkgs`. The first pull
-request asks that account to accept Microsoft's contributor licence agreement,
-once, by commenting `@microsoft-github-policy-service agree` on it; winget's
-reviewers merge it after that. `gh secret list --env release --repo
-floti-dev/floti` lists `HOMEBREW_TAP_DEPLOY_KEY` and `WINGET_TOKEN` beside
-`MINISIGN_SECRET_KEY`, and `gh secret list --repo floti-dev/floti` lists none
-of them.
-
 ### floti.dev
 
 floti.dev is floti-dev/floti-dev.github.io, served by GitHub Pages from its
@@ -891,13 +797,13 @@ unit test writes for 3.0.0, compared byte for byte, and the host's
 **`floti-dev`** runs after `publish`, so the scripts never name a file that
 is not downloadable yet. It fetches the SHA-256 list the release published,
 with no token, and checks its signature against the committed key (the
-`published-sums` action `homebrew` and `winget` use), then checks the four
+`published-sums` action), then checks the four
 files: exactly those four; each script, byte for byte, the one
 `scripts/floti-dev.mjs check-scripts` writes from that list, so it carries
 exactly the published SHA-256s; `update.json`'s signature against the
 committed key, and (`check-manifest`) that it names this version alone, on
 the stable channel, at the release's folder, with that list's floti files
-and SHA-256s. A dry run makes the same checks in `packages-dry-run`, with its
+and SHA-256s. A dry run makes the same checks in `floti-dev-dry-run`, with its
 own list and key. Then it clones the site over HTTPS, commits the four files
 as `floti <version>: the install scripts and update.json`, one commit, and
 pushes it with the deploy key, one push, with GitHub's host keys from its
@@ -907,7 +813,7 @@ because the site's `main` moved on since the clone is reported as that, and
 a re-run clones again. That push to the site's `main` is what publishes
 them; every other change there is the owner's, on a branch they merge.
 
-Like `homebrew`, it fails after the release is published while its
+It fails after the release is published while its
 prerequisite is missing, with one line naming it, and a re-run once it exists
 finishes the work. `sign` keeps the four files as the run's `floti-dev`
 artifact for 90 days, so the re-run can come long after the release. The
@@ -927,8 +833,8 @@ the domain `CNAME` names.
 ### A dry run
 
 A push to a branch named `release-dry-run/<name>` runs the whole workflow and
-publishes nothing: no tag, no release, no attestation, no npm, no tap push,
-no winget pull request and nothing on floti.dev. Everything a
+publishes nothing: no tag, no release, no attestation, no npm and nothing on
+floti.dev. Everything a
 release builds is built and checked, including the notes, the signatures and
 every check of the files that needs no published release. `sign-dry-run` makes
 a minisign key pair in the run (`minisign -G -W` under `$RUNNER_TEMP`), signs
@@ -936,24 +842,13 @@ every file with it through the same `scripts/minisign.mjs` a release uses,
 checks every signature against that pair's public key and uploads exactly the
 twenty-eight files as the run's `release-files` artifact, kept for seven days.
 The run's summary lists each with its SHA-256 and gives the run's public key.
-`packages-dry-run` builds the formula and the winget manifests from the run's
-SHA-256 list as a release would, preview or not, after checking the list's
-signature with the same `published-sums` action, against the public key of
-the run's own pair. Beside them it builds the formula a stable release of the
-same number would push, from the same list with the files renamed, so the
-stable form is checked even when the branch's version is a preview.
-`homebrew-dry-run` takes the documented install order on macOS arm64 and
-Linux x64: `brew trust` on a tap not tapped yet, then that tap, made on the
-runner, then `brew style` and `brew audit --strict` on both formulas, then
-`brew install` and `brew test`, with the run's own file put in Homebrew's
-download cache so the formula installed is the very text a release would
-push.
-`winget-dry-run` runs `winget validate` on the manifests. They are kept for
-seven days as the `homebrew-formula` and `winget-manifests` artifacts.
 floti.dev's four files are written from the run's own files as a stable
 release writes them, `update.json` in the stable form when the branch's
 version is a preview and signed with the run's key, and kept for seven days
-as the `floti-dev` artifact. The install scripts run for real there and
+as the `floti-dev` artifact. `floti-dev-dry-run` checks them as `floti-dev`
+checks a release's, preview or not, after checking the run's SHA-256 list's
+signature with the same `published-sums` action, against the public key of
+the run's own pair. The install scripts run for real there and
 nowhere else: `install-dry-run` on `ubuntu-latest`, `ubuntu-24.04-arm`,
 `macos-latest`, `windows-latest` and `windows-11-arm`, so each CPU detection
 runs on x64 and on arm64, and `install-dry-run-debian` as root in a `debian`
@@ -1154,7 +1049,7 @@ is the one in the user's own folder (`~/.local/bin/floti`,
 the user's `PATH`, setup puts it there and says so in one line, so every way
 in, `curl | sh`, `irm | iex`, the desktop's installer and the desktop's
 install over ssh, ends with `floti` found by the next terminal or login. A
-floti anywhere else, such as a build run from its own folder or Homebrew's,
+floti anywhere else, such as a build run from its own folder,
 changes nothing, and neither does a setup refused as root or a Windows
 service account. The folder is the one the user's home names
 (`Standalone::binary`), even where the OS gives setup's own path with its
@@ -1597,8 +1492,8 @@ folder is an override's with no such mark, holds a `.git`, is the home folder
 or holds it, or is, holds or is inside `~/.claude` or `~/.ssh`; nothing
 touches an agent's config, `~/.ssh` or a repository.
 
-A floti that is not the one in the place the install scripts use, such as one
-Homebrew or winget installed, removes only what it installed: steps 1 to 4
+A floti that is not the one in the place the install scripts use, such as a
+build run from its own folder, removes only what it installed: steps 1 to 4
 and the data, then one line, `floti: left as it is (installed by <where it
 runs from>)`, leaving itself and the PATH to whatever installed it. A `node`
 folder in that place is left too: only beside a floti installed on its own

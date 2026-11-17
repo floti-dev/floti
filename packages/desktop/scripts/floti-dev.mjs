@@ -42,8 +42,7 @@ import { join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import { RELEASE_TARGETS, sumsFileName } from './floti-release.mjs'
-import { downloadUrl, releaseFiles } from './package-managers.mjs'
+import { RELEASE_TARGETS, parseSums, releaseFileName, sumsFileName, targetNamed } from './floti-release.mjs'
 import { parseVersion } from './release.mjs'
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../..')
@@ -78,6 +77,32 @@ export const INSTALL_SCRIPTS = Object.freeze([
 ])
 
 const SHA256 = /^[0-9a-f]{64}$/
+const REPO = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/
+
+/** Where a release's file downloads from. */
+export function downloadUrl(repo, version, name) {
+  return `https://github.com/${repo}/releases/download/v${version}/${name}`
+}
+
+/**
+ * `{ name, url, sha256 }` for each of `targets`, from the release's SHA-256
+ * list. Refuses a list that does not name one of them.
+ */
+export function releaseFiles(sumsText, version, repo, targets) {
+  if (parseVersion(version) === null) throw new Error(`'${version}' is not a release version`)
+  if (!REPO.test(repo)) throw new Error(`'${repo}' is not <owner>/<repository>`)
+  const listed = new Map(parseSums(sumsText).map(({ name, sha256 }) => [name, sha256]))
+  const missing = []
+  const files = new Map()
+  for (const targetName of targets) {
+    const name = releaseFileName(version, targetNamed(targetName))
+    const sha256 = listed.get(name)
+    if (sha256 === undefined || !SHA256.test(sha256)) missing.push(name)
+    else files.set(targetName, { name, url: downloadUrl(repo, version, name), sha256 })
+  }
+  if (missing.length > 0) throw new Error(`the SHA-256 list does not name ${missing.join(', ')}`)
+  return files
+}
 
 /**
  * Why `url` cannot be the folder a script downloads from, or null when it
