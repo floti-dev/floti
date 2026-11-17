@@ -515,6 +515,16 @@ with in [AGENT-TOOLS.md](AGENT-TOOLS.md#floti-browser).
   counts, never a message. What a launch needs (agent
   tools, settings, composed instructions, overlays) is a per-launch file under
   the data directory, never a write into the agent's config.
+- A folder is written in Claude's shape (`CLAUDE.md`, `.claude/`) or the
+  shared one (`AGENTS.md`, `.agents/skills`), or both, and a launch composes
+  either (`agent/workspace.rs`). Everything that shows what a folder holds
+  reads both: the scan's inventory (`workspace/discovery/inventory.rs`, its
+  `agentsMd` and `agentsDir` since protocol 4.2), the project pane, the config
+  scopes (a folder with either shape's files is a scope that exists) and the
+  effective view, which lists an overlay's `.agents/skills` and every
+  `AGENTS.md` a launch loads. A skill folder in both skills folders counts and
+  lists once, from `.claude/skills`, as a launch takes it. None of them writes
+  into the folder.
 
 ## Processes and ports
 
