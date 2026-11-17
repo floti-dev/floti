@@ -93,6 +93,84 @@ describe('the setup window', () => {
     expect(bridge.invocations.map((call) => call.channel)).not.toContain('files:read')
   })
 
+  describe('Locate… on a missing agent', () => {
+    const MISSING: ClaudeStatus = {
+      ...CLAUDE,
+      path: null,
+      source: null,
+      version: null,
+      semver: null,
+      auth: 'unknown',
+      error: 'Claude Code was not found on PATH or in the usual install folders.'
+    }
+    const PICKED: ClaudeStatus = { ...CLAUDE, path: 'D:/tools dir/claude.exe', source: 'setting' }
+    const row = (): HTMLElement => document.querySelector('[data-walkthrough-agent="claude-code"]') as HTMLElement
+    const locate = (): Promise<void> => userEvent.click(screen.getByRole('button', { name: 'Locate…' }))
+
+    async function openMissing(): Promise<void> {
+      bridge.answer('setup:status', () => MISSING)
+      openAt({ step: 2, workspace: null })
+      expect(await screen.findByText('Not installed')).toBeTruthy()
+    }
+
+    it('turns the row Installed, with its version and sign-in, when the picked file passes the host’s check', async () => {
+      bridge.answer('setup:locateClaude', () => PICKED)
+      await openMissing()
+      await locate()
+      expect(await within(row()).findByText('Installed')).toBeTruthy()
+      expect(within(row()).getByText('Signed in')).toBeTruthy()
+      expect(within(row()).getByText('claude 2.1.319')).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Locate…' })).toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
+      // The picker, the host's check and keeping claudePath are all setup:locateClaude's.
+      expect(bridge.invoked('setup:locateClaude')).toHaveLength(1)
+      expect(written().some((patch) => 'claudePath' in patch)).toBe(false)
+    })
+
+    it('keeps the row Not installed with the host’s sentence when the picked file fails, until a pick passes', async () => {
+      const failed = 'That program did not answer `claude --version`.'
+      bridge.answer('setup:locateClaude', () => ({ ...MISSING, error: failed }))
+      await openMissing()
+      await locate()
+      expect((await screen.findByRole('alert')).textContent).toBe(failed)
+      expect(within(row()).getByText('Not installed')).toBeTruthy()
+
+      bridge.answer('setup:locateClaude', () => PICKED)
+      await locate()
+      expect(await within(row()).findByText('Installed')).toBeTruthy()
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('changes nothing when the picker is cancelled: the answer is the status already drawn', async () => {
+      let cancel: (status: ClaudeStatus) => void = () => undefined
+      const cancelled = new Promise<ClaudeStatus>((resolve) => {
+        cancel = resolve
+      })
+      bridge.answer('setup:locateClaude', () => cancelled)
+      await openMissing()
+      await locate()
+      // Settled inside act, after the screen's own handler of the same answer.
+      await act(async () => {
+        cancel(MISSING)
+        await cancelled
+      })
+      expect(bridge.invoked('setup:locateClaude')).toHaveLength(1)
+      expect(within(row()).getByText('Not installed')).toBeTruthy()
+      expect(screen.getByText('irm https://claude.ai/install.ps1 | iex')).toBeTruthy()
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('says why under the rows when the locate itself is refused', async () => {
+      bridge.answer('setup:locateClaude', () => {
+        throw new Error('This Floti host is not answering.')
+      })
+      await openMissing()
+      await locate()
+      expect((await screen.findByRole('alert')).textContent).toBe('This Floti host is not answering.')
+      expect(within(row()).getByText('Not installed')).toBeTruthy()
+    })
+  })
+
   it('says the host is running once main pushes its ready step, after starting', async () => {
     let step: LocalHostStep | null = { step: 'starting', since: 0 }
     const listeners = new Set<() => void>()

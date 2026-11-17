@@ -58,6 +58,8 @@ describe('Step 2, Your agents', () => {
       checking: false,
       onCheckAgain: vi.fn(),
       onCopy: vi.fn(),
+      onLocate: vi.fn(),
+      locateProblem: null,
       onSkip: vi.fn(),
       onBack: vi.fn(),
       onContinue: vi.fn(),
@@ -88,6 +90,40 @@ describe('Step 2, Your agents', () => {
     expect(props.onCopy).toHaveBeenCalledWith('irm https://claude.ai/install.ps1 | iex')
     await userEvent.click(button('Check again'))
     expect(props.onCheckAgain).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Locate… on the install line of a missing agent, after its copy button', async () => {
+    const props = renderAgents({ agents: [{ ...READY, version: null, installed: false, signedIn: 'unknown' }] })
+    const line = within(row()).getByText('irm https://claude.ai/install.ps1 | iex').parentElement as HTMLElement
+    const locate = within(line).getByRole('button', { name: 'Locate…' })
+    expect([...line.querySelectorAll('button')].at(-1)).toBe(locate)
+    await userEvent.click(locate)
+    expect(props.onLocate).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('offers no Locate… for an agent that is installed, signed out or Unknown', () => {
+    const installed = render(<AgentsStep {...renderAgentsProps()} />)
+    expect(screen.queryByRole('button', { name: 'Locate…' })).toBeNull()
+    installed.unmount()
+    const signedOut = render(<AgentsStep {...{ ...renderAgentsProps(), agents: [{ ...READY, signedIn: false }] }} />)
+    expect(screen.queryByRole('button', { name: 'Locate…' })).toBeNull()
+    signedOut.unmount()
+    renderAgents({ agents: [{ ...READY, version: null, installed: 'unknown', signedIn: 'unknown' }] })
+    expect(screen.queryByRole('button', { name: 'Locate…' })).toBeNull()
+  })
+
+  it('says under the rows why a picked file was not kept, and holds Locate… while a check runs', () => {
+    renderAgents({
+      agents: [{ ...READY, version: null, installed: false, signedIn: 'unknown' }],
+      locateProblem: 'That program did not answer `claude --version`.',
+      checking: true
+    })
+    const problem = screen.getByRole('alert')
+    expect(problem.textContent).toBe('That program did not answer `claude --version`.')
+    expect(problem.className).toContain('text-warn')
+    expect(row().contains(problem)).toBe(false)
+    expect((button('Locate…') as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('names the command that signs in a signed-out agent', () => {
@@ -129,6 +165,8 @@ function renderAgentsProps(): AgentsStepProps {
     checking: false,
     onCheckAgain: vi.fn(),
     onCopy: vi.fn(),
+    onLocate: vi.fn(),
+    locateProblem: null,
     onSkip: vi.fn(),
     onBack: vi.fn(),
     onContinue: vi.fn()

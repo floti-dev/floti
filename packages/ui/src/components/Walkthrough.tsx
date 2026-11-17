@@ -296,12 +296,28 @@ export interface AgentsStepProps {
   onCheckAgain: () => void
   /** Puts a line on the clipboard: the install line or the login command. */
   onCopy: (text: string) => void
+  /**
+   * Picks a missing agent's program by hand, for one Floti did not find: the
+   * same check and save as Settings' Locate manually….
+   */
+  onLocate: () => void
+  /** Why the last Locate… was not kept, in the host's words; null when there is nothing to say. */
+  locateProblem: string | null
   onSkip: () => void
   onBack: () => void
   onContinue: () => void
 }
 
-function CommandLine({ text, onCopy }: { text: string; onCopy: (text: string) => void }): JSX.Element {
+function CommandLine({
+  text,
+  onCopy,
+  after
+}: {
+  text: string
+  onCopy: (text: string) => void
+  /** Drawn after the copy button, on the same line: Locate…. */
+  after?: ReactNode
+}): JSX.Element {
   return (
     <div className="mt-2 ml-[24px] flex items-center gap-1.5">
       <code
@@ -320,6 +336,7 @@ function CommandLine({ text, onCopy }: { text: string; onCopy: (text: string) =>
       >
         <CopyIcon width={13} height={13} />
       </button>
+      {after}
     </div>
   )
 }
@@ -347,10 +364,23 @@ export function AgentsStep({
   checking,
   onCheckAgain,
   onCopy,
+  onLocate,
+  locateProblem,
   onSkip,
   onBack,
   onContinue
 }: AgentsStepProps): JSX.Element {
+  const locate = (
+    <button
+      type="button"
+      data-walkthrough-locate
+      disabled={checking}
+      onClick={onLocate}
+      className={cn(secondaryButton, 'h-[28px] shrink-0 px-2.5 py-0 disabled:opacity-50')}
+    >
+      Locate…
+    </button>
+  )
   const missing = agents !== null && agents.some(needsAFix)
   const checkAgain =
     missing || (agents === null && error !== null) ? (
@@ -377,27 +407,34 @@ export function AgentsStep({
           {error === null ? 'Looking…' : `Unknown: ${error}`}
         </p>
       ) : (
-        <Rows>
-          {agents.map((agent) => (
-            <Row
-              key={agent.id}
-              data-walkthrough-agent={agent.id}
-              icon={<TerminalIcon width={14} height={14} />}
-              name={agent.name}
-              detail={agent.version}
-              end={agentChips(agent).map((chip) => (
-                <Chip key={chip.label} tone={chip.tone}>
-                  {chip.label}
-                </Chip>
-              ))}
-            >
-              {agent.installed === false && <CommandLine text={agent.install} onCopy={onCopy} />}
-              {agent.installed === true && agent.signedIn === false && (
-                <CommandLine text={agent.login} onCopy={onCopy} />
-              )}
-            </Row>
-          ))}
-        </Rows>
+        <>
+          <Rows>
+            {agents.map((agent) => (
+              <Row
+                key={agent.id}
+                data-walkthrough-agent={agent.id}
+                icon={<TerminalIcon width={14} height={14} />}
+                name={agent.name}
+                detail={agent.version}
+                end={agentChips(agent).map((chip) => (
+                  <Chip key={chip.label} tone={chip.tone}>
+                    {chip.label}
+                  </Chip>
+                ))}
+              >
+                {agent.installed === false && <CommandLine text={agent.install} onCopy={onCopy} after={locate} />}
+                {agent.installed === true && agent.signedIn === false && (
+                  <CommandLine text={agent.login} onCopy={onCopy} />
+                )}
+              </Row>
+            ))}
+          </Rows>
+          {locateProblem !== null && (
+            <p role="alert" data-walkthrough-locate-problem className="mt-2 text-[12px] text-warn">
+              {locateProblem}
+            </p>
+          )}
+        </>
       )}
     </StepFrame>
   )
