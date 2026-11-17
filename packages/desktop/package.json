@@ -73,12 +73,12 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^5.2.0",
-    "electron": "43.3.0",
+    "electron": "43.8.10",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "esbuild": "^0.28.2",
     "tailwindcss": "^4.3.3",
-    "vite": "^7.3.6"
+    "vite": "^7.3.8"
   },
   "//electron": "Pinned exactly, not a range. electron-builder downloads platform binaries for one specific release and refuses to guess which - a caret here fails the packaging step outright (electron-builder 26.15.3). It is also the right shape regardless: the packaged app must ship the runtime the drivers measured against."
 }

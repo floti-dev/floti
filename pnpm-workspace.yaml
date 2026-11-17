@@ -20,9 +20,35 @@ onlyBuiltDependencies:
 ignoredBuiltDependencies:
   - koffi
 
-# electron-vite 5 peers vite ^5|^6|^7, while @vitejs/plugin-react and
-# @tailwindcss/vite have both moved on to vite 8. Without this, the transitive
-# resolution lands on 8 and electron-vite's bundler API breaks. Pinned in one
-# place so the next electron-vite release is a one-line change.
+# Two vites, each named where it is used. electron-vite 5 peers vite ^5|^6|^7
+# and its bundler API breaks on 8, so the desktop and the sample plugin ask
+# for 7 themselves; the root's test runner asks for 8, which
+# @sveltejs/vite-plugin-svelte requires. No override pins vite: one would
+# put the Svelte plugin on 7, and a peer left to auto-install stays on
+# whatever the lockfile last held.
+#
+# The overrides are security floors for packages that only arrive through
+# another package: each lifts one major line to its first patched release and never
+# moves a dependency to another major. A floor can go once every package that
+# asks for that line asks for the patched release itself.
+#
+# drizzle-kit 0.31 still loads its config through @esbuild-kit, which asks for
+# esbuild 0.18; the dev-server advisory is fixed only from 0.25, and
+# esbuild-kit calls nothing but `transform`, which 0.25 keeps.
+#
+# minimatch has none: its fix exists only in 11, a rewrite that drops `makeRe`
+# and `AST`, and eslint, typescript-eslint and electron-builder ask for 3, 5, 9
+# and 10. Every pattern they match is this repository's own.
 overrides:
-  vite: ^7.3.6
+  '@esbuild-kit/core-utils>esbuild': ^0.25.12
+  '@xmldom/xmldom@0.8': ^0.8.15
+  brace-expansion@1: ^1.1.22
+  brace-expansion@2: ^2.1.8
+  brace-expansion@5: ^5.0.13
+  fast-uri@3: ^3.1.9
+  js-yaml@4: ^4.3.2
+  source-map-js@1: ^1.2.2
+  undici@6: ^6.29.1
+  undici@7: ^7.30.2
+  undici@8: ^8.12.4
+  zod@4: ^4.6.7
