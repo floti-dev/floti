@@ -27,9 +27,9 @@ use rusqlite::Connection;
 
 use super::reader::{is_tpl, rewrite_segment, template_dir, template_id_problems};
 use super::{
-    Entry, KEEP_FILE, LEGACY_WORKSPACE_MANIFEST, MINIMAL_TEMPLATE, TEMPLATE_MANIFEST, TPL_SUFFIX,
-    WORKSPACE_MANIFEST, WORKSPACE_MANIFESTS, below, collate, entries_of, exists, is_real_dir,
-    label, link_on_the_way, mtime, remove_tree,
+    Entry, KEEP_FILE, LEGACY_WORKSPACE_MANIFEST, TEMPLATE_MANIFEST, TPL_SUFFIX, WORKSPACE_MANIFEST,
+    WORKSPACE_MANIFESTS, below, collate, entries_of, exists, is_built_in, is_real_dir, label,
+    link_on_the_way, mtime, remove_tree,
 };
 use crate::agent_config::{PathGuard, SnapshotWriter, normalize, read_file};
 use crate::platform::links;
@@ -142,9 +142,9 @@ pub fn template_name_problems(
         return problems;
     }
     let trimmed = name.trim();
-    if trimmed.eq_ignore_ascii_case(MINIMAL_TEMPLATE) {
+    if is_built_in(trimmed) {
         return vec![format!(
-            "\"{MINIMAL_TEMPLATE}\" is Floti's built-in scaffold, so a template cannot be called that."
+            "\"{trimmed}\" is the name of Floti's built-in Starter template, so a template cannot be called that."
         )];
     }
     if !allow_existing && exists(&templates_dir.join(trimmed)) {

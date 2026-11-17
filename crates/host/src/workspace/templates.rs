@@ -16,8 +16,9 @@
 //!
 //! Templates live in the templates folder, `templates` in the host's config
 //! folder ([`templates_folder`]), which is the user's to edit. The shipped
-//! README and example are written there at host start only when the folder
-//! is absent ([`seed`]), so nothing there is ever overwritten.
+//! README is written there at host start only when the folder is absent
+//! ([`seed`]), so nothing there is ever overwritten. The one template Floti
+//! ships, Starter, is code rather than a folder there.
 //!
 //! A link (a junction on Windows, a symlink on macOS and Linux) is never
 //! walked. Every walk here asks [`links::is_link`] before it asks whether an
@@ -29,9 +30,9 @@
 //! - [`reader`]: listing, previewing and applying templates.
 //! - [`authoring`]: creating, renaming, deleting, describing and filling
 //!   templates, and saving a folder as one.
-//! - [`workspace`]: making a workspace, from the built-in scaffold or a template.
+//! - [`workspace`]: making a workspace, from Starter or a template.
 //! - [`import`]: what a config scope's entries become inside a template.
-//! - [`seed`]: the shipped README and example.
+//! - [`seed`]: the shipped README.
 
 pub mod authoring;
 pub mod import;
@@ -69,10 +70,26 @@ pub const KEEP_FILE: &str = ".gitkeep";
 /// The one extension that opts a file in to substitution. Dropped on write.
 pub const TPL_SUFFIX: &str = ".tpl";
 
-/// The built-in scaffold's id, and what a workspace records when no template
-/// was named. It is code, not a folder: nothing in the templates folder can
-/// change or break it.
-pub const MINIMAL_TEMPLATE: &str = "minimal";
+/// Starter's id, the one template Floti ships, and what a workspace made
+/// from it records. It is code, not a folder, so it reaches a user whose
+/// templates folder already exists, and nothing in that folder can change or
+/// break it.
+pub const STARTER_TEMPLATE: &str = "starter";
+
+/// The id the built-in template had before Starter. A workspace recording it
+/// keeps working, because a manifest's `template:` is only a label, and a
+/// client that still asks for it is given Starter.
+pub const LEGACY_BUILT_IN: &str = "minimal";
+
+/// Whether `id` names the built-in template, by either id it has had, without
+/// case: Windows would let a `Starter` folder shadow the row that always works.
+/// Neither id can be a folder in the templates folder.
+pub fn is_built_in(id: &str) -> bool {
+    let id = id.trim();
+    [STARTER_TEMPLATE, LEGACY_BUILT_IN]
+        .iter()
+        .any(|built_in| id.eq_ignore_ascii_case(built_in))
+}
 
 /// Where the user's templates live: `templates` in the host's config folder.
 pub fn templates_folder(folders: &Folders) -> PathBuf {

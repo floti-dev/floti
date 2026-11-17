@@ -167,7 +167,7 @@ fn roots_heard(listener: &mut broadcast::Receiver<Publication>) -> Vec<Vec<Strin
 }
 
 #[tokio::test]
-async fn a_host_seeds_the_shipped_readme_and_example_into_a_templates_folder_that_is_absent() {
+async fn a_host_seeds_only_the_shipped_readme_into_a_templates_folder_that_is_absent() {
     let world = World::new();
     let dir = world.templates();
     for (relative, content) in SHIPPED_TEMPLATES {
@@ -186,7 +186,12 @@ async fn a_host_seeds_the_shipped_readme_and_example_into_a_templates_folder_tha
         .iter()
         .map(|choice| choice.id.as_str())
         .collect();
-    assert_eq!(ids, ["minimal", "example"]);
+    assert_eq!(ids, ["starter"]);
+    assert_eq!(
+        std::fs::read_dir(&dir).unwrap().count(),
+        1,
+        "the README and nothing else"
+    );
     assert_eq!(listing.dir, text(&dir));
     assert!(listing.problems.is_empty(), "{:?}", listing.problems);
 }
@@ -202,7 +207,7 @@ async fn a_host_whose_config_folder_is_another_hosts_seeds_no_templates_and_stil
         .iter()
         .map(|choice| choice.id.as_str())
         .collect();
-    assert_eq!(ids, ["minimal"]);
+    assert_eq!(ids, ["starter"]);
 }
 
 #[tokio::test]
@@ -490,16 +495,47 @@ async fn a_refused_workspace_changes_no_roots_and_answers_the_roots_as_they_are(
 }
 
 #[tokio::test]
+async fn a_workspace_made_with_no_template_named_is_starter() {
+    let world = World::new();
+    let parent = world.dirs.folder("workspaces");
+
+    let outcome = world.create_workspace(&parent, "my work");
+
+    assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
+    let workspace = parent.join("my work");
+    let mut entries: Vec<String> = std::fs::read_dir(&workspace)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    entries.sort();
+    assert_eq!(entries, ["AGENTS.md", "repos", "workspace.yaml"]);
+    assert_eq!(
+        std::fs::read_dir(workspace.join("repos")).unwrap().count(),
+        0
+    );
+    let agents_md = std::fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
+    assert!(agents_md.starts_with("# my work\n"), "{agents_md}");
+}
+
+#[tokio::test]
 async fn a_workspace_made_from_a_template_in_the_hosts_folder_carries_its_tree() {
     let world = World::new();
     let parent = world.dirs.folder("workspaces");
+    let template = world.templates().join("client-work");
+    std::fs::create_dir_all(template.join("dot-claude").join("skills")).unwrap();
+    std::fs::write(
+        template.join("dot-claude").join("skills").join(".gitkeep"),
+        "",
+    )
+    .unwrap();
+    std::fs::write(template.join("CLAUDE.md.tpl"), "# {{NAME}}\n").unwrap();
 
     let outcome: CreateWorkspaceOutcome = world
         .ask::<CreateWorkspace>(&CreateWorkspaceRequest {
             mode: WorkspaceMode::New,
             dir: text(&parent),
             name: Some("work".into()),
-            template: Some("example".into()),
+            template: Some("client-work".into()),
         })
         .unwrap();
 

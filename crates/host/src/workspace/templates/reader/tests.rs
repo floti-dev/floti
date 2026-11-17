@@ -19,7 +19,7 @@ fn puts_the_built_in_first_however_the_folder_sorts() {
     world.plant("aaa", &[("template.yaml", "label: \"Aaa\"\n")]);
 
     let listing = list_templates(&world.templates);
-    assert_eq!(world.listed_ids(), ["minimal", "aaa"]);
+    assert_eq!(world.listed_ids(), ["starter", "aaa"]);
     assert!(listing.templates[0].built_in);
     assert_eq!(listing.dir, world.templates.display().to_string());
 }
@@ -28,7 +28,7 @@ fn puts_the_built_in_first_however_the_folder_sorts() {
 fn is_a_one_row_picker_when_the_folder_is_not_there_at_all() {
     let world = World::new();
     let listing = list_templates(&world.root.join("nothing-here"));
-    assert_eq!(ids(&world.root.join("nothing-here")), ["minimal"]);
+    assert_eq!(ids(&world.root.join("nothing-here")), ["starter"]);
     assert!(listing.problems.is_empty());
 }
 
@@ -83,7 +83,7 @@ fn sorts_by_order_then_label_with_the_unordered_ones_last() {
         .into_iter()
         .map(|choice| choice.label)
         .collect();
-    assert_eq!(labels, ["Minimal", "zeta", "alpha", "aardvark", "beta"]);
+    assert_eq!(labels, ["Starter", "zeta", "alpha", "aardvark", "beta"]);
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn skips_one_malformed_template_with_a_sentence_and_keeps_the_rest() {
     );
 
     let listing = list_templates(&world.templates);
-    assert_eq!(world.listed_ids(), ["minimal", "good"]);
+    assert_eq!(world.listed_ids(), ["starter", "good"]);
     assert_eq!(listing.problems.len(), 1);
     assert!(
         listing.problems[0].contains("broken"),
@@ -106,18 +106,41 @@ fn skips_one_malformed_template_with_a_sentence_and_keeps_the_rest() {
 }
 
 #[test]
-fn will_not_let_a_folder_take_the_built_in_name() {
+fn will_not_let_a_folder_take_either_name_the_built_in_has_had() {
     let world = World::new();
-    world.plant("minimal", &[("template.yaml", "label: \"Impostor\"\n")]);
+    world.plant("Starter", &[("template.yaml", "label: \"Impostor\"\n")]);
+    world.plant("minimal", &[("template.yaml", "label: \"Old\"\n")]);
 
     let listing = list_templates(&world.templates);
-    assert_eq!(world.listed_ids(), ["minimal"]);
-    assert_eq!(listing.templates[0].label, "Minimal");
+    assert_eq!(world.listed_ids(), ["starter"]);
+    assert_eq!(listing.templates[0].label, "Starter");
+    assert_eq!(listing.problems.len(), 2, "{:?}", listing.problems);
     assert!(
-        listing.problems[0].contains("built-in"),
+        listing
+            .problems
+            .iter()
+            .all(|problem| problem.contains("built-in")),
         "{:?}",
         listing.problems
     );
+}
+
+#[test]
+fn lists_starter_first_as_the_built_in_with_what_it_writes() {
+    let world = World::new();
+    world.plant(
+        "client-work",
+        &[("template.yaml", "label: \"Client work\"\n")],
+    );
+
+    let listing = list_templates(&world.templates);
+    let starter = &listing.templates[0];
+    assert_eq!(starter.id, "starter");
+    assert_eq!(starter.label, "Starter");
+    assert_eq!(starter.description.as_deref(), Some("repos/, AGENTS.md"));
+    assert!(starter.built_in);
+    assert_eq!(world.listed_ids(), ["starter", "client-work"]);
+    assert!(!listing.templates[1].built_in);
 }
 
 #[test]
@@ -127,7 +150,7 @@ fn does_not_offer_a_link_as_a_template() {
     link_folder(&real, &world.templates.join("linked"));
 
     let listing = list_templates(&world.templates);
-    assert_eq!(world.listed_ids(), ["minimal", "real"]);
+    assert_eq!(world.listed_ids(), ["starter", "real"]);
     assert!(
         listing.problems.join(" ").contains("linked"),
         "{:?}",
@@ -140,14 +163,26 @@ fn does_not_offer_a_link_as_a_template() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn describes_the_minimal_scaffold_per_mode() {
+fn describes_starter_per_mode_and_convert_as_the_manifest_alone() {
     let world = World::new();
-    let for_new = preview_template(&world.templates, "minimal", Some(WorkspaceMode::New));
-    assert_eq!(for_new.entries, ["workspace.yaml", "repos/", ".claude/"]);
+    for asked in ["starter", "minimal"] {
+        let for_new = preview_template(&world.templates, asked, Some(WorkspaceMode::New));
+        assert_eq!(
+            for_new.entries,
+            ["workspace.yaml", "AGENTS.md", "repos/"],
+            "{asked}"
+        );
+        assert_eq!(for_new.template, "starter", "{asked}");
+        assert!(for_new.problems.is_empty(), "{:?}", for_new.problems);
+    }
 
     let for_convert = preview_template(&world.templates, "anything", Some(WorkspaceMode::Convert));
-    assert_eq!(for_convert.entries, ["workspace.yaml", ".claude/"]);
-    assert_eq!(for_convert.template, "minimal");
+    assert_eq!(for_convert.entries, ["workspace.yaml"]);
+    assert!(
+        for_convert.problems.is_empty(),
+        "{:?}",
+        for_convert.problems
+    );
 }
 
 #[test]
@@ -191,7 +226,7 @@ fn names_exactly_what_the_writer_then_writes_for_the_built_in_and_for_a_template
         ],
     );
 
-    for template in ["minimal", "demo"] {
+    for template in ["starter", "demo"] {
         let preview = preview_template(&world.templates, template, Some(WorkspaceMode::New));
         let name = format!("from-{template}");
         let result = world.workspace(&name, Some(template));
