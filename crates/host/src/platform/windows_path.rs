@@ -88,8 +88,8 @@ mod tests {
     #[test]
     fn a_windows_path_is_joined_split_and_compared_as_windows_does_on_every_os() {
         assert_eq!(
-            join(Path::new(LOCAL), &["Programs", "Helm"]),
-            PathBuf::from(r"C:\Users\Some One\AppData\Local\Programs\Helm")
+            join(Path::new(LOCAL), &["Programs", "Floti", "desktop"]),
+            PathBuf::from(r"C:\Users\Some One\AppData\Local\Programs\Floti\desktop")
         );
         assert_eq!(
             join(Path::new(r"C:\"), &["floti.exe"]),
@@ -114,15 +114,15 @@ mod tests {
 
     #[test]
     fn inside_is_below_the_folder_in_any_case_and_never_beside_it() {
-        let helm = Path::new(r"C:\Users\Some One\AppData\Local\Programs\Helm");
+        let desktop = Path::new(r"C:\Users\Some One\AppData\Local\Programs\Floti\desktop");
         assert!(inside(
-            Path::new(r"c:/users/some one/appdata/local/programs/HELM/resources/floti.exe"),
-            helm
+            Path::new(r"c:/users/some one/appdata/local/programs/FLOTI/Desktop/resources/floti.exe"),
+            desktop
         ));
-        assert!(!inside(helm, helm));
+        assert!(!inside(desktop, desktop));
         assert!(!inside(
-            Path::new(r"C:\Users\Some One\AppData\Local\Programs\Helm Old\floti.exe"),
-            helm
+            Path::new(r"C:\Users\Some One\AppData\Local\Programs\Floti\desktop Old\floti.exe"),
+            desktop
         ));
     }
 

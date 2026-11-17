@@ -1,12 +1,12 @@
-//! `floti end-old-host <client folder>`: what Helm runs, from the floti it
+//! `floti end-old-host <client folder>`: what the desktop runs, from the floti it
 //! carries, when the user chooses Restart host to update for this PC's host
 //! and that host speaks protocol 1.x, from before the restart frames. Such a
 //! host can be asked nothing about a restart, so it is ended the way a crash
 //! would end it: its process alone, at once, which leaves its session keeper
-//! running with every session and terminal in it. The host Helm starts next
+//! running with every session and terminal in it. The host the desktop starts next
 //! takes that keeper back.
 //!
-//! It connects as `floti bridge` does, with the keys in Helm's client folder,
+//! It connects as `floti bridge` does, with the keys in the desktop's client folder,
 //! and says this floti's hello. Only when the host refuses it naming protocol
 //! major 1 does it end the process serving this user's local endpoint
 //! ([`LocalSocket::connect_naming_server`]), held before the hello so the
@@ -42,7 +42,7 @@ pub const NOT_AN_OLD_HOST_EXIT: u8 = 9;
 /// The protocol major of a host from before the restart frames.
 const OLD_MAJOR: u16 = 1;
 
-/// What follows `end-old-host`: Helm's client folder.
+/// What follows `end-old-host`: the desktop's client folder.
 pub fn parse(args: &[String]) -> Option<PathBuf> {
     match args {
         [folder] if !folder.is_empty() => Some(PathBuf::from(folder)),
@@ -241,8 +241,8 @@ mod tests {
     #[test]
     fn it_takes_one_client_folder() {
         assert_eq!(
-            parse(&args(&["C:\\Users\\a user\\Helm\\host-client"])),
-            Some(PathBuf::from("C:\\Users\\a user\\Helm\\host-client"))
+            parse(&args(&["C:\\Users\\a user\\Floti\\desktop\\host-client"])),
+            Some(PathBuf::from("C:\\Users\\a user\\Floti\\desktop\\host-client"))
         );
         assert_eq!(parse(&args(&[])), None);
         assert_eq!(parse(&args(&[""])), None);

@@ -110,7 +110,7 @@ impl Installs for FakeInstalls {
         self.launcher.clone().map_err(crate::Error::Refused)
     }
 
-    fn install_desktop(&self, desktop: &Desktop, release: &Path) -> Result<Desktop> {
+    fn install_desktop(&self, _desktop: &Desktop, release: &Path) -> Result<()> {
         if self.install_fails {
             return Err(crate::Error::Refused(
                 "The Floti installer ended with exit code: 2.".into(),
@@ -120,7 +120,7 @@ impl Installs for FakeInstalls {
             .lock()
             .unwrap()
             .push(std::fs::read(release).unwrap());
-        Ok(desktop.clone())
+        Ok(())
     }
 }
 
@@ -658,7 +658,7 @@ fn an_installed_app_missing_its_menu_entry_gets_it_and_is_still_already_installe
     let mut world = World::new();
     world.installs.installed = true;
     world.installs.repair = Ok(Some(PathBuf::from(
-        "/home/me/.local/share/applications/helm.desktop",
+        "/home/me/.local/share/applications/dev.floti.desktop.desktop",
     )));
     let run = world.run();
     assert_eq!(
@@ -671,7 +671,7 @@ fn an_installed_app_missing_its_menu_entry_gets_it_and_is_still_already_installe
         format!(
             "Floti is already installed at {}; floti update keeps it up to date. Its menu entry was missing, so floti added it at {}.\n",
             world.installs.target.path.display(),
-            Path::new("/home/me/.local/share/applications/helm.desktop").display()
+            Path::new("/home/me/.local/share/applications/dev.floti.desktop.desktop").display()
         )
     );
     assert!(world.network.asked().is_empty());
@@ -753,13 +753,13 @@ fn an_installer_that_fails_installs_nothing_and_says_so() {
 fn the_menu_entry_is_named_and_a_failure_to_write_it_says_the_app_is_installed() {
     let mut world = World::new();
     world.installs.launcher = Ok(Some(PathBuf::from(
-        "/home/me/.local/share/applications/helm.desktop",
+        "/home/me/.local/share/applications/dev.floti.desktop.desktop",
     )));
     world.publish(&Published::new(RUNNING));
     let run = world.run();
     assert!(
         run.out
-            .contains("Its menu entry is /home/me/.local/share/applications/helm.desktop."),
+            .contains("Its menu entry is /home/me/.local/share/applications/dev.floti.desktop.desktop."),
         "{}",
         run.out
     );
