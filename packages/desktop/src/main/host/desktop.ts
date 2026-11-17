@@ -649,7 +649,7 @@ export function createDesktopHost({
   const files = createHostFiles({ link, emit: toNoWindow, log })
   // Kept for the session tools' detail; the window reads its own.
   const resources = createHostResources({ link, emit: toNoWindow, log })
-  // Read from helm.db and sent; the host records that it finished.
+  // Read from desktop.db and sent; the host records that it finished.
   const ownData = createOwnDataCopy({ link, store: services.store, log })
   ownData.onChange((state) => send('ownData:changed', state))
   return {

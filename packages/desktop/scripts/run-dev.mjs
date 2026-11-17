@@ -4,7 +4,7 @@
 // own uses **the installed app's own directory** (`paths.ts`:
 // `%LOCALAPPDATA%\Floti\desktop`, `~/Library/Application Support/Floti/desktop`,
 // `~/.local/share/floti/desktop`). Before this script, `pnpm dev` shared
-// `helm.db`, `overlays/` and the Chromium profile with whichever copy of the
+// `desktop.db`, `overlays/` and the Chromium profile with whichever copy of the
 // app the developer had open, and two processes fought over one Chromium
 // profile ("Unable to move the cache: Access is denied").
 //
@@ -270,7 +270,7 @@ function reportTemplates(start, end) {
 /** Entry names and the database's size and mtime, which is what a run moves. */
 function snapshot(dir) {
   if (!existsSync(dir)) return { entries: [], db: null }
-  const db = join(dir, 'helm.db')
+  const db = join(dir, 'desktop.db')
   let stamp = null
   try {
     const stat = statSync(db)
@@ -301,7 +301,7 @@ function report(start, end) {
     // behind it is what a comparison against an empty listing would also say.
     console.log(
       `\n${realDataDir()} is unchanged: ${String(end.entries.length)} entries, ` +
-        `helm.db ${end.db ?? 'absent'} (size@mtime).`
+        `desktop.db ${end.db ?? 'absent'} (size@mtime).`
     )
     return
   }
@@ -309,7 +309,7 @@ function report(start, end) {
   console.log(`\n${realDataDir()} CHANGED while dev was up:`)
   if (added.length > 0) console.log(`  added    ${added.join(', ')}`)
   if (removed.length > 0) console.log(`  removed  ${removed.join(', ')}`)
-  if (dbMoved) console.log(`  helm.db  ${String(start.db)} -> ${String(end.db)}`)
+  if (dbMoved) console.log(`  desktop.db  ${String(start.db)} -> ${String(end.db)}`)
   console.log('  If the installed app was open, this is its own writing. If it was')
   console.log('  not, something in the dev run is still resolving the real userData.')
 }

@@ -1,5 +1,5 @@
 // A test step that leaves something behind, for scripts/test-leftovers.mjs's
-// own test: a `helm world-` folder in the temp folder and a detached Node
+// own test: a `floti world-` folder in the temp folder and a detached Node
 // process that outlives this one. It prints both as one JSON line, so the
 // test can check the report against them and then remove them itself. The
 // child inherits this step's environment, with the step's mark, and its
@@ -11,7 +11,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const folder = mkdtempSync(join(tmpdir(), 'helm world-'))
+const folder = mkdtempSync(join(tmpdir(), 'floti world-'))
 const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60_000)', 'leaky-step-child'], {
   detached: true,
   stdio: 'ignore',

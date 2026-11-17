@@ -26,7 +26,7 @@ export async function launchHelm(world: World): Promise<Helm> {
     args: [desktop],
     cwd: desktop,
     // Main records the channels each page uses over IPC (`ipc-recorder.ts`).
-    env: { ...world.env, HELM_RECORD_IPC: '1' }
+    env: { ...world.env, FLOTI_RECORD_IPC: '1' }
   })
   const window = await app.firstWindow()
   await window.waitForLoadState('domcontentloaded')

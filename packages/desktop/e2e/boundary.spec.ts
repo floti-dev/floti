@@ -54,7 +54,7 @@ const test = base.extend<{ sample: SampleFixture }>({
 
 /** Every channel main recorded so far, and which page used it. */
 const recorded = (helm: Helm): Promise<RecordedChannel[]> =>
-  helm.app.evaluate(() => (globalThis as unknown as { __helmIpcChannels: () => RecordedChannel[] }).__helmIpcChannels())
+  helm.app.evaluate(() => (globalThis as unknown as { __flotiIpcChannels: () => RecordedChannel[] }).__flotiIpcChannels())
 
 /** What crossed Electron IPC that `boundary.rs` does not keep on the client, named. */
 function strays(channels: readonly RecordedChannel[]): string[] {

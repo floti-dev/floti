@@ -48,7 +48,7 @@ export interface DriveAgentsOptions {
 
 /**
  * Writes every fake under `<root>/fake-agents` and chooses each in
- * `<dataDir>/helm.db`, whatever the copied database chose.
+ * `<dataDir>/desktop.db`, whatever the copied database chose.
  */
 export function prepareDriveAgents(root: string, dataDir: string, options: DriveAgentsOptions): DriveAgents {
   const folder = join(root, 'fake-agents')
@@ -60,7 +60,7 @@ export function prepareDriveAgents(root: string, dataDir: string, options: Drive
 
   const onboarding = join(claudeConfigDir, '.claude.json')
   if (!existsSync(onboarding)) {
-    writeFileSync(onboarding, JSON.stringify({ hasCompletedOnboarding: true, userID: 'helm-dev-drive' }))
+    writeFileSync(onboarding, JSON.stringify({ hasCompletedOnboarding: true, userID: 'floti-dev-drive' }))
   }
 
   const write = {
@@ -72,7 +72,7 @@ export function prepareDriveAgents(root: string, dataDir: string, options: Drive
 
   const patch: Partial<AppSettings> = {}
   for (const { backend, program } of agents) patch[PROGRAM_SETTING[backend]] = program
-  const store = openStore({ file: join(dataDir, 'helm.db') })
+  const store = openStore({ file: join(dataDir, 'desktop.db') })
   try {
     writeSettings(store, patch)
   } finally {

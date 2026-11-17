@@ -554,7 +554,7 @@ async function checkPermissionPrompt(ctx: Ctx, h: PtyHandle): Promise<Check> {
   // directory is harmless, and it is declined below in any case.
   await typeText(
     ctx.win,
-    'Run this exact shell command with the Bash tool, nothing else: mkdir -p /tmp/helm-spike-perm'
+    'Run this exact shell command with the Bash tool, nothing else: mkdir -p /tmp/floti-spike-perm'
   )
   await sleep(500)
   await sendKey(ctx.win, 'Return', [], 500)
@@ -592,8 +592,8 @@ async function checkPermissionPrompt(ctx: Ctx, h: PtyHandle): Promise<Check> {
   // have created does not exist.
   const declined =
     appeared &&
-    !existsSync(join(tmpdir(), 'helm-spike-perm')) &&
-    !existsSync('C:\\tmp\\helm-spike-perm')
+    !existsSync(join(tmpdir(), 'floti-spike-perm')) &&
+    !existsSync('C:\\tmp\\floti-spike-perm')
 
   if (!appeared) {
     notes.push(

@@ -189,7 +189,7 @@ describe('the notices standing on a host, over the window’s own connection', (
     await vi.waitFor(() => expect(before.adapter.store.get().away).toHaveLength(2))
     await vi.waitFor(() => expect(kept.at(-1)).toEqual({ 'h-build': '2026-11-06T10:05:00Z' }))
 
-    // After it: a new page, its marks read again from helm.db.
+    // After it: a new page, its marks read again from desktop.db.
     const after = await shown()
     const began: P.StandingNotice = { ...limit, id: 'n-5', since: '2026-11-06T12:00:00Z' }
     after.connection.snapshot('notices:changed', [needsYou, limit, began])

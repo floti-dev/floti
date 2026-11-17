@@ -27,7 +27,7 @@ import { expect, startSession, terminalText, test, type Helm } from '../../e2e/h
  * real `~/.claude`, a real CLI or an installed Helm.
  */
 
-const OUT = process.env['HELM_SHOTS_DIR'] ?? join(repoRoot(), 'reports', 'screenshots')
+const OUT = process.env['FLOTI_SHOTS_DIR'] ?? join(repoRoot(), 'reports', 'screenshots')
 const THEMES = ['light', 'dark'] as const
 /**
  * One size wherever the screen holds it, so two runs can be compared side by

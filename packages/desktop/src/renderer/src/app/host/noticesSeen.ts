@@ -40,7 +40,7 @@ export function memorySeen(): NoticesSeen {
   }
 }
 
-/** Where every host's mark is kept: `noticesSeen` in this device's own settings (helm.db). */
+/** Where every host's mark is kept: `noticesSeen` in this device's own settings (desktop.db). */
 export interface SeenStorage {
   read(): Promise<Readonly<Record<string, string>>>
   write(marks: Readonly<Record<string, string>>): Promise<unknown>

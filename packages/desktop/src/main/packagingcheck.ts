@@ -49,7 +49,7 @@ import type { Check } from './fidelity'
  * So the auditor is made to fail first - a file carrying a personal path is
  * planted, caught, and removed - before its clean result is believed.
  *
- * `pnpm packaging-check` -> helm-data/packaging-report.json + helm-data/packaging-firstrun-report.json
+ * `pnpm packaging-check` -> floti-data/packaging-report.json + floti-data/packaging-firstrun-report.json
  */
 
 const GROUPS = ['audit', 'cli', 'firstrun', 'workspace', 'scan', 'version'] as const

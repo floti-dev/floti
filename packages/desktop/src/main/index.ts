@@ -324,7 +324,7 @@ export interface AppOptions {
  *
  * Printed before the database is opened, because by the time the window is up
  * the damage this warns about is already possible: this process is about to
- * write to the `helm.db`, the `overlays/` and the Chromium profile of whichever
+ * write to the `desktop.db`, the `overlays/` and the Chromium profile of whichever
  * Helm the user has open. The status bar names the mode too, but a chip on a
  * window somebody is not looking at is not a warning.
  */

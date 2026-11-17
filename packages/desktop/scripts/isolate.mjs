@@ -14,7 +14,7 @@
 // from the installed app's `realDataDirFor` on each OS - and it is told about it with
 // **PORTABLE_EXECUTABLE_DIR** - the app's own portable-mode mechanism, the same
 // one `run-packaging.mjs` already uses as isolation, rather than a hook that exists
-// only for checks. `paths.ts` reads it, puts `helm-data` under it and calls
+// only for checks. `paths.ts` reads it, puts `floti-data` under it and calls
 // `app.setPath('userData')`, so the database, the overlay shims, the reports and
 // Chromium's own profile all move together.
 //
@@ -146,7 +146,7 @@ export function isolatedRoot(name, group = 'checks') {
  *
  * `concurrent: true` when the thing being launched is an app somebody keeps
  * open rather than a check that runs and exits. A second one then gets
- * `<name>-2` rather than failing, because the first still holds `helm.db` and
+ * `<name>-2` rather than failing, because the first still holds `desktop.db` and
  * Windows will not let the seed replace an open file. Checks leave this off on
  * purpose: two of them in one directory would interleave their fixtures and
  * their reports, and the honest answer to that is to stop, not to shard.
@@ -168,7 +168,7 @@ export function isolate(
   for (let attempt = 0; attempt < limit; attempt++) {
     const dirName = attempt === 0 ? name : `${name}-${String(attempt + 1)}`
     const root = isolatedRoot(dirName, group)
-    const dataDir = join(root, 'helm-data')
+    const dataDir = join(root, 'floti-data')
     mkdirSync(dataDir, { recursive: true })
     const env = { ...process.env, PORTABLE_EXECUTABLE_DIR: root }
 
@@ -192,7 +192,7 @@ export function isolate(
  * Removes the isolated database, and the `-wal`/`-shm` beside it.
  *
  * Both of those, always: SQLite reads a stale write-ahead log back over a file
- * that has been replaced, so deleting only `helm.db` produces a database that
+ * that has been replaced, so deleting only `desktop.db` produces a database that
  * is neither the old one nor the new one.
  *
  * Returns `'busy'` when an app still has it open. Windows holds a mandatory
@@ -202,7 +202,7 @@ export function isolate(
  * copy of unknown age while reporting a fresh one.
  */
 export function clearDatabase(dataDir) {
-  const dest = join(dataDir, 'helm.db')
+  const dest = join(dataDir, 'desktop.db')
   for (const suffix of ['', '-wal', '-shm']) {
     try {
       rmSync(`${dest}${suffix}`, { force: true })
@@ -227,8 +227,8 @@ export function clearDatabase(dataDir) {
  * one then starts empty.
  */
 export function seedDatabase(dataDir, { keepUiState = false } = {}) {
-  const source = join(realDataDir(), 'helm.db')
-  const dest = join(dataDir, 'helm.db')
+  const source = join(realDataDir(), 'desktop.db')
+  const dest = join(dataDir, 'desktop.db')
   if (!existsSync(source)) {
     console.log(`(no database at ${source}; the isolated one starts empty)`)
     return clearDatabase(dataDir) === 'busy' ? 'busy' : false

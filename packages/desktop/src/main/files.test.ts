@@ -27,7 +27,7 @@ let opened: string[]
 let handler: string
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'helm files-ipc-'))
+  root = mkdtempSync(join(tmpdir(), 'floti files-ipc-'))
   git(root, 'init', '-q')
   mkdirSync(join(root, 'src'))
   writeFileSync(join(root, 'src', 'a.ts'), 'one\ntwo\nthree\n')
@@ -76,7 +76,7 @@ describe('filesRoots', () => {
   const profileAt = (root: string, overlays: string[] = []): Profile => ({ root, overlays }) as Profile
 
   it('hands on a file from a folder the host knows and nothing else', async () => {
-    const elsewhere = mkdtempSync(join(tmpdir(), 'helm files-elsewhere-'))
+    const elsewhere = mkdtempSync(join(tmpdir(), 'floti files-elsewhere-'))
     try {
       const profileRoot = join(elsewhere, 'profile root')
       const overlay = join(elsewhere, 'overlay')

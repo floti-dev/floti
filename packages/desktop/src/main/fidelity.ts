@@ -225,7 +225,7 @@ async function checkUnicode(ctx: Ctx, h: PtyHandle): Promise<Check> {
   // The box is written to a UTF-8 file and cat'd back, rather than built from
   // PowerShell char literals: [char] is 16-bit, so an astral code point like
   // U+1F680 cannot be expressed that way at all.
-  const boxFile = join(tmpdir(), 'helm-spike-unibox.txt')
+  const boxFile = join(tmpdir(), 'floti-spike-unibox.txt')
   mkdirSync(tmpdir(), { recursive: true })
   writeFileSync(boxFile, BOX_ROWS.join('\n') + '\n', 'utf8')
 

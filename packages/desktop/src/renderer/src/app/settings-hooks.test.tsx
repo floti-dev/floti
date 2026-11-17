@@ -105,8 +105,8 @@ describe('useLauncher', () => {
   const APP_INFO: AppInfo = {
     version: '1.2.0',
     mode: 'portable',
-    dataDir: 'C:\\helm-data',
-    dbFile: 'C:\\helm-data\\helm.db',
+    dataDir: 'C:\\floti-data',
+    dbFile: 'C:\\floti-data\\desktop.db',
     migrations: [],
     versions: { electron: '43', chrome: '150', node: '24' },
     hostLogFile: null,

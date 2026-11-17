@@ -90,7 +90,7 @@ fn helm_plugin(id: &str) -> String {
     )
 }
 
-const HELM_PLUGIN_FILES: &[(&str, &str)] = &[
+const FLOTI_PLUGIN_FILES: &[(&str, &str)] = &[
     (
         "background.html",
         "<!doctype html><script src=\"bg.js\"></script>",
@@ -439,7 +439,7 @@ async fn a_version_1_plugin_loads_with_its_background_page_listed_for_the_client
     let mut world = HostWorld::start().await;
     let old = world
         .dirs
-        .plugin_folder("helm plugin", &helm_plugin("board"), HELM_PLUGIN_FILES);
+        .plugin_folder("helm plugin", &helm_plugin("board"), FLOTI_PLUGIN_FILES);
     let plugin = only(&world.add(&old).await.plugins).clone();
     assert_eq!(plugin.error, None, "{plugin:#?}");
     assert_eq!(
@@ -493,10 +493,10 @@ async fn any_device_adds_removes_and_switches_a_plugin_and_each_switch_is_stored
     let mut world = HostWorld::start().await;
     let kept = world
         .dirs
-        .plugin_folder("kept plugin", &helm_plugin("kept"), HELM_PLUGIN_FILES);
+        .plugin_folder("kept plugin", &helm_plugin("kept"), FLOTI_PLUGIN_FILES);
     let other = world
         .dirs
-        .plugin_folder("other plugin", &helm_plugin("other"), HELM_PLUGIN_FILES);
+        .plugin_folder("other plugin", &helm_plugin("other"), FLOTI_PLUGIN_FILES);
     world.add(&kept).await;
     // A device the host has never seen switches its tools off; the desktop
     // does the rest.
@@ -535,7 +535,7 @@ async fn a_page_file_is_served_from_a_plugin_that_is_on_and_nothing_outside_its_
     let mut world = HostWorld::start().await;
     let folder = world
         .dirs
-        .plugin_folder("pages plugin", &helm_plugin("pages"), HELM_PLUGIN_FILES);
+        .plugin_folder("pages plugin", &helm_plugin("pages"), FLOTI_PLUGIN_FILES);
     std::fs::write(world.dirs.root().join("beside.txt"), "not the plugin's").unwrap();
     let plugin = only(&world.add(&folder).await.plugins).clone();
 
@@ -594,7 +594,7 @@ async fn an_edited_page_file_reads_the_folder_again_and_is_served_at_the_new_rev
     let folder =
         world
             .dirs
-            .plugin_folder("watched plugin", &helm_plugin("watched"), HELM_PLUGIN_FILES);
+            .plugin_folder("watched plugin", &helm_plugin("watched"), FLOTI_PLUGIN_FILES);
     let added = only(&world.add(&folder).await.plugins).clone();
     let (mut subscriber, _) = world.watcher().await;
 

@@ -12,7 +12,7 @@ name: macOS build
 # through the E2E tests' Playwright launch into a world with the fake claude
 # (packages/desktop/test/world.ts), and photograph every destination on the
 # rail and a session terminal, in the light and the dark theme. The pictures
-# are uploaded as the run's `helm-macos-screenshots` artifact. On macOS each
+# are uploaded as the run's `floti-macos-screenshots` artifact. On macOS each
 # view is saved twice: the page through Playwright, and the window as the
 # screen shows it, traffic lights and browser page included.
 #
@@ -67,7 +67,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 45
     env:
-      HELM_SHOTS_DIR: ${{ github.workspace }}/reports/screenshots
+      FLOTI_SHOTS_DIR: ${{ github.workspace }}/reports/screenshots
 
     steps:
       - uses: actions/checkout@v5
@@ -127,7 +127,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && !cancelled() && steps.capture.outcome != 'skipped' }}
         uses: actions/upload-artifact@v4
         with:
-          name: helm-macos-screenshots
+          name: floti-macos-screenshots
           path: reports/screenshots
           if-no-files-found: error
           retention-days: 14
@@ -138,7 +138,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: helm-macos-screenshots-failure
+          name: floti-macos-screenshots-failure
           path: reports/screenshots-results
           if-no-files-found: ignore
           retention-days: 14
