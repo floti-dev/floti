@@ -13,7 +13,7 @@ import {
 import { writeFakeAgent } from '../../../test/fake-agents/programs.mjs'
 
 /**
- * A machine of Helm's own for one test: a home directory with its own
+ * A machine of the desktop's own for one test: a home directory with its own
  * `.claude`, a fake `claude`, two git projects, and a data
  * directory for the app. Nothing in it touches the network, a real `~/.claude`,
  * a real CLI or the installed app.
@@ -117,7 +117,7 @@ export function createWorld(): World {
   const bin = join(root, 'bin')
   for (const dir of [claudeDir, portableDir, projectsDir, bin]) mkdirSync(dir, { recursive: true })
 
-  // Signed in as far as Helm can tell: it reads only that onboarding finished.
+  // Signed in as far as the desktop can tell: it reads only that onboarding finished.
   writeFileSync(join(home, '.claude.json'), JSON.stringify({ hasCompletedOnboarding: true, userID: 'floti-tests' }))
 
   const claude = writeFakeAgent(bin, 'claude-code')
@@ -164,7 +164,7 @@ function gitProject(dir: string, branch: string): string {
  */
 export const HOST_TEST_SEAL_MARKER = 'floti-test-secret-seal'
 
-/** Where the host Helm starts for a world keeps its data. */
+/** Where the host the desktop starts for a world keeps its data. */
 export const hostDataOf = (world: World): string => join(world.dataDir, 'host', 'data')
 
 /**

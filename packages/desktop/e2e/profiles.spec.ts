@@ -8,7 +8,7 @@ import { claudeRunIn, expect, sessionIdOf, shimFolderOf, terminalText, test as b
  * The world gets a workspace before the app starts, so the first scan finds it:
  * `hub`, whose `repos/tools` has a skill to compose. The shims a launch builds
  * hold junctions into it, so they are unlinked before the world is removed,
- * by `test` in `helm.ts`.
+ * by `test` in `desktop.ts`.
  */
 const test = base.extend({
   world: async ({ world }, use) => {
@@ -45,7 +45,7 @@ test('a profile made in the New profile dialog is saved in the host and starts i
   await dialog.getByRole('button', { name: 'Save and start' }).click()
   await expect(dialog).toBeHidden()
   await expect(window.getByRole('list', { name: 'Saved profiles' }).getByRole('button', { name: /^hub dev/ })).toBeVisible()
-  // Saved in the host, not in Helm's own database.
+  // Saved in the host, not in the desktop's own database.
   const listed = await invoke<Array<{ name: string }>>(window, 'profile:list')
   expect(listed.map((profile) => profile.name)).toEqual(['hub dev'])
 

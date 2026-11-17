@@ -9,10 +9,10 @@ import { EventEmitter } from 'node:events'
  *     ...(await import('../../test/browser-electron')).browserElectronFake()
  *   }))
  *
- * Helm's side is real; Chromium's side is played by the test. A fake web
- * contents records what Helm asked of it (`loads`, `reloads`, `finds`) and the
+ * The desktop's side is real; Chromium's side is played by the test. A fake web
+ * contents records what the desktop asked of it (`loads`, `reloads`, `finds`) and the
  * test raises the events Chromium would raise in reply (`commit`, `failLoad`,
- * `closeItself`). That split is what lets a test prove Helm's own behaviour -
+ * `closeItself`). That split is what lets a test prove the desktop's own behaviour -
  * the retry on a refused connection, say - with no Chromium underneath to do
  * the same thing on its own.
  *
@@ -21,7 +21,7 @@ import { EventEmitter } from 'node:events'
 
 let nextContentsId = 1000
 
-/** The event object Electron passes first. Helm calls `preventDefault` on some. */
+/** The event object Electron passes first. The desktop calls `preventDefault` on some. */
 const electronEvent = (): { preventDefault: () => void } => ({ preventDefault: () => undefined })
 
 /** A key as `before-input-event` reports it. */
@@ -219,13 +219,13 @@ export class FakeNet {
 
 export class FakeWebContents extends EventEmitter {
   readonly id = nextContentsId++
-  /** Every address Helm asked this page to load, in order. */
+  /** Every address the desktop asked this page to load, in order. */
   readonly loads: string[] = []
   readonly reloads: Array<'ordinary' | 'ignoring-cache'> = []
   readonly finds: Array<{ query: string; forward: boolean; findNext: boolean }> = []
   readonly stoppedFinding: string[] = []
   readonly evaluated: Array<{ source: string; userGesture: boolean }> = []
-  /** Every input event Helm sent, in order: the pointer and the wheel as well as keys. */
+  /** Every input event the desktop sent, in order: the pointer and the wheel as well as keys. */
   readonly inputs: Array<Record<string, unknown>> = []
   /** What `executeJavaScript` resolves with, or throws. */
   answer: (source: string) => unknown = () => undefined
@@ -268,7 +268,7 @@ export class FakeWebContents extends EventEmitter {
     this.startNavigation(url)
     return Promise.resolve()
   }
-  /** How many times Helm stopped a load. */
+  /** How many times the desktop stopped a load. */
   stopped = 0
   /**
    * `stop()` on 43.3.0: the load ends with `did-stop-loading` and nothing else -
@@ -312,7 +312,7 @@ export class FakeWebContents extends EventEmitter {
   closeDevTools(): void {
     this.devtools = false
   }
-  /** How many times Helm moved keyboard focus into this page. */
+  /** How many times the desktop moved keyboard focus into this page. */
   focused = 0
   /** Whether the page holds the keyboard, for `isFocused`. Set by the test. */
   hasFocus = false
@@ -369,7 +369,7 @@ export class FakeWebContents extends EventEmitter {
       meta: mods.includes('meta')
     })
   }
-  /** Helm closing the page. Electron reports the contents destroyed. */
+  /** The desktop closing the page. Electron reports the contents destroyed. */
   close(): void {
     if (this.destroyed) return
     this.destroyed = true
@@ -395,7 +395,7 @@ export class FakeWebContents extends EventEmitter {
   /**
    * A load that failed. Chromium reports the failure and then commits an error
    * page at the same address, which is a main-frame navigation with no status
-   * (`-1`) - the order Helm's `did-navigate` guard exists for. A load a newer
+   * (`-1`) - the order the desktop's `did-navigate` guard exists for. A load a newer
    * one superseded (`ERR_ABORTED`) commits nothing: `errorPage: false`.
    */
   failLoad(code: number, description: string, url: string, options: { errorPage?: boolean } = {}): void {
@@ -465,7 +465,7 @@ export class FakeWebContents extends EventEmitter {
   }
 
   /**
-   * A key pressed with the page holding the keyboard. True when Helm swallowed
+   * A key pressed with the page holding the keyboard. True when the desktop swallowed
    * it (`preventDefault`), which is to say the page never saw it.
    */
   press(key: FakeKey): boolean {

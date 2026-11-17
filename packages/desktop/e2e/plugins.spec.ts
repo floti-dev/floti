@@ -12,8 +12,8 @@ import { TOKEN, installSample, pluginFrame, startServer, type SampleFixture } fr
  * Plugins, through the real window: the sample plugin (`examples/sample-plugin`)
  * against a sample server on this machine. Its rail panel, its tab, its
  * background module, the secret it asks for, the programs and service it runs,
- * and what Helm holds it to - the hosts it may reach, the shortcuts it may not
- * keep, the process it may crash without taking Helm with it.
+ * and what the desktop holds it to - the hosts it may reach, the shortcuts it may not
+ * keep, the process it may crash without taking the desktop with it.
  *
  * The sample's pages are on `floti-plugin://sample/`
  * with `window.floti`, and its background is a module the host runs, read
@@ -46,7 +46,7 @@ const test = base.extend<{ sample: SampleFixture; sampleRegistered: boolean }>({
 
 /** The sample page's `window.floti`, in a frame's `evaluate`. */
 type PluginWindow = Window & { floti: FlotiBridge }
-/** Helm's window and its routed bridge (`inspect.ts`), which asks for a host feature the way the window does. */
+/** The desktop's window and its routed bridge (`inspect.ts`), which asks for a host feature the way the window does. */
 type FlotiWindow = Window & { __flotiRouted: { invoke: (channel: string, payload?: unknown) => Promise<unknown> } }
 
 const statusItem = (ui: Page): Locator => ui.locator('[data-status-plugin="sample"]')
@@ -81,7 +81,7 @@ test('a plugin: its background module, a secret it asks for, its panel, badge, s
   // The background module runs with nothing of the plugin's on screen.
   await expect(statusItem(ui)).toHaveText('Sample: no token')
 
-  // Its rail icon is drawn at the rail's size, as Helm's own are: the icon is
+  // Its rail icon is drawn at the rail's size, as the desktop's own are: the icon is
   // what is left in the button once the badge, the dot and the 2px edge of a
   // current view are set aside.
   const iconSize = (button: Locator): Promise<number[][]> =>
@@ -220,13 +220,13 @@ test("Floti's shortcuts work from inside a plugin page, and its commands run fro
   const panel = await openPanel(ui)
   await expect(panel.locator('[data-sample-item]')).toHaveCount(3)
 
-  // Focus is in the plugin's process: the key reaches Helm only because the
+  // Focus is in the plugin's process: the key reaches the desktop only because the
   // page forwards what it did not handle.
   await panel.locator('[data-sample-item="1"]').focus()
   await ui.keyboard.press('ControlOrMeta+Shift+P')
   const palette = ui.getByRole('dialog', { name: 'Run a command' })
   await expect(palette).toBeVisible()
-  // Helm's own History is listed with the plugin's two commands.
+  // The desktop's own History is listed with the plugin's two commands.
   await expect(palette.getByRole('option')).toHaveText([/History/, /New item/, /Refresh items/])
 
   await ui.keyboard.type('new')
@@ -264,9 +264,9 @@ test("Floti's shortcuts work from inside a plugin page, and its commands run fro
 })
 
 /**
- * Runs `script` in Helm's window, or in the frame at `frameUrl`, through the
+ * Runs `script` in the desktop's window, or in the frame at `frameUrl`, through the
  * main process. Once a plugin frame's process ends, Playwright counts the whole
- * page as crashed and drives it no further, though Helm's own process is fine.
+ * page as crashed and drives it no further, though the desktop's own process is fine.
  */
 function inDesktop<T>(desktop: Desktop, script: string, frameUrl?: string): Promise<T> {
   return desktop.app.evaluate(
@@ -286,7 +286,7 @@ const LISTEN = (name: string): string =>
   `(() => { window.__heard = []; new BroadcastChannel(${JSON.stringify(name)}).onmessage = (event) => window.__heard.push(event.data); return true })()`
 
 /**
- * Waits until Helm's window holds no user activation: Chromium ends a click's
+ * Waits until the desktop's window holds no user activation: Chromium ends a click's
  * a few seconds after it. Asked through main, which grants none; Playwright's
  * `evaluate` counts as a gesture of its own, so a call made through it is
  * always "from a click".
@@ -297,7 +297,7 @@ async function activationLapsed(desktop: Desktop): Promise<void> {
 
 test('a plugin page that crashes says so in its own place, and Reload brings it back', async ({ desktop }) => {
   const ui = desktop.window
-  // Loaded, with Helm's bridge on the page.
+  // Loaded, with the desktop's bridge on the page.
   const panel = await openPanel(ui)
   const url = panel.url()
 
@@ -318,7 +318,7 @@ test('a plugin page that crashes says so in its own place, and Reload brings it 
     .poll(() => inDesktop<string>(desktop, `document.querySelector('[data-plugin-error]')?.textContent ?? ''`))
     .toContain('Sample stopped')
 
-  // Helm itself is untouched: Ctrl+H opens History over the window, and Escape closes it.
+  // The desktop itself is untouched: Ctrl+H opens History over the window, and Escape closes it.
   const historyField = `document.querySelector('[role=combobox][aria-label="Search History"]') !== null`
   await inDesktop(desktop, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', ctrlKey: true }))`)
   await expect.poll(() => inDesktop<boolean>(desktop, historyField)).toBe(true)
@@ -424,7 +424,7 @@ test("a session calls the plugin's tools, its background module answers, and tur
   await storeToken(ui, sample.server.url)
   await startSession(ui, 'alpha')
 
-  // What the session was told: the plugin's own server, beside Helm's, under
+  // What the session was told: the plugin's own server, beside the desktop's, under
   // today's names, in a file in the host's own launch folder. Sessions can
   // start agents by default, so the host's own agents family is there too.
   const run = await claudeRunIn(world, world.projects.alpha)
@@ -482,7 +482,7 @@ test("a session calls the plugin's tools, its background module answers, and tur
   await group.getByRole('checkbox', { name: 'Offer to sessions' }).click()
   await expect(group.locator('[data-plugin-tools-state]')).toHaveText('No session gets them.')
   expect((await rpc(tools.url, token, 'tools/list')).status).toBe(404)
-  // Helm's own tools are another family, and stay.
+  // The desktop's own tools are another family, and stay.
   const browser = config.mcpServers['floti-browser']
   if (browser === undefined) throw new Error('no browser server')
   expect((await rpc(browser.url, token, 'tools/list')).status).toBe(200)
@@ -574,7 +574,7 @@ test('a plugin page starts a session from a click, once the user has seen what i
   const item = await pluginFrame(ui, 'dist/tabs/item.html')
   await expect(item.locator('h1')).toHaveText('Second item')
 
-  // Asked for without a click, it is refused before Helm draws anything.
+  // Asked for without a click, it is refused before the desktop draws anything.
   await activationLapsed(desktop)
   const unasked = await inDesktop<string>(
     desktop,

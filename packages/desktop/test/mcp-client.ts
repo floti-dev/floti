@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs'
 import { request, type IncomingHttpHeaders } from 'node:http'
 
 /**
- * Just enough of an MCP client to talk to Helm's tool endpoint the way a
+ * Just enough of an MCP client to talk to the desktop's tool endpoint the way a
  * session's `claude` does: JSON-RPC over HTTP POST, with the bearer token from
- * the `--mcp-config` document Helm wrote for it.
+ * the `--mcp-config` document the desktop wrote for it.
  *
  * Every request opens a connection of its own (`agent: false`), so a test that
  * stops the endpoint is never answered by a pooled socket the server has

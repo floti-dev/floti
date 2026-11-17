@@ -12,7 +12,7 @@
 // Claude Code's config folder moves with it (`CLAUDE_CONFIG_DIR`), to a folder
 // beside the fakes, so what the fake writes (its session records, history and
 // transcripts) never lands in the real `~/.claude`. That folder starts with
-// the onboarding record a signed-in CLI leaves, which is all Helm reads of a
+// the onboarding record a signed-in CLI leaves, which is all the desktop reads of a
 // sign-in, and is kept across launches so a fake conversation can be resumed;
 // `--fresh` starts it over.
 
@@ -21,7 +21,7 @@ import { join } from 'node:path'
 import { openStore, settleWalkthrough, writeSettings, type AppSettings } from '@floti/core'
 import { FAKE_AGENTS, writeFakeAgent, type FakeBackend } from '../../../test/fake-agents/programs.mjs'
 
-/** The setting that chooses each backend's program in Helm. */
+/** The setting that chooses each backend's program in the desktop. */
 const PROGRAM_SETTING = { 'claude-code': 'claudePath' } as const satisfies Record<FakeBackend, keyof AppSettings>
 
 export interface DriveAgent {

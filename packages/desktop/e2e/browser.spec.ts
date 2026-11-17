@@ -3,7 +3,7 @@ import { COOKIE, POPUP_CODE, startBrowserFixture, type BrowserFixture } from './
 import { expect, keepClearOfCursor, test, type Desktop } from './desktop'
 
 /**
- * The browser pane: a page loads, the page is held to Helm's posture, and what
+ * The browser pane: a page loads, the page is held to the desktop's posture, and what
  * it stores outlives the app. Detail is in `main/browser.test.ts` and the
  * pane's component tests; these are the workflows through the real window.
  *
@@ -75,7 +75,7 @@ const focusPage = (desktop: Desktop, prefix: string): Promise<void> =>
 
 /**
  * A key pressed in the page at `prefix`, the way a person's arrives: through
- * Electron's input path, which is where Helm reads the browser's keys and
+ * Electron's input path, which is where the desktop reads the browser's keys and
  * where Chromium takes Escape out of fullscreen. Playwright's keyboard goes
  * round both, so a test of either could not use it.
  */
@@ -449,7 +449,7 @@ test('permissions: a page may write the clipboard and take the whole screen, and
   try {
     await focusPage(desktop, url)
     await page.getByRole('button', { name: 'Copy' }).click()
-    // Helm's part is the permission: refused, the page's promise rejects
+    // The desktop's part is the permission: refused, the page's promise rejects
     // with NotAllowedError. What lands on the system clipboard is
     // Chromium's, and a process run where the clipboard is out of reach (a
     // sandboxed shell, a service) cannot see it, so it is not asserted.

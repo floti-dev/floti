@@ -97,7 +97,7 @@ export async function stopFlotiHost(host: { exited: Promise<void> }, env: NodeJS
 }
 
 /**
- * Connects to the host in `env`'s folders the way Helm reaches a host on
+ * Connects to the host in `env`'s folders the way the desktop reaches a host on
  * another computer: `floti bridge` through `carry.mjs`, with this device's
  * keys in `folder`, pinning the host's key the first time.
  */

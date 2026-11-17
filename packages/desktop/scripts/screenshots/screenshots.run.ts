@@ -24,7 +24,7 @@ import { expect, startSession, terminalText, test, type Desktop } from '../../e2
  *
  * The world is the E2E tests' (`test/world.ts`): a home of its own with a fake
  * `claude`, two git projects and a data directory, so nothing here touches a
- * real `~/.claude`, a real CLI or an installed Helm.
+ * real `~/.claude`, a real CLI or an installed Floti.
  */
 
 const OUT = process.env['FLOTI_SHOTS_DIR'] ?? join(repoRoot(), 'reports', 'screenshots')

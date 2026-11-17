@@ -123,7 +123,7 @@ function tool(cmd, args) {
  * Why a `codesign -d --verbose=2` report is not of an ad-hoc signature, or
  * null when it is one. codesign writes the report to stderr, as lines like
  *
- *   Executable=/Volumes/Helm/Helm.app/Contents/MacOS/Helm
+ *   Executable=/Volumes/Floti/Floti.app/Contents/MacOS/Floti
  *   Identifier=dev.floti.desktop
  *   Format=app bundle with Mach-O thin (arm64)
  *   CodeDirectory v=20400 size=1234 flags=0x2(adhoc) hashes=28+7 location=embedded
@@ -151,7 +151,7 @@ function plistValue(plist, key) {
   return read.ok ? { value: read.stdout.trim(), said: null } : { value: null, said: read.said }
 }
 
-/** Every problem with one Helm.app, prefixed with where it came from. */
+/** Every problem with one Floti.app, prefixed with where it came from. */
 function appProblems(app, origin) {
   const problems = []
   const fail = (message) => problems.push(`${origin}: ${message}`)

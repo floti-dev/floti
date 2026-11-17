@@ -1,10 +1,10 @@
-// A data directory of the check's own, so a run cannot disturb the Helm the
+// A data directory of the check's own, so a run cannot disturb the desktop the
 // user is sitting in front of.
 //
 // The drivers used to point the app they launch at the real data directory -
 // the installed app's own - and one of them went further and said so on purpose: it parked
 // settings on fixture values and put them back at the end. That is defensible
-// for a claim about persistence and indefensible in practice, because Helm is a
+// for a claim about persistence and indefensible in practice, because the desktop is a
 // desktop app somebody is using while its checks run. Observed: a check run
 // flipped the live app's theme, font and default shell underneath it, and the
 // only reason the settings came back at all is that the run got as far as its
