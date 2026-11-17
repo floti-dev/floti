@@ -6621,6 +6621,7 @@ export function App(): JSX.Element {
             <ShellWalkthrough
               walkthrough={settings.walkthrough}
               bridge={helm}
+              hostReady={localStep?.step === "ready"}
               write={writeSettings}
               start={startFirstSession}
               onDone={finishWalkthrough}

@@ -19,6 +19,12 @@ export interface ShellWalkthroughProps {
   /** At step 5 or 6. */
   walkthrough: Walkthrough
   bridge: Pick<HelmBridge, 'invoke'>
+  /**
+   * Whether this PC's host is ready. The agents are read again when it
+   * becomes so: a read made while the shell was still connecting can answer
+   * none.
+   */
+  hostReady: boolean
   /** Writes the shell's settings, as every other shell write goes. */
   write: (patch: Partial<AppSettings>) => void
   /** Starts the session and puts it in a tab; rejects with why it did not start. */
@@ -32,7 +38,14 @@ export interface ShellWalkthroughProps {
  * rail and sidebar step 5 names. Starting the session, or skipping, marks the
  * walkthrough done, so it shows again only from Settings > General.
  */
-export function ShellWalkthrough({ walkthrough, bridge, write, start, onDone }: ShellWalkthroughProps): JSX.Element {
+export function ShellWalkthrough({
+  walkthrough,
+  bridge,
+  hostReady,
+  write,
+  start,
+  onDone
+}: ShellWalkthroughProps): JSX.Element {
   const { workspace } = walkthrough
   const finish = (started: boolean): void => {
     write(WALKTHROUGH_DONE)
@@ -54,6 +67,7 @@ export function ShellWalkthrough({ walkthrough, bridge, write, start, onDone }: 
         ) : (
           <FirstSession
             bridge={bridge}
+            hostReady={hostReady}
             workspace={workspace}
             start={start}
             onSkip={() => finish(false)}
@@ -68,6 +82,7 @@ export function ShellWalkthrough({ walkthrough, bridge, write, start, onDone }: 
 
 function FirstSession({
   bridge,
+  hostReady,
   workspace,
   start,
   onSkip,
@@ -75,6 +90,7 @@ function FirstSession({
   onStarted
 }: {
   bridge: Pick<HelmBridge, 'invoke'>
+  hostReady: boolean
   workspace: string | null
   start: ShellWalkthroughProps['start']
   onSkip: () => void
@@ -87,7 +103,8 @@ function FirstSession({
   const [problems, setProblems] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
 
-  // The agents this PC's host runs, Claude Code first when it is one.
+  // The agents this PC's host runs, Claude Code first when it is one: read
+  // on arrival and again once the host is ready.
   useEffect(() => {
     let cancelled = false
     void bridge.invoke('agents:list').then(
@@ -103,7 +120,7 @@ function FirstSession({
     return () => {
       cancelled = true
     }
-  }, [bridge])
+  }, [bridge, hostReady])
 
   const begin = async (): Promise<void> => {
     if (workspace === null || agent === null) return

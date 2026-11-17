@@ -22,6 +22,7 @@ function renderAt(walkthrough: Walkthrough, start: ShellWalkthroughProps['start'
     <ShellWalkthrough
       walkthrough={walkthrough}
       bridge={bridge}
+      hostReady
       write={(patch) => writes.push(patch)}
       start={start}
       onDone={onDone}
@@ -88,6 +89,24 @@ describe('the walkthrough in the shell', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Start session' }))
     expect((await screen.findByRole('alert')).textContent).toBe('The host refused the launch.')
     expect(writes).toEqual([])
+  })
+
+  it('reads the agents again once the host is ready, when the first read answered none', async () => {
+    let backends: Array<{ id: string; name: string }> = []
+    bridge.answer('agents:list', () => ({ agents: [], bad: [], backends, folder: null, readOnly: false, shipped: [] }) as never)
+    const props = {
+      walkthrough: { step: 6, workspace: WORKSPACE } as Walkthrough,
+      bridge,
+      write: vi.fn(),
+      start: vi.fn(async () => undefined),
+      onDone: vi.fn()
+    }
+    const { rerender } = render(<ShellWalkthrough {...props} hostReady={false} />)
+    await waitFor(() => expect(bridge.invoked('agents:list')).toHaveLength(1), PATIENCE)
+    expect(screen.getByRole('combobox', { name: 'Agent' })).toHaveProperty('disabled', true)
+    backends = [{ id: 'claude-code', name: 'Claude Code' }]
+    rerender(<ShellWalkthrough {...props} hostReady />)
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Agent' })).toHaveProperty('value', 'claude-code'), PATIENCE)
   })
 
   it('is skipped on step 6: done, with the workspace left selected and no session', async () => {
