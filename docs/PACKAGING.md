@@ -123,6 +123,11 @@ file it cannot read out of the install without failing it. So
 (`ELECTRON_BUILDER_7Z_FILTER`), and `verify-artifact.mjs` fails an artefact
 with any file packed with a filter 19.00 cannot read.
 
+On Windows `floti.exe` carries the app's icon, `build/icon.ico`, as its icon
+resource, so Explorer, the taskbar and Task Manager show the colour circle
+for it: `crates/host/build.rs` compiles `crates/host/floti.rc` into it for a
+Windows target, and builds for macOS and Linux have no resource step.
+
 ### floti for every host
 
 Every release also carries `floti` on its own, for each computer a host can run
@@ -1173,7 +1178,7 @@ it:
 |---|---|---|
 | Windows | `%LOCALAPPDATA%\Programs\Floti\desktop`, beside floti's own `Programs\Floti\bin`, by running the release's `Floti-<version>-setup.exe` with `/S`, which runs `floti install-self` itself. | The Start menu entry the installer makes. |
 | macOS | `~/Applications/Floti.app`, unpacked from `Floti-<version>-arm64-mac.zip` with `ditto -x -k --noqtn` beside it and renamed into place; then `floti install-self` runs from the floti inside it. | `~/Applications` is the Applications entry. |
-| Linux | `~/Applications/Floti.AppImage`, from `Floti-<version>-linux-x64.AppImage`, written beside, made executable and renamed into place. | `applications/dev.floti.desktop.desktop` and `icons/hicolor/256x256/apps/dev.floti.desktop.png` under `$XDG_DATA_HOME` (`~/.local/share`); the icon is the AppImage's own, built into floti. |
+| Linux | `~/Applications/Floti.AppImage`, from `Floti-<version>-linux-x64.AppImage`, written beside, made executable and renamed into place. | `applications/dev.floti.desktop.desktop` and `icons/hicolor/256x256/apps/dev.floti.desktop.png` under `$XDG_DATA_HOME` (`~/.local/share`); the icon is the AppImage's own, built into floti. Where the entry is there, the host of floti installed on its own puts its icon in place of one that differs each time it starts, because an update is run by the floti it replaces, whose icon is the old one. |
 
 **Which release.** The release that is floti's own version, preview or
 stable, at `https://github.com/floti-dev/floti/releases/download/v<version>/`;
@@ -1211,7 +1216,8 @@ from start to end, so a second `floti add desktop`, or one while `floti
 update` runs, refuses in one line and two never write the same download; it
 writes no ended record, since a host follows updates by it. Where the app is
 already installed it says where, with its version where that can be told,
-and changes nothing but a menu entry floti makes that is missing (Linux).
+and changes nothing but a menu entry floti makes that is missing, or an
+older floti's icon beside one that is there (Linux).
 Where something that is not an install is at the install's place (a
 `Floti.app` with no `Info.plist`, a `Programs\Floti` with no uninstaller, a
 folder named `Floti.AppImage`) it refuses in one line and leaves it as it

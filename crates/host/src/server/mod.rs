@@ -709,7 +709,11 @@ fn start_background_update(features: &Features, data: PathBuf, binary: PathBuf, 
     });
     tokio::spawn(async move {
         let swept = binary.clone();
-        let _ = tokio::task::spawn_blocking(move || update::background::sweep_asides(&swept)).await;
+        let _ = tokio::task::spawn_blocking(move || {
+            update::background::sweep_asides(&swept);
+            update::background::refresh_launcher(&UserEnv::from_process());
+        })
+        .await;
         let check = {
             let (data, binary) = (data.clone(), binary.clone());
             move || update::background::check_now(&data, &binary)

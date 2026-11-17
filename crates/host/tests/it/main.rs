@@ -20,6 +20,7 @@ mod content;
 mod detached;
 mod discovery;
 mod end_session;
+mod exe_icon;
 mod fake_agent;
 mod fake_agent_input;
 mod files;
