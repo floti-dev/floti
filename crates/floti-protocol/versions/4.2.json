@@ -3619,7 +3619,8 @@
         "claude-md",
         "mcp",
         "rule",
-        "other"
+        "other",
+        "agents-md"
       ],
       "type": "string"
     },

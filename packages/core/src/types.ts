@@ -2118,6 +2118,7 @@ export type ConfigFileKind =
   | 'settings'
   | 'settings-local'
   | 'claude-md'
+  | 'agents-md'
   | 'mcp'
   | 'rule'
   | 'other'

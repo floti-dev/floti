@@ -2117,7 +2117,7 @@
       "type": "object"
     },
     "ConfigFileKind": {
-      "description": "What a file in a config tree is, as the agent resolves it.",
+      "description": "What a file in a config tree is, as the agent resolves it. `agents-md`,\na project's `AGENTS.md` (the shared shape's instructions file), is since\nprotocol 4.2. No variant carries a doc of its own: one would make this\ntype's schema a `oneOf` rather than an `enum` gaining a value.",
       "enum": [
         "skill",
         "command",
@@ -2129,7 +2129,8 @@
         "claude-md",
         "mcp",
         "rule",
-        "other"
+        "other",
+        "agents-md"
       ],
       "type": "string"
     },

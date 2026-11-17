@@ -990,9 +990,12 @@ hash: string, size: number, mtimeMs: Millis,
 binary: boolean, };
 
 /**
- * What a file in a config tree is, as the agent resolves it.
+ * What a file in a config tree is, as the agent resolves it. `agents-md`,
+ * a project's `AGENTS.md` (the shared shape's instructions file), is since
+ * protocol 4.2. No variant carries a doc of its own: one would make this
+ * type's schema a `oneOf` rather than an `enum` gaining a value.
  */
-export type ConfigFileKind = "skill" | "command" | "agent" | "workflow" | "hook" | "settings" | "settings-local" | "claude-md" | "mcp" | "rule" | "other";
+export type ConfigFileKind = "skill" | "command" | "agent" | "workflow" | "hook" | "settings" | "settings-local" | "claude-md" | "mcp" | "rule" | "other" | "agents-md";
 
 /**
  * One config tree.
