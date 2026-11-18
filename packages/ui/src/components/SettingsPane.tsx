@@ -268,36 +268,30 @@ export interface SettingsPaneProps {
   browserSearch: BrowserSearch
   onBrowserSearchChange: (search: BrowserSearch) => void
   /**
-   * The two browser-tool keys: whether Floti serves its browser tools to the
-   * sessions it hosts, and whether those tools are held to this machine when
-   * the pane is not. Both are preferences rather than state, so both are here.
+   * The two browser-tool keys: whether the picked host's sessions get the
+   * browser tools (that host's, in Tools), and whether those tools are held to
+   * localhost when the pane is not (this desktop's, in Browser).
    */
   browserMcp: boolean
   onBrowserMcpChange: (next: boolean) => void
   browserMcpLocalOnly: boolean
   onBrowserMcpLocalOnlyChange: (next: boolean) => void
 
-  /**
-   * Whether a session may ask Floti what the other sessions are doing.
-   *
-   * Its own row in its own group rather than a third tick under Browser: it is
-   * served by the same endpoint but it is not the same capability, and a person
-   * deciding about it is deciding about their other work rather than about a
-   * browser.
-   */
+  /** Whether the picked host's sessions may ask Floti what the other sessions there are doing. That host's, in Tools. */
   sessionMcp: boolean
   onSessionMcpChange: (next: boolean) => void
   /**
    * Whether the sessions a host starts can start sessions of their own, and
    * the limits that bound them. A profile can turn it off for its own sessions;
-   * this is what every other session follows. The host enforces all of it.
+   * this is what every other session follows. The host enforces all of it;
+   * Tools and Agents show the picked host's.
    */
   sessionAgents: boolean
   onSessionAgentsChange: (next: boolean) => void
   /**
    * Whether the sessions a host starts can use this window: open Floti's
-   * views and read and change its settings (the floti-desktop tools). Told to
-   * the host like the other families.
+   * views and read and change its settings (the floti-desktop tools). Each
+   * host keeps its own; Tools shows the picked host's.
    */
   desktopMcp: boolean
   onDesktopMcpChange: (next: boolean) => void
@@ -1911,7 +1905,10 @@ function BrowserGroup({
             and then turns them off for an afternoon should find them still
             confined when they turn them back on, and a control that greys out
             is a control whose state people stop trusting. */}
-        <CheckRow label={labelOf('browserMcpLocalOnly')} hint={hintOf('browserMcpLocalOnly', mcpLocalOnly)}>
+        <CheckRow
+          label={labelOf('browserMcpLocalOnly')}
+          hint={hintOf('browserMcpLocalOnly', mcpLocalOnly) ?? settingEntry('browserMcpLocalOnly').description}
+        >
           <span data-settings-browser-mcp-local={String(mcpLocalOnly)}>
             <Checkbox
               checked={mcpLocalOnly}

@@ -1001,7 +1001,6 @@ export function App(): JSX.Element {
         };
   };
   const history = useHistoryPalette(historyHost, historyOpen, historySeed);
-  const archiveStats = useArchiveStats(historyHost);
   const check = useUpdate(UPDATE_DEPS, info?.version ?? null);
   const ownData = useOwnDataCopy();
   const themes = useThemes();
@@ -4325,13 +4324,10 @@ export function App(): JSX.Element {
       ? settings
       : (hostWork.byHost.get(settingsHost)?.settings ?? null);
   const { writeSettings: writeSettingsOn } = hostWork;
-  const writeHostSettings = useCallback(
-    (patch: Partial<AppSettings>): void => {
-      if (settingsHost === LOCAL_HOST_KEY) writeSettings(patch);
-      else void writeSettingsOn(settingsHost, patch);
-    },
-    [settingsHost, writeSettings, writeSettingsOn],
-  );
+  const writeHostSettings = (patch: Partial<AppSettings>): void => {
+    if (settingsHost === LOCAL_HOST_KEY) writeSettings(patch);
+    else void writeSettingsOn(settingsHost, patch);
+  };
   const settingsHostAway = awaySince.get(settingsHost);
   const settingsHostView: SettingsHostView = {
     name: hostName(settingsHost),

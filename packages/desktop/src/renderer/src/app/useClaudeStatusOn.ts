@@ -42,10 +42,10 @@ export function useClaudeStatusOn(
     bridgesRef.current = bridges
   }, [bridges])
 
-  const ask = useCallback((on: string, checking: boolean) => {
+  /** Asks `on` for its status; the answer lands only if no later read was asked since. */
+  const request = useCallback((on: string) => {
     asked.current += 1
     const mine = asked.current
-    setRead((current) => (current.host === on ? { ...current, checking } : { host: on, status: null, statusError: null, checking }))
     void bridgesRef.current(on)
       .invoke('setup:status')
       .then(
@@ -53,20 +53,27 @@ export function useClaudeStatusOn(
           if (mine === asked.current) setRead({ host: on, status, statusError: null, checking: false })
         },
         (error: unknown) => {
-          if (mine === asked.current) {
-            setRead((current) => ({ ...current, host: on, statusError: readable(error), checking: false }))
-          }
+          if (mine !== asked.current) return
+          setRead((current) =>
+            current.host === on
+              ? { ...current, statusError: readable(error), checking: false }
+              : { host: on, status: null, statusError: readable(error), checking: false }
+          )
         }
       )
   }, [])
 
   useEffect(() => {
-    if (host !== null) ask(host, false)
-  }, [host, ask])
+    if (host !== null) request(host)
+  }, [host, request])
 
   const recheck = useCallback(() => {
-    if (host !== null) ask(host, true)
-  }, [host, ask])
+    if (host === null) return
+    setRead((current) =>
+      current.host === host ? { ...current, checking: true } : { host, status: null, statusError: null, checking: true }
+    )
+    request(host)
+  }, [host, request])
 
   const mine = read.host === host
   return {
