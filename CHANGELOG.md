@@ -14,6 +14,48 @@ A version with no section here does not release: the workflow fails rather than
 publishing an empty body, because the step a person can skip is the step that
 gets skipped.
 
+## 3.1.0
+
+**Sessions and Floti's window**
+
+- Sessions can open Floti's views for you: a file at a line, a folder in
+  Files with its changed files marked, a project's page, History with a
+  search typed in, or a section of Settings. What a session opens shows
+  beside its tab as a preview, and the keyboard stays where you were typing.
+  From a session's shell it is `floti desktop open`.
+- Sessions can read Floti's settings and change them by name, also as
+  `floti desktop settings` and `floti desktop set` from the shell. Every
+  change shows a toast naming the session, with Undo. A session can only
+  narrow what agents may reach or do and what Floti does on its own; widening
+  those, and choosing the Claude CLI, the shell or how much the archive
+  keeps, stay yours to change in Settings.
+- When something isn't working, a session can ask Floti how it stands (the
+  versions, each agent CLI and its sign-in, the hosts and how each is
+  connected, plugins and their errors) and read the latest lines of Floti's
+  logs, also as `floti desktop status` and `floti desktop log`. Anything
+  shaped like a secret is hidden in both.
+- "Sessions can use Floti's window", in Settings > Floti host > Tools and on
+  by default, turns all of this off for a host's sessions.
+
+**Settings and hosts**
+
+- Settings that decide what a host's sessions run or may do are kept by that
+  host: every window attached to it sees the same values, and they hold with
+  no window open. A session changing one changes it on its own host unless
+  it names another. The values this computer had move to its host the first
+  time 3.1.0 starts.
+- Settings lists a Floti desktop group for this device and a Floti host group
+  for the host you pick, with new Programs and Tools sections. With several
+  hosts or long names, the host switch is a menu showing each host's state.
+  A host out of reach shows Unknown, and Secrets and Plugins follow the host
+  you picked.
+- A plain terminal opens in the shell its host's settings choose.
+
+**Security**
+
+- Electron moves to 43.8.10, and Floti's dependencies to their patched
+  releases.
+
 ## 3.0.0
 
 The first stable release of Floti 3: everything in 3.0.0-preview.1, plus what
