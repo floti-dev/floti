@@ -38,7 +38,11 @@ jobs:
           # false.
           - os: windows-latest
             required: true
-          - os: macos-latest
+          # Intel: the check needs macOS, not Apple Silicon, and GitHub's
+          # arm64 Mac pool is the one that runs short of runners, where a
+          # queued job is cancelled unacquired. The Mac app is built on arm64
+          # (`release-mac` in release.yml).
+          - os: macos-15-intel
             required: true
           - os: ubuntu-latest
             required: true
