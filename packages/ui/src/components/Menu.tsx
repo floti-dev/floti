@@ -51,6 +51,8 @@ export type MenuEntry =
       hint?: string | undefined
       /** The hint in `danger`: a state that is a fault, such as a host out of reach. */
       hintTone?: 'danger' | undefined
+      /** The hint is words, not machine data, so it is set in sans: a state such as "connected". Mono otherwise. */
+      hintSans?: boolean | undefined
       /** The label is machine data, set in mono: a remote host's name. */
       mono?: boolean | undefined
       /** A tick menu's state, or a list's current choice. Undefined draws no tick column. */
@@ -564,7 +566,8 @@ export function MenuList({
             {entry.hint !== undefined && (
               <span
                 className={cn(
-                  'ml-3 shrink-0 font-mono text-[11px]',
+                  'ml-3 shrink-0',
+                  entry.hintSans === true ? 'text-[10.5px]' : 'font-mono text-[11px]',
                   entry.hintTone === 'danger' ? 'text-danger' : 'text-fg-subtle'
                 )}
               >

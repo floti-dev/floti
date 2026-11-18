@@ -127,7 +127,8 @@ pub struct ToolFamiliesStatus {
     pub address: Option<String>,
 }
 
-/// What sessions may start, as Settings › Agents sets it.
+/// What sessions may start, as Settings sets it: whether they may at all
+/// (Floti host › Tools) and the limits (Floti host › Agents).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentLimits {

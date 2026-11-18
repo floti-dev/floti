@@ -131,6 +131,7 @@ export function HostSwitch({
         checked: each.id === host,
         icon: <StateDot away={each.away === true} />,
         hint: each.away === true ? 'out of reach' : 'connected',
+        hintSans: true,
         hintTone: each.away === true ? 'danger' : undefined
       })
     )

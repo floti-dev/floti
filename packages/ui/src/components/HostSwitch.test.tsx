@@ -102,6 +102,10 @@ describe('HostSwitch', () => {
     expect(options[1]?.querySelector('.font-mono')?.textContent).toBe('buildbox')
     expect(options[3]?.querySelector('[data-host-state]')?.getAttribute('data-host-state')).toBe('away')
     expect(within(options[3]!).getByText('out of reach').className).toContain('text-danger')
+    // The states are words, in sans as the mockup sets them; host names are machine data, in mono.
+    for (const state of within(menu).getAllByText(/^(connected|out of reach)$/)) {
+      expect(state.className).not.toContain('font-mono')
+    }
 
     // A host out of reach can be picked: its surface says why it cannot be read.
     await userEvent.click(options[3]!)

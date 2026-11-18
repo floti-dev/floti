@@ -17,7 +17,7 @@ import {
 import { EmptyState } from './EmptyState'
 import { KeyIcon, PlusIcon } from './icons'
 import { Overlay } from './Overlay'
-import { Action, Group, HostLine, SettingsPage, Verdict } from './SettingsKit'
+import { Action, Group, HostLine, ReachNotice, SettingsPage, UnknownValue, Verdict } from './SettingsKit'
 
 /**
  * Settings > Secrets, and the dialog every secret is typed into.
@@ -325,11 +325,28 @@ export interface SecretsPageProps {
   onRemove: (key: string) => Promise<string | null>
   /** The host whose secret store this is, named under the title as every Floti host section names it. */
   hostName?: string | undefined
+  /**
+   * That host cannot be reached (S5): when its link failed, as the window
+   * shows a time, or null when not seen. Its secrets are Unknown under the
+   * notice, never an empty list, and nothing can be added.
+   */
+  away?: { failedAt: string | null } | null | undefined
+  /** Opens Settings > Hosts, which says more about a host out of reach. */
+  onShowHosts?: (() => void) | undefined
 }
 
 /** Settings > Secrets: every stored secret, where it may go and who may send it. */
-export function SecretsPage({ state, plugins, onSave, onRemove, hostName }: SecretsPageProps): JSX.Element {
+export function SecretsPage({
+  state,
+  plugins,
+  onSave,
+  onRemove,
+  hostName,
+  away = null,
+  onShowHosts
+}: SecretsPageProps): JSX.Element {
   const [editing, setEditing] = useState<SecretInfo | 'new' | null>(null)
+  const unknown = away !== null
   const available = state?.available ?? true
   const names = new Map(plugins.map((plugin) => [plugin.id, plugin.name]))
   const secrets = state?.secrets ?? []
@@ -341,7 +358,7 @@ export function SecretsPage({ state, plugins, onSave, onRemove, hostName }: Secr
       onHost={hostName === undefined ? undefined : <HostLine name={hostName} />}
       sole
       aside={
-        <Action primary disabled={!available} onClick={() => setEditing('new')} data-secret-add>
+        <Action primary disabled={!available || unknown} onClick={() => setEditing('new')} data-secret-add>
           <span className="flex items-center gap-1.5">
             <PlusIcon width={11} height={11} />
             Add secret
@@ -349,12 +366,19 @@ export function SecretsPage({ state, plugins, onSave, onRemove, hostName }: Secr
         </Action>
       }
     >
+      {unknown && (
+        <ReachNotice name={hostName ?? 'This host'} failedAt={away.failedAt} onShowHosts={onShowHosts} />
+      )}
       <Group
         name="secrets"
         title="Secrets"
         hint="Tokens and keys plugins use in requests, stored encrypted on this computer. Each goes only to the hosts and plugins you allow."
       >
-        {!available && (
+        {unknown ? (
+          <p className="pb-1">
+            <UnknownValue />
+          </p>
+        ) : !available && (
           <div className="pb-3">
             <Verdict
               tone="warn"
@@ -363,7 +387,7 @@ export function SecretsPage({ state, plugins, onSave, onRemove, hostName }: Secr
             />
           </div>
         )}
-        {state !== null && secrets.length === 0 ? (
+        {unknown ? null : state !== null && secrets.length === 0 ? (
           <EmptyState
             size="list"
             name="secrets"

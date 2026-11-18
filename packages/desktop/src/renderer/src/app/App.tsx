@@ -108,7 +108,6 @@ import {
   type RestoreOffer,
   type SavedPaneLayout,
   type SessionRecord,
-  type AppSettings,
 } from "@floti/core/types";
 import {
   AppShell,
@@ -148,7 +147,6 @@ import {
   TrashIcon,
   pluginSection,
   type PaletteCommand,
-  type SecretPluginChoice,
   type StatusPluginItem,
   ConfirmSessionDialog,
   DeleteProfileDialog,
@@ -236,7 +234,6 @@ import {
   type LauncherHost,
   type HostChoice,
   type HostChoiceHost,
-  type SettingsHostView,
   AddHostDialog,
 } from "@floti/ui";
 import { sidebarFor, type SidebarView } from "./sidebarFor";
@@ -353,7 +350,8 @@ import { useHistoryPalette } from "./useHistoryPalette";
 import { useStoppedGroup } from "./useStoppedGroup";
 import { useConversationResume } from "./useConversationResume";
 import { useArchiveStats } from "./useArchiveStats";
-import { clockTime, useAwaySince } from "./useAwaySince";
+import { useAwaySince } from "./useAwaySince";
+import { secretChoicesOn, settingsHostFor } from "./settingsHost";
 import { useClaudeStatusOn } from "./useClaudeStatusOn";
 import { ConversationPane } from "./ConversationPane";
 import { useLauncher } from "./useLauncher";
@@ -1329,7 +1327,7 @@ export function App(): JSX.Element {
 
   /**
    * What the window knows of children shown in their parent's tab, while this
-   * device shows them (Settings > Agents): the sessions each host lists, and
+   * device shows them (Settings > Sessions): the sessions each host lists, and
    * which parent tabs' panes have room (`familyRooms.ts`). A child shown there
    * has no tab and is open here all the same.
    */
@@ -4318,30 +4316,21 @@ export function App(): JSX.Element {
   const settingsHostReached = settingsHostLocal
     ? localReached
     : connectedHostIds.includes(settingsHost);
-  const settingsHostValues: AppSettings | null = !settingsHostReached
-    ? null
-    : settingsHostLocal
-      ? settings
-      : (hostWork.byHost.get(settingsHost)?.settings ?? null);
   const { writeSettings: writeSettingsOn } = hostWork;
-  const writeHostSettings = (patch: Partial<AppSettings>): void => {
-    if (settingsHost === LOCAL_HOST_KEY) writeSettings(patch);
-    else void writeSettingsOn(settingsHost, patch);
-  };
-  const settingsHostAway = awaySince.get(settingsHost);
-  const settingsHostView: SettingsHostView = {
+  const {
+    values: settingsHostValues,
+    view: settingsHostView,
+    write: writeHostSettings,
+  } = settingsHostFor({
+    host: settingsHost,
     name: hostName(settingsHost),
-    remote: !settingsHostLocal,
-    unknown: !settingsHostReached
-      ? {
-          kind: "away",
-          failedAt:
-            settingsHostAway === undefined ? null : clockTime(settingsHostAway),
-        }
-      : settingsHostValues === null
-        ? { kind: "reading" }
-        : null,
-  };
+    reached: settingsHostReached,
+    local: settings,
+    remote: (host) => hostWork.byHost.get(host)?.settings ?? null,
+    writeLocal: writeSettings,
+    writeRemote: writeSettingsOn,
+    awaySince: awaySince.get(settingsHost),
+  });
   /** Settings > Programs on a host on another computer: its own Claude CLI and shells. */
   const settingsClaude = useClaudeStatusOn(
     settingsOnScreen && !settingsHostLocal && settingsHostReached
@@ -5251,10 +5240,16 @@ export function App(): JSX.Element {
       return (
         <SecretsPage
           state={pluginSettings.secrets}
-          plugins={secretChoices}
+          plugins={secretChoicesOn(settingsHost, pluginsOn)}
           onSave={pluginSettings.saveSecret}
           onRemove={pluginSettings.removeSecret}
           hostName={hostName(settingsHost)}
+          away={
+            settingsHostView.unknown?.kind === "away"
+              ? { failedAt: settingsHostView.unknown.failedAt }
+              : null
+          }
+          onShowHosts={() => setSettingsSection("hosts")}
         />
       );
     }
@@ -5264,7 +5259,7 @@ export function App(): JSX.Element {
         <PluginPage
           key={path}
           plugin={settingsPlugin}
-          plugins={pluginState.list ?? []}
+          plugins={shownPluginState.list ?? []}
           metrics={pluginSettings.metrics}
           log={pluginSettings.log}
           secrets={pluginSettings.secrets}
@@ -6333,14 +6328,10 @@ export function App(): JSX.Element {
   };
 
   /** The plugins a secret asked for may be shared with: those on the asking plugin's host. */
-  const secretChoices: SecretPluginChoice[] = [
-    ...pluginsOn(secretAsk?.host ?? LOCAL_HOST_KEY).entries(),
-  ].map(([id, plugin]) => ({
-    id,
-    name: plugin.name,
-    network: plugin.network,
-    secrets: plugin.secrets.map((entry) => entry.key),
-  }));
+  const secretChoices = secretChoicesOn(
+    secretAsk?.host ?? LOCAL_HOST_KEY,
+    pluginsOn,
+  );
 
   const inFront = (...kinds: PaneRef["kind"][]): boolean =>
     front !== null && kinds.includes(front.kind);

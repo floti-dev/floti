@@ -6014,7 +6014,7 @@ impl World {
         window
     }
 
-    /// Switches floti-desktop, as Settings > Agents does.
+    /// Switches floti-desktop, as Settings > Floti host > Tools does.
     async fn desktop_tools(&self, on: bool) {
         self.client()
             .await

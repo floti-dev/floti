@@ -844,7 +844,7 @@ describe('the browser tools', () => {
       settings = { ...settings, browserMcp: false }
       const off = await alpha.call('browser_open', { url: 'http://127.0.0.1:5173/' })
       expect(off).toEqual({
-        text: "Floti's browser tools are switched off in Settings > Browser, so this session has none to call.",
+        text: "Floti's browser tools are switched off for this host in Settings > Tools, so this session has none to call.",
         isError: true,
         images: []
       })

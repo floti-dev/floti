@@ -185,7 +185,7 @@ describe('ProfileEditor', () => {
     it('says what it covers, and that Settings can turn the tools off for every session', () => {
       renderEditor()
       expect(screen.getByText(/get the tools to start, list and stop agents of their own/)).toBeTruthy()
-      expect(screen.getByText(/follows Settings > Agents/)).toBeTruthy()
+      expect(screen.getByText(/follows Settings > Tools/)).toBeTruthy()
     })
   })
 
