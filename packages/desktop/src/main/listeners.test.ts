@@ -42,7 +42,9 @@ describe("main's listeners", () => {
   })
 
   it('S6: mints no bearer token and keeps no folder of --mcp-config files', () => {
-    expect(filesWhere((source) => /Bearer|Authorization/.test(source))).toEqual([])
+    // mainLog.ts names bearer values only to hide them from main's log, and sends none.
+    const bearer = filesWhere((source) => /Bearer|Authorization/.test(source))
+    expect(bearer.filter((path) => path !== 'mainLog.ts')).toEqual([])
     expect(filesWhere((source) => /\bmcpConfigDir\b|cleanStaleMcpConfigs/.test(source))).toEqual([])
   })
 
