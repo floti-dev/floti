@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { PATIENCE } from '../../../test/patience'
 import { bearerOf, callTool, readMcpConfig, rpc } from '../test/mcp-client'
-import { claudeRunIn, expect, startSession, test, typeLine } from './desktop'
+import { claudeRunIn, expect, menuLayer, startSession, test, typeLine } from './desktop'
 
 /** A page the session drives, and one only the user may look at. */
 const PAGES: Record<string, string> = {
@@ -187,7 +187,8 @@ test('the user shares a page with a session, which reads and drives it until the
 
     // Shared from the bar, with the session picked by name.
     await window.getByRole('button', { name: 'Share with a session' }).click()
-    await window.getByRole('menu', { name: 'Share' }).getByRole('menuitemcheckbox', { name: /alpha/ }).click()
+    // The menu is drawn in the browser's menu layer, over the page.
+    await (await menuLayer(desktop)).getByRole('menu', { name: 'Share' }).getByRole('menuitemcheckbox', { name: /alpha/ }).click()
     const note = window.getByRole('note')
     await expect(note).toHaveText('Shared with “alpha”: that session can read and drive this page.Stop sharing')
     await expect(pageTab.getByText('shared', { exact: true })).toBeVisible()
@@ -253,7 +254,7 @@ test('the user shares a page with a session, which reads and drives it until the
     // Shared again, then the session ends, and the share goes with it.
     await pageTab.click()
     await window.getByRole('button', { name: 'Share with a session' }).click()
-    await window.getByRole('menu', { name: 'Share' }).getByRole('menuitemcheckbox', { name: /alpha/ }).click()
+    await (await menuLayer(desktop)).getByRole('menu', { name: 'Share' }).getByRole('menuitemcheckbox', { name: /alpha/ }).click()
     await expect(note).toBeVisible()
     await window.getByRole('tab', { name: /^alpha, / }).click()
     await typeLine(pane, '/exit')

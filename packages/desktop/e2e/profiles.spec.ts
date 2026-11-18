@@ -34,7 +34,8 @@ test('a profile made in the New profile dialog is saved in the host and starts i
   await expect(window.getByRole('button', { name: 'hub, 2 projects' })).toBeVisible()
 
   await window.getByRole('navigation', { name: 'Destinations' }).getByRole('button', { name: 'Profiles' }).click()
-  await window.getByRole('button', { name: 'New profile' }).click()
+  // With no profile yet, the empty page's own next step.
+  await window.getByRole('button', { name: 'New profile' }).and(window.locator('[data-empty-action]')).click()
   const dialog = window.getByRole('dialog', { name: 'New profile' })
   await dialog.getByRole('textbox', { name: 'Profile name' }).fill('hub dev')
   await dialog.getByRole('textbox', { name: 'Root directory' }).fill(hub.root)

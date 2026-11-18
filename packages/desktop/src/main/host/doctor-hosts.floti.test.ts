@@ -91,20 +91,27 @@ describe.runIf(flotiAvailable)('the hosts floti doctor checks', () => {
       const doctorEnv = await doctorEnvironment(root, env)
       const doctor = await runFloti(['doctor'], doctorEnv)
       const lines = doctor.stdout.trim().split(/\r?\n/)
-      expect(lines, doctor.stderr).toHaveLength(5)
+      expect(lines, doctor.stderr).toHaveLength(10)
       expect(lines[0]).toMatch(/^This PC: answers, floti \S+, \d+ ms round trip$/)
-      // Beside this PC's host, what it could not tell here; the fake claude is
-      // in the tested range, so nothing is said of it.
-      expect(lines.slice(1, 3)).toEqual(NOT_LOOKED_AT)
-      expect(lines[3]).toMatch(/^build-box: answers, floti \S+, \d+ ms round trip$/)
+      // Then how this PC's host stands, one fact a line: the fake claude is in
+      // the tested range, so its line is a fact and not a problem.
+      const standing = lines.slice(1, 6)
+      expect(standing[0]).toMatch(/^This PC: Floti host \S+, protocol \d+\.\d+\.$/)
+      expect(standing[1]).toMatch(/^This PC: Folders: data .+, logs .+ \(host log .+\)\.$/)
+      expect(standing[2]).toMatch(/^This PC: Agent CLI .+: .+, in the tested range \(.+\); .+\.$/)
+      expect(standing[3]).toBe('This PC: Plugins: none added.')
+      expect(standing[4]).toMatch(/^This PC: Agents: sessions can start agents (on|off); /)
+      // Beside this PC's host, what it could not tell here.
+      expect(lines.slice(6, 8)).toEqual(NOT_LOOKED_AT)
+      expect(lines[8]).toMatch(/^build-box: answers, floti \S+, \d+ ms round trip$/)
       // What its command said, unedited, and the line to try by hand.
-      expect(lines[4]).toMatch(/^gone-box: does not answer: gone-box: Connection refused \| try by hand: .+ floti connect$/)
+      expect(lines[9]).toMatch(/^gone-box: does not answer: gone-box: Connection refused \| try by hand: .+ floti connect$/)
       expect(doctor.code).toBe(1)
 
       // With gone-box removed on this device, every host answers.
       await recordDoctorHosts(places, deps, doctorHosts(hosts.slice(0, 1), folderOf))
       const again = await runFloti(['doctor'], doctorEnv)
-      expect(again.stdout.trim().split(/\r?\n/)).toHaveLength(4)
+      expect(again.stdout.trim().split(/\r?\n/)).toHaveLength(9)
       expect(again.code, again.stdout).toBe(0)
 
       await stopFlotiHost(host, env)

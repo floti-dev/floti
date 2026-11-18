@@ -11,6 +11,7 @@ import {
   flotiChildren,
   mainPid,
   processAlive,
+  runClipboard,
   sessionIdOf,
   startSession,
   terminalText,
@@ -238,8 +239,8 @@ test('a word copied from a session goes to the clipboard, and pastes back into t
   desktop,
   world
 }) => {
-  const { app, window } = desktop
-  const clipboard = (): Promise<string> => app.evaluate(({ clipboard: board }) => board.readText())
+  const { window } = desktop
+  const clipboard = (): Promise<string> => runClipboard(desktop)
   const word = 'clip-4821'
 
   const id = await startSession(window, 'alpha')

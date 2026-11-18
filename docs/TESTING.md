@@ -501,7 +501,7 @@ over the window, or Electron's own guards on a page.
 | `own-data` | what only `desktop.db` held copied into the host, and History and the archived conversation showing it |
 | `files` | a file opened from the tree beside its session, its changed lines counted, its line numbers to the bottom, and the view following the session's next edit; Ctrl+P, and the hand-offs to VS Code, Explorer and the clipboard |
 | `notes` | a note rendered and its wikilink followed; a note edited beside its preview, its draft kept behind another tab, and saved; Ctrl+Shift+F finding a note; an HTML artifact framed with no reach |
-| `browser` | browsing; the security posture; a cookie surviving a restart; find in page; the browser's keys with the caret in the page; the page standing down for the address list and the menu; clipboard writing and fullscreen; the page standing down while a divider or the Browser tab is dragged |
+| `browser` | browsing; the security posture; a cookie surviving a restart; find in page; the browser's keys with the caret in the page; the address list and the menu drawn over the live page in the menu layer; clipboard writing and fullscreen; the page standing down while a divider or the Browser tab is dragged |
 | `agent-tools` | a session drives a browser tab of its own through its own token, and loses its tools when it ends; a page the user shares with a session, read and driven until the share is taken back or the session ends |
 | `plugins` | the sample plugin, against a server of its own: its background module, read through what it does (the badge, the status bar item, a command's effect, the tools' answers), a secret it asks for, its panel, badge, status and a tab with parameters, its pages on `floti-plugin://sample/` with `window.floti`, and `floti.fetch` held to the manifest's origins on every redirect; Floti's shortcuts from inside a plugin page and its commands from Ctrl+Shift+P; a crashed plugin page and Reload; a folder added in Settings, kept across a restart, and turned off and on; a session calling the plugin's tools through the host, answered by its background module, and losing them when they are turned off in Settings; a page strip; a plugin page starting a session and opening a link from a click |
 | `boundary` | every channel a workflow uses crosses only as `channels/boundary.rs` allows: the launcher, sessions and terminals; history; the Files view, a note and the profile form; plugin pages, a tool called by a session, and the Browser tab |
@@ -519,12 +519,21 @@ over the window, or Electron's own guards on a page.
   and session keeper by the pid the host logs, each fake `claude` by its
   record), because Windows will not delete a file a live process holds. A
   test that leaves something running fails there, naming the pids.
+- **The desktop's copies and pastes use a clipboard of the run's own**
+  (`FLOTI_RUN_CLIPBOARD`, `desktopClipboard` in `main/clipboard.ts`), held in
+  main and read by `runClipboard`. The system clipboard is one for the whole
+  desktop: a run on it would overwrite what the person at the computer
+  copied, and any program holding it open would fail the run. How a copy
+  gets through a contended system clipboard is `clipboard.test.ts`'s. A
+  browser page's own clipboard write is Chromium's, and is checked on the
+  system clipboard, put back as it was.
 - **One project**, `in the local host`: sessions, terminals, discovery, setup,
   templates, notes, files and the plugins registry are the local host's.
 - **`e2e/desktop.ts`** has the `test` fixture (`world`, `desktop`, `relaunch`) and
   the helpers: `startSession`, `typeLine`, `terminalText`, `claudeRunIn`,
-  `processAlive`, and for quitting `closeWindow`, `answer` and
-  `closeKeepRunning`.
+  `processAlive`, `runClipboard`, `menuLayer` (the browser's menu layer, where
+  its menus and address list are drawn), and for quitting `closeWindow`,
+  `answer` and `closeKeepRunning`.
 - **Find elements by role and accessible name**, as a user sees them. Two
   exceptions, both read-only: terminal text comes from
   `window.__flotiTerminals()`, because xterm paints to a canvas; and a pane's

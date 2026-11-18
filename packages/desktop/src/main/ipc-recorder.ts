@@ -43,10 +43,19 @@ function pageOf(contents: WebContents | null | undefined): RecordedPage {
 export function installIpcRecorder(): void {
   if (app.isPackaged || process.env[RECORD_IPC_ENV] !== '1') return
   const seen = new Map<string, RecordedChannel>()
-  const record = (channel: string, kind: RecordedChannel['kind'], contents: WebContents | null | undefined): void => {
-    const page = pageOf(contents)
+  const add = (channel: string, kind: RecordedChannel['kind'], page: RecordedPage): void => {
     const key = `${kind} ${channel} ${page}`
     if (!seen.has(key)) seen.set(key, { channel, kind, page })
+  }
+  const record = (channel: string, kind: RecordedChannel['kind'], contents: WebContents | null | undefined): void => {
+    // Main sends to a window from its first frame (the local host's start-up
+    // steps), before its page has an address. Which page that is, is known
+    // once its first navigation commits; one that never loads heard nothing.
+    if (contents !== null && contents !== undefined && !contents.isDestroyed() && contents.getURL() === '') {
+      contents.once('did-navigate', () => add(channel, kind, pageOf(contents)))
+      return
+    }
+    add(channel, kind, pageOf(contents))
   }
   ;(globalThis as Record<string, unknown>)[RECORD_GLOBAL] = (): RecordedChannel[] => [...seen.values()]
 

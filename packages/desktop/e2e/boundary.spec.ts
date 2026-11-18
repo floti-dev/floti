@@ -118,7 +118,8 @@ test('the Files view, a note and the profile form use only client channels', asy
   await expect(window.getByRole('heading', { level: 1, name: 'First note' })).toBeVisible()
 
   await destination(desktop, 'Profiles').click()
-  await window.getByRole('button', { name: 'New profile' }).click()
+  // With no profile yet, the empty page's own next step.
+  await window.getByRole('button', { name: 'New profile' }).and(window.locator('[data-empty-action]')).click()
   const dialog = window.getByRole('dialog', { name: 'New profile' })
   await dialog.getByRole('textbox', { name: 'Profile name' }).fill('boundary')
   await dialog.getByRole('button', { name: 'Cancel' }).click()

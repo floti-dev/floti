@@ -54,6 +54,52 @@ function asStored(text: string): string {
   return (nul === -1 ? text : text.slice(0, nul)).replace(/\r\n/g, '\n')
 }
 
+/**
+ * Set to `1` by the end-to-end fixture, and honoured only in a build that is
+ * not packaged: the desktop's own copies and pastes then use a clipboard of
+ * the run's own, held in main. The system clipboard is one for the whole
+ * desktop, so a run on it would overwrite what the person at the computer
+ * copied, and a program holding it open (see above) would fail the run.
+ */
+export const RUN_CLIPBOARD_ENV = 'FLOTI_RUN_CLIPBOARD'
+
+/** Where the run's clipboard is published, for the end-to-end tests to read and write by `app.evaluate`. */
+export const RUN_CLIPBOARD_GLOBAL = '__flotiRunClipboard'
+
+/** A clipboard held in memory: the text last written, which nothing else can hold or change. */
+export function memoryClipboard(): TextClipboard {
+  let text = ''
+  return {
+    writeText: (written) => {
+      text = written
+    },
+    readText: () => text,
+    availableFormats: () => (text === '' ? [] : ['text/plain'])
+  }
+}
+
+/** What decides which clipboard the desktop's own copies and pastes use. */
+export interface ClipboardRun {
+  packaged: boolean
+  env: NodeJS.ProcessEnv
+  /** Where the run's clipboard is published: main's `globalThis`. */
+  global: Record<string, unknown>
+}
+
+/**
+ * The clipboard the desktop's own copies and pastes use: the system's, or in
+ * an end-to-end run (`RUN_CLIPBOARD_ENV`) the run's own, published on
+ * `RUN_CLIPBOARD_GLOBAL`. Every call in one run answers the same clipboard.
+ */
+export function desktopClipboard(system: TextClipboard, run: ClipboardRun): TextClipboard {
+  if (run.packaged || run.env[RUN_CLIPBOARD_ENV] !== '1') return system
+  const published = run.global[RUN_CLIPBOARD_GLOBAL] as TextClipboard | undefined
+  if (published !== undefined) return published
+  const board = memoryClipboard()
+  run.global[RUN_CLIPBOARD_GLOBAL] = board
+  return board
+}
+
 export function createClipboardText(
   board: TextClipboard,
   delays: readonly number[] = CLIPBOARD_RETRY_DELAYS_MS

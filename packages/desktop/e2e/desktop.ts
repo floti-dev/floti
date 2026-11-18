@@ -25,8 +25,11 @@ export async function launchDesktop(world: World): Promise<Desktop> {
   const app = await electron.launch({
     args: [desktop],
     cwd: desktop,
-    // Main records the channels each page uses over IPC (`ipc-recorder.ts`).
-    env: { ...world.env, FLOTI_RECORD_IPC: '1' }
+    // Main records the channels each page uses over IPC (`ipc-recorder.ts`),
+    // and the desktop's copies and pastes use a clipboard of the run's own,
+    // never the system's that the person at the computer is using
+    // (`desktopClipboard` in `main/clipboard.ts`).
+    env: { ...world.env, FLOTI_RECORD_IPC: '1', FLOTI_RUN_CLIPBOARD: '1' }
   })
   const window = await app.firstWindow()
   await window.waitForLoadState('domcontentloaded')
@@ -211,6 +214,29 @@ export async function keepClearOfCursor(desktop: Desktop): Promise<void> {
     win.setBounds({ ...bounds, x: leftRoom >= rightRoom ? cursor.x - margin - bounds.width : cursor.x + margin })
     if (under(win.getBounds())) throw new Error(`the window could not be moved clear of the cursor at ${String(cursor.x)},${String(cursor.y)}`)
   })
+}
+
+/** The text on the run's own clipboard, which the desktop's copies write and its pastes read. */
+export const runClipboard = (desktop: Desktop): Promise<string> =>
+  desktop.app.evaluate(() => (globalThis as unknown as { __flotiRunClipboard: { readText(): string } }).__flotiRunClipboard.readText())
+
+/** Whether a web contents' address is the browser's menu layer (`layer.html`). */
+const isMenuLayer = (url: string): boolean => new URL(url, 'file:///').pathname.endsWith('/layer.html')
+
+/**
+ * The browser's menu layer: a view of its own above the browser's pages, where
+ * the browser's menus and the address list are drawn over the live page.
+ * Playwright sees it as a page of its own once it has loaded.
+ */
+export async function menuLayer(desktop: Desktop): Promise<Page> {
+  let found: Page | undefined
+  await expect
+    .poll(() => {
+      found = desktop.app.windows().find((candidate) => isMenuLayer(candidate.url()))
+      return found !== undefined
+    })
+    .toBe(true)
+  return found as Page
 }
 
 /** Closes the desktop's window the way its close button or Alt+F4 does. */
