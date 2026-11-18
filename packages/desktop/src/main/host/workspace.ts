@@ -350,7 +350,7 @@ export function createHostWorkspace({
           try {
             heard(await connection.request('settings:read', null))
           } catch (error) {
-            throw new Error(claudeNeedsHostSettings((error as Error).message))
+            throw new Error(claudeNeedsHostSettings((error as Error).message), { cause: error })
           }
         }
       }
