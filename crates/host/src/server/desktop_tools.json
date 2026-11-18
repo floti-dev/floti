@@ -1,7 +1,7 @@
 {
   "name": "floti-desktop",
   "path": "/mcp/desktop",
-  "instructions": "These tools open Floti's views, in the window of Floti, the app hosting this session, so you can show the user what you are talking about instead of describing where to find it. What you open appears beside this session's tab and the keyboard stays in the terminal, so the user can keep typing to you. A tab you open is a preview: the next one you open takes its place, unless the user has kept it, so show things one at a time. Floti's views: a file's tab shows a file's text with its changed lines marked, scrolled to a line when you give one - use it to show code you wrote, read or are asking about; the Files view is the sidebar's tree of a project's folders with every changed file marked - use it to show what changed in a folder or where files are; a project's page shows a project at a glance - its git state, its configuration, the skills, agents and commands it gives a session, and its agent worktrees - with a button to start a session in it; History is the palette that searches every past session's conversation, and opens over the window, taking the keyboard until the user closes it; Settings is where the user changes how Floti behaves, one section at a time. Paths may be relative to your own folder, and must be under a folder Floti knows. desktop_settings lists every one of Floti's settings with what it does, its value, the values it takes and its default, and desktop_set changes one or several by name: use them when the user asks you to change how Floti behaves, such as \"turn off agents\". A setting that decides what agents may reach or do (the tool families' switches, Sessions can start agents, the browser's reach, the agent limits, plugins' switches and the folders Floti scans), or what Floti or its sessions do on their own (updating by itself, address-bar search, keeping sessions running on quit, resuming after a crash without asking), you may narrow but never widen: only the user widens one, in Settings. Every change shows the user a toast naming your session, with Undo. The same tools run from your shell as `floti desktop open`, `floti desktop settings` and `floti desktop set`, with `--json` for an answer as JSON.",
+  "instructions": "These tools open Floti's views, in the window of Floti, the app hosting this session, so you can show the user what you are talking about instead of describing where to find it. What you open appears beside this session's tab and the keyboard stays in the terminal, so the user can keep typing to you. A tab you open is a preview: the next one you open takes its place, unless the user has kept it, so show things one at a time. Floti's views: a file's tab shows a file's text with its changed lines marked, scrolled to a line when you give one - use it to show code you wrote, read or are asking about; the Files view is the sidebar's tree of a project's folders with every changed file marked - use it to show what changed in a folder or where files are; a project's page shows a project at a glance - its git state, its configuration, the skills, agents and commands it gives a session, and its agent worktrees - with a button to start a session in it; History is the palette that searches every past session's conversation, and opens over the window, taking the keyboard until the user closes it; Settings is where the user changes how Floti behaves, one section at a time. Paths may be relative to your own folder, and must be under a folder Floti knows. desktop_settings lists every one of Floti's settings with what it does, its value, the values it takes and its default, and desktop_set changes one or several by name: use them when the user asks you to change how Floti behaves, such as \"turn off agents\". A setting that decides what agents may reach or do (the tool families' switches, Sessions can start agents, the browser's reach, the agent limits, plugins' switches and the folders Floti scans), or what Floti or its sessions do on their own (updating by itself, address-bar search, keeping sessions running on quit, resuming after a crash without asking), you may narrow but never widen: only the user widens one, in Settings. Every change shows the user a toast naming your session, with Undo. When the user asks why something in Floti is not working, look before you guess: desktop_status says which versions run, each agent CLI against the range Floti was tested with and whether it is signed in, the hosts the window knows with how each is connected and its last error, which plugin failed to load and why, which tool families are on, and the agent limits; desktop_log answers the latest lines of the host's log and of the desktop's own (main.log), only lines holding a word when you give one. The same tools run from your shell as `floti desktop open`, `floti desktop settings`, `floti desktop set`, `floti desktop status` and `floti desktop log`, with `--json` for an answer as JSON.",
   "tools": [
     {
       "name": "desktop_open",
@@ -79,6 +79,37 @@
           }
         },
         "required": ["changes"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "desktop_status",
+      "readOnly": true,
+      "description": "Says how Floti stands, to find out why something is not working: the host's, the desktop's and the protocol's versions; each agent CLI's version against the range Floti was tested with, and whether it is signed in (as Floti judges it, from a sign-in file existing, or unknown); the hosts the window knows, each with how it is connected and its last error; this host's data, config and log folders; each plugin, on or off, loaded or with why it did not load; the agent tool families on and where their listener is; and the agent limits. With no Floti window attached it answers this host's part and names what only a window can tell. Changes nothing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "desktop_log",
+      "readOnly": true,
+      "description": "Answers the latest lines of this host's log (host.log) and of the desktop's own log (main.log, read through the Floti window; with none attached it says so), oldest first, to see what Floti said about a problem. Changes nothing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "How many of the latest lines of each log, up to 500. 100 when left out."
+          },
+          "word": {
+            "type": "string",
+            "description": "Only lines holding this word, in any case."
+          }
+        },
         "additionalProperties": false
       }
     }

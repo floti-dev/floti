@@ -8,7 +8,10 @@
 //! one or several, as `desktop_set` does: a value is read as JSON where it is
 //! JSON (`false`, `3`, `["C:\\work"]`, `null`) and as text otherwise
 //! (`local`), and `--host <id>` names the host a per-host setting or a
-//! plugin's switch changes on. Each subcommand is one tool of the family, called
+//! plugin's switch changes on. `floti desktop status` says how Floti stands,
+//! as `desktop_status` does, and `floti desktop log [<word>] [--lines <n>]`
+//! answers the latest lines of the host's and the desktop's logs, as
+//! `desktop_log` does. Each subcommand is one tool of the family, called
 //! over the same endpoint the session's agent tools use, so the host answers
 //! one way whoever asks and the same folder rule applies. The session is
 //! known by the bearer token in `FLOTI_AGENT_TOKEN` and the address in
@@ -36,7 +39,7 @@ use crate::agent_cli::{Family, Outcome, TOKEN_VAR, address_and_token, call, prin
 pub const DESKTOP_URL_VAR: &str = "FLOTI_AGENT_DESKTOP_URL";
 
 /// What `floti desktop` accepts.
-pub const USAGE: &str = "usage: floti desktop open file <path> [--line <n>] [--json]\n       floti desktop open folder <path> [--json]\n       floti desktop open project <path> [--json]\n       floti desktop open history [<search>...] [--json]\n       floti desktop open settings [<section>] [--json]\n       floti desktop settings [--json]\n       floti desktop set <name> <value> [<name> <value>...] [--host <id>] [--json]";
+pub const USAGE: &str = "usage: floti desktop open file <path> [--line <n>] [--json]\n       floti desktop open folder <path> [--json]\n       floti desktop open project <path> [--json]\n       floti desktop open history [<search>...] [--json]\n       floti desktop open settings [<section>] [--json]\n       floti desktop settings [--json]\n       floti desktop set <name> <value> [<name> <value>...] [--host <id>] [--json]\n       floti desktop status [--json]\n       floti desktop log [<word>] [--lines <n>] [--json]";
 
 const DESKTOP: Family = Family {
     url_var: DESKTOP_URL_VAR,
@@ -49,6 +52,10 @@ const OPEN_TOOL: &str = "desktop_open";
 const SETTINGS_TOOL: &str = "desktop_settings";
 /// The tool `floti desktop set` calls.
 const SET_TOOL: &str = "desktop_set";
+/// The tool `floti desktop status` calls.
+const STATUS_TOOL: &str = "desktop_status";
+/// The tool `floti desktop log` calls.
+const LOG_TOOL: &str = "desktop_log";
 
 /// A subcommand, as parsed: the tool it calls and the arguments it passes.
 #[derive(Debug, Clone, PartialEq)]
@@ -66,12 +73,14 @@ pub struct Command {
 /// A sentence naming what is missing or not understood.
 pub fn parse(args: &[String], here: &Path) -> Result<Command, String> {
     let Some((subcommand, rest)) = args.split_first() else {
-        return Err("Say what to do: open, settings or set.".to_owned());
+        return Err("Say what to do: open, settings, set, status or log.".to_owned());
     };
     match subcommand.as_str() {
         "open" => parse_open(rest, here),
         "settings" => parse_settings(rest),
         "set" => parse_set(rest),
+        "status" => parse_status(rest),
+        "log" => parse_log(rest),
         other => Err(format!("`{other}` is not a floti desktop command.")),
     }
 }
@@ -92,6 +101,76 @@ fn parse_settings(args: &[String]) -> Result<Command, String> {
     Ok(Command {
         tool: SETTINGS_TOOL,
         arguments: json!({}),
+        json,
+    })
+}
+
+/// `status`: nothing but `--json`.
+fn parse_status(args: &[String]) -> Result<Command, String> {
+    let mut json = false;
+    for arg in args {
+        match arg.as_str() {
+            "--json" => json = true,
+            other => {
+                return Err(format!(
+                    "`{other}` is not something floti desktop status takes: it says how Floti stands."
+                ));
+            }
+        }
+    }
+    Ok(Command {
+        tool: STATUS_TOOL,
+        arguments: json!({}),
+        json,
+    })
+}
+
+/// `log [<word>] [--lines <n>]`.
+fn parse_log(args: &[String]) -> Result<Command, String> {
+    let mut json = false;
+    let mut lines: Option<String> = None;
+    let mut words: Vec<&str> = Vec::new();
+    let mut flags_done = false;
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            word if flags_done => words.push(word),
+            "--" => flags_done = true,
+            "--json" => json = true,
+            "--lines" => {
+                let value = rest
+                    .next()
+                    .ok_or_else(|| "`--lines` takes how many lines.".to_owned())?;
+                lines = Some(value.clone());
+            }
+            flag if flag.starts_with("--lines=") => {
+                lines = Some(flag["--lines=".len()..].to_owned());
+            }
+            flag if flag.starts_with("--") => {
+                return Err(format!("`{flag}` is not a floti desktop log option."));
+            }
+            word => words.push(word),
+        }
+    }
+    let mut arguments = Map::new();
+    match words.as_slice() {
+        [] => {}
+        [word] if !word.trim().is_empty() => {
+            arguments.insert("word".to_owned(), json!(word));
+        }
+        _ => return Err("Name one word to look for, or none.".to_owned()),
+    }
+    if let Some(lines) = lines {
+        let count: u32 = lines
+            .parse()
+            .ok()
+            .filter(|count| (1..=500).contains(count))
+            .ok_or_else(|| format!("`--lines {lines}` is not a number of lines from 1 to 500."))?;
+        arguments.insert("lines".to_owned(), json!(count));
+    }
+    Ok(Command {
+        tool: LOG_TOOL,
+        arguments: Value::Object(arguments),
         json,
     })
 }
@@ -453,6 +532,53 @@ mod tests {
                 &["set", "agentDepth", "1", "--wait"][..],
                 "not a floti desktop set option",
             ),
+        ] {
+            let refused = parse(&args(words), &here()).unwrap_err();
+            assert!(refused.contains(says), "{words:?}: {refused}");
+        }
+    }
+
+    #[test]
+    fn status_takes_only_json_and_log_takes_a_word_and_how_many_lines() {
+        assert_eq!(
+            parse(&args(&["status", "--json"]), &here()),
+            Ok(Command {
+                tool: "desktop_status",
+                arguments: json!({}),
+                json: true
+            })
+        );
+        assert_eq!(
+            parse(&args(&["log"]), &here()),
+            Ok(Command {
+                tool: "desktop_log",
+                arguments: json!({}),
+                json: false
+            })
+        );
+        assert_eq!(
+            parse(
+                &args(&["log", "plugin", "--lines", "500", "--json"]),
+                &here()
+            ),
+            Ok(Command {
+                tool: "desktop_log",
+                arguments: json!({ "word": "plugin", "lines": 500 }),
+                json: true
+            })
+        );
+        assert_eq!(
+            parse(&args(&["log", "--lines=3", "--", "--odd"]), &here())
+                .map(|command| command.arguments),
+            Ok(json!({ "word": "--odd", "lines": 3 }))
+        );
+        for (words, says) in [
+            (&["status", "now"][..], "says how Floti stands"),
+            (&["log", "a", "b"][..], "one word"),
+            (&["log", "--lines"][..], "takes how many"),
+            (&["log", "--lines", "0"][..], "from 1 to 500"),
+            (&["log", "--lines", "501"][..], "from 1 to 500"),
+            (&["log", "--since"][..], "not a floti desktop log option"),
         ] {
             let refused = parse(&args(words), &here()).unwrap_err();
             assert!(refused.contains(says), "{words:?}: {refused}");

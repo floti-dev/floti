@@ -46,6 +46,7 @@ use crate::agent_tools::{
     AgentToolsListener, FamilySource, Grant, GrantId, GrantScope, KeptGrant, ToolFamily,
 };
 use crate::session::SessionId;
+use crate::status::ToolFamiliesStatus;
 
 pub(crate) struct HostAgentTools {
     listener: AgentToolsListener,
@@ -113,6 +114,15 @@ impl HostAgentTools {
     /// knows.
     pub fn open_through(&self, world: Arc<dyn DesktopWorld>) {
         self.desktop.answer_from(world);
+    }
+
+    /// The families switched on now and where the listener is bound, while
+    /// it is: what `desktop_status` says of the agent tools.
+    pub fn tool_families(&self) -> ToolFamiliesStatus {
+        ToolFamiliesStatus {
+            on: self.listener.served_names(),
+            address: self.listener.address().map(|address| address.to_string()),
+        }
     }
 
     /// What floti-agents acts through: the host's sessions.

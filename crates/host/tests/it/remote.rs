@@ -1503,6 +1503,39 @@ fn answers(line: &str, name: &str) -> bool {
         .is_some_and(|ms| ms.parse::<u128>().is_ok())
 }
 
+/// How many lines doctor says of how this computer's host stands.
+const STANDING: usize = 5;
+
+/// Asserts `lines` are how the test host stands, as doctor asks it and says
+/// it through the status module `desktop_status` uses: its floti and
+/// protocol, its folders, no agent CLI to find (the fake agent runs as a
+/// plain command), no plugin added, and the agent limits.
+fn stands(lines: &[&str], dirs: &TestDirs) {
+    assert_eq!(lines.len(), STANDING, "{lines:?}");
+    assert_eq!(
+        lines[0],
+        format!(
+            "This PC: Floti host {}, protocol {PROTOCOL_VERSION}.",
+            floti_host::version::FLOTI_VERSION
+        )
+    );
+    assert_eq!(
+        lines[1],
+        format!(
+            "This PC: Folders: data {}, logs {} (host log {}).",
+            dirs.data.display(),
+            dirs.logs.display(),
+            dirs.logs.join("host.log").display()
+        )
+    );
+    assert_eq!(lines[2], "This PC: Agent CLIs: none to find.");
+    assert_eq!(lines[3], "This PC: Plugins: none added.");
+    assert!(
+        lines[4].starts_with("This PC: Agents: sessions can start agents on; at most "),
+        "{lines:?}"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn s6_floti_doctor_prints_one_line_per_host_and_fails_when_any_does_not_answer() {
     let world = World::start();
@@ -1523,8 +1556,11 @@ async fn s6_floti_doctor_prints_one_line_per_host_and_fails_when_any_does_not_an
     let checked = doctor(dirs, &[], b"", Some("denied")).await;
     assert_eq!(checked.code, Some(1), "{checked:?}");
     let lines: Vec<&str> = checked.stdout.lines().collect();
-    assert_eq!(lines.len(), 6, "{checked:?}");
+    assert_eq!(lines.len(), 6 + STANDING, "{checked:?}");
     assert!(answers(lines[0], "This PC"), "{checked:?}");
+    // Then how this computer's host stands, which is no problem.
+    stands(&lines[1..=STANDING], dirs);
+    let lines = [&lines[..1], &lines[1 + STANDING..]].concat();
     // Beside this computer's host, what it could not tell here; Claude Code
     // is in the tested range, so nothing is said of it.
     assert_eq!(lines[1..3], not_looked_at(), "{checked:?}");
@@ -1568,7 +1604,7 @@ async fn s6_floti_doctor_prints_one_line_per_host_and_fails_when_any_does_not_an
     );
     let checked = doctor(dirs, &[], b"", None).await;
     assert_eq!(checked.code, Some(0), "{checked:?}");
-    assert_eq!(checked.stdout.lines().count(), 4, "{checked:?}");
+    assert_eq!(checked.stdout.lines().count(), 4 + STANDING, "{checked:?}");
     world.stop().await;
 }
 
@@ -1587,8 +1623,10 @@ async fn floti_doctor_reports_claude_code_missing_or_out_of_range_on_one_line_wi
     let missing = doctor_with(dirs, &[], b"", None, Claude::Missing).await;
     assert_eq!(missing.code, Some(1), "{missing:?}");
     let lines: Vec<&str> = missing.stdout.lines().collect();
-    assert_eq!(lines.len(), 4, "{missing:?}");
+    assert_eq!(lines.len(), 4 + STANDING, "{missing:?}");
     assert!(answers(lines[0], "This PC"), "{missing:?}");
+    stands(&lines[1..=STANDING], dirs);
+    let lines = [&lines[..1], &lines[1 + STANDING..]].concat();
     assert_eq!(lines[1..3], not_looked_at(), "{missing:?}");
     assert_eq!(
         lines[3],

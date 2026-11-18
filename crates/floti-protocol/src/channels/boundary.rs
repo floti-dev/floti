@@ -105,6 +105,10 @@ pub const CLIENT_ONLY: &[Outside] = &[
         "the client's own build, data folder and runtime versions",
     ),
     outside(
+        "ownLog:*",
+        "the client's own log, which its main process writes on its machine beside the host's; a session reads it with desktop_log, which the client's window answers over agentDesktop:*",
+    ),
+    outside(
         "ownData:*",
         "where the copy of the client's own database into the host stands: only the client's main process reads that database, and it sends the rows over carry:*",
     ),

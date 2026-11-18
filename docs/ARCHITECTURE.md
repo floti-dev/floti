@@ -28,7 +28,10 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   host's sessions are on screen and whether its OS window is in front
   (`session:focus`). Main's link to this PC's host answers the browser tools
   (`agentBrowser:call`, declared with `browser`), because the browser pane is
-  main's ([AGENT-TOOLS.md](AGENT-TOOLS.md#floti-desktop)).
+  main's ([AGENT-TOOLS.md](AGENT-TOOLS.md#floti-desktop)). Main writes what
+  it prints to `main.log` beside the host's `host.log` (`main/mainLog.ts`),
+  and the window reads its latest lines on the client-only `ownLog:tail` for
+  `desktop_log`.
 - The host never opens `desktop.db` or learns Floti's data folder. What only
   `desktop.db` holds (archived conversations whose transcript is gone, their
   usage, History's names) main reads through core's

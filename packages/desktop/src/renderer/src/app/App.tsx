@@ -337,6 +337,13 @@ import {
   type DesktopSettingsWindow,
 } from "./desktopSettings";
 import type { DesktopToolHandlers } from "./host/desktopTools";
+import {
+  localHost,
+  logForAgent,
+  remoteHost,
+  statusForAgent,
+  type DesktopDiagnosisWindow,
+} from "./desktopDiagnosis";
 import { HOST_WORKSPACE_KEYS } from "../../../shared/host/records";
 import { focusByHost, stillTold } from "./focusByHost";
 import { useHistoryPalette } from "./useHistoryPalette";
@@ -3348,6 +3355,42 @@ export function App(): JSX.Element {
   ]);
 
   /**
+   * What a session's agent asks here with `desktop_status` and `desktop_log`
+   * (`desktopDiagnosis.ts`): this desktop's version, how the window's link to
+   * each host stands and its last error, and main's own log, which only main
+   * reads (`ownLog:tail`). The host answers the rest itself.
+   */
+  const localHostLost = hostLink.lost;
+  const diagnosisTools = useMemo((): DesktopToolHandlers => {
+    const window: DesktopDiagnosisWindow = {
+      version: () => info?.version ?? null,
+      hosts: () => [
+        localHost(
+          LOCAL_HOST_KEY,
+          LOCAL_HOST_LABEL,
+          localStep,
+          localHostLost,
+          seenLocalVersion !== null && "hostVersion" in seenLocalVersion
+            ? seenLocalVersion.hostVersion
+            : null,
+        ),
+        ...listedHosts.map((host) =>
+          remoteHost(host.id, host.name, remoteView[host.id]?.connection ?? null),
+        ),
+      ],
+      mainLog: (lines, word) =>
+        desktop.invoke(
+          "ownLog:tail",
+          word === undefined ? { lines } : { lines, word },
+        ),
+    };
+    return {
+      desktop_status: (call) => statusForAgent(call, window),
+      desktop_log: (call) => logForAgent(call, window),
+    };
+  }, [info, localStep, localHostLost, seenLocalVersion, listedHosts, remoteView]);
+
+  /**
    * What a session's agent opens here with `desktop_open` (`desktopOpen.ts`):
    * beside the tab showing the session that asked, the focus left where it
    * is, so the person goes on typing to that session. Registered again on
@@ -3422,9 +3465,11 @@ export function App(): JSX.Element {
     return desktopTools.answerWith({
       desktop_open: (call) => openForAgent(call, opener),
       ...settingsTools,
+      ...diagnosisTools,
     });
   }, [
     settingsTools,
+    diagnosisTools,
     open,
     preview,
     commit,

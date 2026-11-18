@@ -42,6 +42,29 @@ export function flotiDataDirFor(platform: NodeJS.Platform, env: FolderEnv, home:
 }
 
 /**
+ * Where the installed app's host keeps its logs on `platform`, for the user
+ * whose environment is `env` and whose home is `home`: the host's own rule
+ * (`platform/folders` in the host), `FLOTI_LOG_DIR` first when it names an
+ * absolute folder, as the host started with this environment reads it.
+ *
+ *   Windows  `%LOCALAPPDATA%\Floti\logs`
+ *   macOS    `~/Library/Application Support/Floti/logs`
+ *   Linux    `${XDG_STATE_HOME:-~/.local/state}/floti`
+ */
+export function flotiLogsDirFor(platform: NodeJS.Platform, env: FolderEnv, home: string): string {
+  const path = platform === 'win32' ? win32 : posix
+  const moved = absolute(path, env['FLOTI_LOG_DIR'])
+  if (moved !== undefined) return moved
+  if (platform === 'win32') {
+    const local = absolute(win32, env['LOCALAPPDATA']) ?? win32.join(home, 'AppData', 'Local')
+    return win32.join(local, 'Floti', 'logs')
+  }
+  if (platform === 'darwin') return posix.join(home, 'Library', 'Application Support', 'Floti', 'logs')
+  const state = absolute(posix, env['XDG_STATE_HOME']) ?? posix.join(home, '.local', 'state')
+  return posix.join(state, 'floti')
+}
+
+/**
  * The user's own files (templates, themes, plugins they are writing) on every
  * OS: `~/.config/floti`, the host's own rule (`config_folder` in the host).
  */

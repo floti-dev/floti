@@ -11,6 +11,15 @@
 //! window's (its settings table), so the host passes those calls on as they
 //! are and checks only their shape.
 //!
+//! `desktop_status` and `desktop_log` diagnose Floti. The host answers its
+//! own part with no window ([`crate::status`], and the tail of its own
+//! `host.log`), then asks the window for the part only it can tell: the
+//! desktop's version, the hosts it knows with how each is connected and its
+//! last error, and main's log. With no window attached, or one that leaves
+//! or fails, the answer is the host's part and names what only a window can
+//! tell. Every string in either part has what is shaped like a secret hidden
+//! ([`hide_secrets`]), so no answer holds a token, key or credential.
+//!
 //! **The host has no window.** Each call is relayed ([`DesktopRelay`]) to an
 //! attached client that declared `desktop`, the one the relay chooses for the
 //! caller, and that client's answer, an MCP tool result, is the tool's answer
@@ -35,11 +44,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, OnceLock, Weak};
 
-use floti_protocol::Payload;
 use floti_protocol::channel::{from_payload, to_payload};
 use floti_protocol::channels::agent_desktop::{AgentDesktopOutcome, DesktopOpen};
+use floti_protocol::{PROTOCOL_VERSION, Payload};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::features::{DesktopCaller, DesktopRelay};
 use super::hosted::{Hosted, session_id};
@@ -47,8 +56,14 @@ use crate::agent_config::normalize;
 use crate::agent_tools::{
     CallToolResult, Caller, ContentBlock, JsonObject, Tool, ToolAnnotations, ToolFamily, ToolFuture,
 };
+use crate::host_log::{LOG_FILE, TAIL_MOST, hide_secrets, tail};
+use crate::platform::folders::Folders;
+use crate::plugins::WeakRegistry;
 use crate::session::SessionId;
+use crate::status::{self, HostStatus, StatusFolders, StatusParts, ToolFamiliesStatus};
 use crate::workspace::roots::{KnownRoot, KnownRoots};
+use crate::workspace::settings::SettingsService;
+use crate::workspace::setup::setup_status;
 
 #[derive(Debug, Deserialize)]
 struct Table {
@@ -80,6 +95,8 @@ pub(crate) const DESKTOP_FAMILY: &str = "floti-desktop";
 const DESKTOP_OPEN: &str = "desktop_open";
 const DESKTOP_SETTINGS: &str = "desktop_settings";
 const DESKTOP_SET: &str = "desktop_set";
+const DESKTOP_STATUS: &str = "desktop_status";
+const DESKTOP_LOG: &str = "desktop_log";
 
 /// The command that runs `desktop_open` from a session's shell.
 pub(crate) const OPEN_COMMAND: &str = "floti desktop open";
@@ -87,6 +104,21 @@ pub(crate) const OPEN_COMMAND: &str = "floti desktop open";
 pub(crate) const SETTINGS_COMMAND: &str = "floti desktop settings";
 /// The command that runs `desktop_set` from a session's shell.
 pub(crate) const SET_COMMAND: &str = "floti desktop set";
+/// The command that runs `desktop_status` from a session's shell.
+pub(crate) const STATUS_COMMAND: &str = "floti desktop status";
+/// The command that runs `desktop_log` from a session's shell.
+pub(crate) const LOG_COMMAND: &str = "floti desktop log";
+
+/// How many lines `desktop_log` answers of each log when not told.
+const LOG_LINES: usize = 100;
+
+/// What only a window can tell, as `desktop_status` names it when no window
+/// answers.
+const WINDOW_PARTS: [&str; 3] = [
+    "the desktop's version",
+    "the hosts the window knows with how each is connected and its last error",
+    "where main's log is",
+];
 
 /// The answer to a call from a token whose session has not started yet.
 const NO_SESSION_YET: &str = "Floti cannot tell which session this call is from yet - it is still starting. Try again in a moment.";
@@ -127,6 +159,13 @@ pub(crate) trait DesktopWorld: Send + Sync + 'static {
     /// The deepest workspace or project holding `path`, or the sentence
     /// saying there is none. Blocking: it reads the store.
     fn project_holding(&self, path: &Path) -> Result<KnownRoot, String>;
+
+    /// The host's own part of `desktop_status`, or the sentence saying why
+    /// it cannot be had. Blocking: it asks each agent CLI its version.
+    fn status(&self) -> Result<HostStatus, String>;
+
+    /// The host's own log file.
+    fn host_log(&self) -> PathBuf;
 }
 
 /// The family: its switch, the `desktopMcp` setting as last written, the
@@ -207,6 +246,245 @@ impl DesktopTools {
         };
         tool_result(self.relay.call(&caller, tool, arguments).await)
     }
+
+    /// `desktop_status`: the host's part, then the window's when one answers.
+    async fn status(&self, session: u64, arguments: JsonObject) -> CallToolResult {
+        if let Some(stray) = arguments.keys().next() {
+            return problem(&format!("{DESKTOP_STATUS} takes nothing, not `{stray}`."));
+        }
+        let Some(world) = self.world.get().cloned() else {
+            return problem(STILL_STARTING);
+        };
+        let looked = tokio::task::spawn_blocking(move || {
+            (world.status(), caller_for(world.as_ref(), session))
+        })
+        .await;
+        let (host, caller) = match looked {
+            Ok((Ok(host), caller)) => (host, caller),
+            Ok((Err(refused), _)) => return problem(&refused),
+            Err(_) => return problem(STILL_STARTING),
+        };
+        let window = self.window_part(caller, DESKTOP_STATUS, &json!({})).await;
+        status_answer(&host, window)
+    }
+
+    /// `desktop_log`: the latest lines of the host's log, then of main's
+    /// when a window answers.
+    async fn log(&self, session: u64, arguments: JsonObject) -> CallToolResult {
+        let (lines, word) = match log_arguments(&arguments) {
+            Ok(asked) => asked,
+            Err(refused) => return problem(&refused),
+        };
+        let Some(world) = self.world.get().cloned() else {
+            return problem(STILL_STARTING);
+        };
+        let read_word = word.clone();
+        let looked = tokio::task::spawn_blocking(move || {
+            let path = world.host_log();
+            let read = tail(&path, lines, read_word.as_deref())
+                .map_err(|err| format!("Floti could not read {}: {err}.", path.display()));
+            (path, read, caller_for(world.as_ref(), session))
+        })
+        .await;
+        let Ok((path, host, caller)) = looked else {
+            return problem(STILL_STARTING);
+        };
+        let mut asked = json!({ "lines": lines });
+        if let Some(word) = &word {
+            asked["word"] = json!(word);
+        }
+        let window = self.window_part(caller, DESKTOP_LOG, &asked).await;
+        log_answer(&path, host, word.as_deref(), window)
+    }
+
+    /// What the window answers `tool` with for `caller`: its sentence and
+    /// its structured part, or why there is none.
+    async fn window_part(
+        &self,
+        caller: Result<DesktopCaller, String>,
+        tool: &str,
+        arguments: &Value,
+    ) -> Result<WindowPart, String> {
+        let caller = caller?;
+        if !self.relay.has_window() {
+            return Err("no Floti window is attached".to_owned());
+        }
+        let arguments = to_payload(arguments).map_err(|err| err.to_string())?;
+        match self.relay.call(&caller, tool, arguments).await {
+            AgentDesktopOutcome::Done { value } => window_part(&value),
+            AgentDesktopOutcome::Failed { message } => Err(message),
+        }
+    }
+}
+
+/// What a window answered a diagnosis call with: its sentence and its
+/// structured part, every string with its secrets hidden.
+#[derive(Debug, Clone, PartialEq)]
+struct WindowPart {
+    text: String,
+    value: Value,
+}
+
+/// The window's tool result `value` as its part, or why it is not one.
+fn window_part(value: &Payload) -> Result<WindowPart, String> {
+    let result: Value = from_payload(value).map_err(|err| err.to_string())?;
+    let text = |at: usize| result["content"][at]["text"].as_str();
+    // The sentence is hidden as text; the JSON only once parsed, string by
+    // string, since a hidden value may run into the quote that ends it.
+    let sentence = |at: usize| text(at).map(|text| hide_secrets(text).into_owned());
+    if result["isError"].as_bool() == Some(true) {
+        return Err(sentence(0).unwrap_or_else(|| "Floti's window could not answer.".to_owned()));
+    }
+    let structured = text(1)
+        .and_then(|json| serde_json::from_str::<Value>(json).ok())
+        .ok_or_else(|| "Floti's window answered without its part.".to_owned())?;
+    Ok(WindowPart {
+        text: sentence(0).unwrap_or_default(),
+        value: hidden(structured),
+    })
+}
+
+/// `value` with every string in it, at any depth, its secrets hidden.
+fn hidden(value: Value) -> Value {
+    match value {
+        Value::String(text) => Value::String(hide_secrets(&text).into_owned()),
+        Value::Array(items) => Value::Array(items.into_iter().map(hidden).collect()),
+        Value::Object(fields) => Value::Object(
+            fields
+                .into_iter()
+                .map(|(key, value)| (key, hidden(value)))
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+/// Who `session` is to the relay, or why the host cannot tell.
+fn caller_for(world: &dyn DesktopWorld, session: u64) -> Result<DesktopCaller, String> {
+    let mine = world.session(session)?.ok_or(NO_RECORD)?;
+    Ok(caller_of(world, session, mine))
+}
+
+/// `desktop_status`'s answer: the host's lines and the window's, or the
+/// parts only a window can tell and why none did; as JSON beside it.
+fn status_answer(host: &HostStatus, window: Result<WindowPart, String>) -> CallToolResult {
+    let host_lines = status::lines(host)
+        .iter()
+        .map(|line| hide_secrets(line).into_owned())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut structured =
+        json!({ "host": hidden(serde_json::to_value(host).unwrap_or(Value::Null)) });
+    let window_text = match window {
+        Ok(part) => {
+            structured["window"] = part.value;
+            part.text
+        }
+        Err(why) => {
+            structured["window"] = Value::Null;
+            structured["needsWindow"] = json!(WINDOW_PARTS);
+            structured["windowProblem"] = json!(why);
+            let [version, hosts, log] = WINDOW_PARTS;
+            format!(
+                "Only a Floti window can tell {version}, {hosts}, and {log}: {}.",
+                why.trim_end_matches('.')
+            )
+        }
+    };
+    told(
+        &format!("This host:\n{host_lines}\n\nFloti's window:\n{window_text}"),
+        &structured,
+    )
+}
+
+/// `desktop_log`'s answer: the host's lines from `path`, then main's, or
+/// why there are none; as JSON beside it.
+fn log_answer(
+    path: &Path,
+    host: Result<Option<Vec<String>>, String>,
+    word: Option<&str>,
+    window: Result<WindowPart, String>,
+) -> CallToolResult {
+    let holding = word
+        .map(|word| format!(" holding \"{word}\""))
+        .unwrap_or_default();
+    let mut structured = json!({ "host": { "path": path.display().to_string() } });
+    let host_text = match host {
+        Ok(Some(lines)) => {
+            let text = if lines.is_empty() {
+                format!("{LOG_FILE} ({}) has no lines{holding}.", path.display())
+            } else {
+                format!(
+                    "{LOG_FILE} ({}), its last {} lines{holding}:\n{}",
+                    path.display(),
+                    lines.len(),
+                    lines.join("\n")
+                )
+            };
+            structured["host"]["lines"] = json!(lines);
+            text
+        }
+        Ok(None) => {
+            structured["host"]["lines"] = json!([]);
+            format!("{LOG_FILE} ({}) is not there yet.", path.display())
+        }
+        Err(why) => {
+            structured["host"]["problem"] = json!(why);
+            why
+        }
+    };
+    let main_text = match window {
+        Ok(part) => {
+            structured["main"] = part.value;
+            part.text
+        }
+        Err(why) => {
+            structured["main"] = Value::Null;
+            structured["windowProblem"] = json!(why);
+            format!(
+                "Main's log is read through a Floti window: {}.",
+                why.trim_end_matches('.')
+            )
+        }
+    };
+    told(&format!("{host_text}\n\n{main_text}"), &structured)
+}
+
+/// How many lines `desktop_log` was asked for and the word they hold, or
+/// the sentence saying why not.
+fn log_arguments(arguments: &JsonObject) -> Result<(usize, Option<String>), String> {
+    if let Some(stray) = arguments
+        .keys()
+        .find(|key| !["lines", "word"].contains(&key.as_str()))
+    {
+        return Err(format!(
+            "`{stray}` is not something {DESKTOP_LOG} takes: it takes lines and word."
+        ));
+    }
+    let lines = match arguments.get("lines") {
+        None => LOG_LINES,
+        Some(lines) => lines
+            .as_u64()
+            .and_then(|lines| usize::try_from(lines).ok())
+            .filter(|lines| (1..=TAIL_MOST).contains(lines))
+            .ok_or_else(|| {
+                format!("lines {lines} is not a number of lines from 1 to {TAIL_MOST}.")
+            })?,
+    };
+    let word = match arguments.get("word") {
+        None => None,
+        Some(Value::String(word)) => Some(word.trim().to_owned()).filter(|word| !word.is_empty()),
+        Some(_) => return Err("word is the text each line must hold.".to_owned()),
+    };
+    Ok((lines, word))
+}
+
+/// A tool result: its sentence, and its JSON as the second block.
+fn told(sentence: &str, structured: &Value) -> CallToolResult {
+    CallToolResult::success(vec![
+        ContentBlock::text(sentence.to_owned()),
+        ContentBlock::text(structured.to_string()),
+    ])
 }
 
 impl ToolFamily for DesktopTools {
@@ -251,14 +529,17 @@ impl ToolFamily for DesktopTools {
 
     /// Every tool is allowed at launch, each named on its own: opening a view
     /// changes nothing but what the user's window shows, beside the caller's
-    /// own tab; listing the settings changes nothing; and a set can only
-    /// narrow what agents may reach or do, shows the user a toast with Undo,
-    /// and is refused for anything else the window does not allow.
+    /// own tab; listing the settings, the status and the logs changes
+    /// nothing; and a set can only narrow what agents may reach or do, shows
+    /// the user a toast with Undo, and is refused for anything else the
+    /// window does not allow.
     fn allowed_tools(&self) -> Vec<String> {
         vec![
             DESKTOP_OPEN.to_owned(),
             DESKTOP_SETTINGS.to_owned(),
             DESKTOP_SET.to_owned(),
+            DESKTOP_STATUS.to_owned(),
+            DESKTOP_LOG.to_owned(),
         ]
     }
 
@@ -267,6 +548,8 @@ impl ToolFamily for DesktopTools {
             OPEN_COMMAND.to_owned(),
             SETTINGS_COMMAND.to_owned(),
             SET_COMMAND.to_owned(),
+            STATUS_COMMAND.to_owned(),
+            LOG_COMMAND.to_owned(),
         ]
     }
 
@@ -282,6 +565,8 @@ impl ToolFamily for DesktopTools {
                 DESKTOP_OPEN => self.open(session, arguments).await,
                 DESKTOP_SETTINGS => self.pass_on(session, DESKTOP_SETTINGS, arguments).await,
                 DESKTOP_SET => self.pass_on(session, DESKTOP_SET, arguments).await,
+                DESKTOP_STATUS => self.status(session, arguments).await,
+                DESKTOP_LOG => self.log(session, arguments).await,
                 other => problem(&format!("{} has no tool named {other}.", TABLE.name)),
             }
         })
@@ -518,13 +803,23 @@ fn problem(body: &str) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(body.to_owned())])
 }
 
-/// The world the host answers from: its sessions and the folders it knows.
-/// It holds both weakly, so it keeps nothing of the host's alive: the host's
-/// sessions hold the agent tools, and the folders it knows read the sessions.
+/// The world the host answers from: its sessions, the folders it knows, its
+/// settings, its plugins, its folders and its agent tools listener. It holds
+/// what is the host's weakly, so it keeps nothing of the host's alive: the
+/// host's sessions hold the agent tools, and the folders it knows read the
+/// sessions.
 pub(crate) struct HostDesktopWorld {
     pub hosted: Weak<Hosted>,
     pub roots: Weak<KnownRoots>,
+    pub settings: Weak<SettingsService>,
+    pub plugins: WeakRegistry,
+    pub folders: Folders,
+    /// The families on and the listener's address, while the host runs.
+    pub tool_families: Box<dyn Fn() -> Option<ToolFamiliesStatus> + Send + Sync>,
 }
+
+/// The answer to `desktop_status` once the host has let go of what it reads.
+const STOPPING_STATUS: &str = "Floti's host is stopping, so it cannot say how it stands now.";
 
 /// The answer once the host has let go of what the tools read: it is
 /// stopping.
@@ -555,6 +850,45 @@ impl DesktopWorld for HostDesktopWorld {
             .upgrade()
             .ok_or_else(|| STOPPING.to_owned())?
             .project_holding(path)
+    }
+
+    fn status(&self) -> Result<HostStatus, String> {
+        let stopping = || STOPPING_STATUS.to_owned();
+        let hosted = self.hosted.upgrade().ok_or_else(stopping)?;
+        let settings = self
+            .settings
+            .upgrade()
+            .ok_or_else(stopping)?
+            .read()
+            .map_err(|err| format!("Floti could not read its settings: {err}."))?;
+        let plugins = self.plugins.upgrade().ok_or_else(stopping)?.list();
+        let setup = setup_status(hosted.backends(), &settings.backend_paths);
+        let backend_name = |id: &str| {
+            hosted
+                .backends()
+                .iter()
+                .find(|backend| backend.id().as_str() == id)
+                .map(|backend| backend.name().to_owned())
+        };
+        Ok(status::host_status(&StatusParts {
+            version: crate::version::FLOTI_VERSION,
+            protocol: PROTOCOL_VERSION.to_string(),
+            folders: StatusFolders {
+                data: self.folders.data.display().to_string(),
+                config: Some(self.folders.config.display().to_string()),
+                logs: self.folders.logs.display().to_string(),
+                host_log: self.host_log().display().to_string(),
+            },
+            setup: &setup,
+            backend_name: &backend_name,
+            plugins: &plugins,
+            settings: &settings,
+            tool_families: (self.tool_families)(),
+        }))
+    }
+
+    fn host_log(&self) -> PathBuf {
+        self.folders.logs.join(LOG_FILE)
     }
 }
 
@@ -608,7 +942,60 @@ mod tests {
             self.root(path, |kind| kind == RootKind::Project)
                 .ok_or_else(|| "no project page".to_owned())
         }
+
+        fn status(&self) -> Result<HostStatus, String> {
+            if self.stopping {
+                return Err(STOPPING_STATUS.to_owned());
+            }
+            Ok(host_status())
+        }
+
+        fn host_log(&self) -> PathBuf {
+            PathBuf::from("logs dir").join(LOG_FILE)
+        }
     }
+
+    /// A host's own part, with a token in a plugin's error as a line that
+    /// should never have held one would.
+    fn host_status() -> HostStatus {
+        HostStatus {
+            version: "1.2.3".to_owned(),
+            protocol: "4.3".to_owned(),
+            folders: StatusFolders {
+                data: "data dir".to_owned(),
+                config: None,
+                logs: "logs dir".to_owned(),
+                host_log: "logs dir/host.log".to_owned(),
+            },
+            agents: Vec::new(),
+            plugins: vec![status::PluginStatus {
+                id: Some("p".to_owned()),
+                name: "P".to_owned(),
+                path: "plugins/p".to_owned(),
+                on: true,
+                loaded: false,
+                error: Some(format!("sent Bearer {TOKEN}")),
+                tools_on: None,
+                background: None,
+                service: None,
+            }],
+            tool_families: Some(ToolFamiliesStatus {
+                on: vec![DESKTOP_FAMILY.to_owned()],
+                address: Some("127.0.0.1:4100".to_owned()),
+            }),
+            limits: status::AgentLimits {
+                sessions_can_start_agents: true,
+                children_per_parent: 4,
+                sessions_per_host: 16,
+                depth: 3,
+                starts_per_parent: 50,
+                commands_per_parent: 4,
+            },
+        }
+    }
+
+    /// A token, as the listener mints them.
+    const TOKEN: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
 
     fn facts(cwd: &Path, parent: Option<u64>, starter: Option<&str>) -> SessionFacts {
         SessionFacts {
@@ -656,11 +1043,24 @@ mod tests {
     }
 
     #[test]
-    fn the_table_is_floti_desktop_at_mcp_desktop_with_its_three_tools() {
+    fn the_table_is_floti_desktop_at_mcp_desktop_with_its_five_tools() {
         assert_eq!(TABLE.name, DESKTOP_FAMILY);
         assert_eq!(TABLE.path, "/mcp/desktop");
         let names: Vec<&str> = TABLE.tools.iter().map(|tool| tool.name.as_str()).collect();
-        assert_eq!(names, [DESKTOP_OPEN, DESKTOP_SETTINGS, DESKTOP_SET]);
+        assert_eq!(
+            names,
+            [
+                DESKTOP_OPEN,
+                DESKTOP_SETTINGS,
+                DESKTOP_SET,
+                DESKTOP_STATUS,
+                DESKTOP_LOG
+            ]
+        );
+        // The instructions name the diagnosis tools and their commands.
+        for said in [DESKTOP_STATUS, DESKTOP_LOG, STATUS_COMMAND, LOG_COMMAND] {
+            assert!(TABLE.instructions.contains(said), "{said}");
+        }
         // The instructions say what each view is for.
         for view in [
             "file's tab",
@@ -678,14 +1078,152 @@ mod tests {
     }
 
     #[test]
-    fn only_desktop_settings_is_marked_read_only() {
+    fn the_settings_list_the_status_and_the_log_are_marked_read_only() {
         let events = Arc::new(super::super::events::Events::new());
         let focus = Arc::new(std::sync::Mutex::new(Default::default()));
         let tools = DesktopTools::new(Arc::new(DesktopRelay::new(&events, focus, |_| None)));
         assert_eq!(
             crate::agent_tools::read_only_tools(&tools.tools()),
-            [DESKTOP_SETTINGS]
+            [DESKTOP_SETTINGS, DESKTOP_STATUS, DESKTOP_LOG]
         );
+    }
+
+    fn text_of(result: &CallToolResult) -> (String, Value) {
+        let value = serde_json::to_value(result).unwrap();
+        let text = |at: usize| {
+            value["content"][at]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let structured = serde_json::from_str(&text(1)).unwrap_or(Value::Null);
+        (text(0), structured)
+    }
+
+    fn window(text: &str, value: Value) -> Payload {
+        to_payload(&json!({
+            "content": [
+                { "type": "text", "text": text },
+                { "type": "text", "text": value.to_string() },
+            ],
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_status_with_no_window_answers_the_hosts_part_and_names_what_only_a_window_can_tell() {
+        let (text, structured) = text_of(&status_answer(
+            &host_status(),
+            Err("no Floti window is attached".to_owned()),
+        ));
+        assert!(
+            text.starts_with("This host:\nFloti host 1.2.3, protocol 4.3."),
+            "{text}"
+        );
+        assert!(text.contains("listens on 127.0.0.1:4100"), "{text}");
+        assert!(
+            text.contains("Only a Floti window can tell the desktop's version, the hosts the window knows with how each is connected and its last error, and where main's log is: no Floti window is attached."),
+            "{text}"
+        );
+        assert_eq!(structured["window"], Value::Null);
+        assert_eq!(structured["needsWindow"], json!(WINDOW_PARTS));
+        assert_eq!(structured["host"]["version"], "1.2.3");
+        // The token in a plugin's error is hidden in both blocks.
+        assert!(!text.contains(TOKEN) && !structured.to_string().contains(TOKEN));
+        assert!(text.contains("Bearer [hidden]"), "{text}");
+    }
+
+    #[test]
+    fn a_status_with_a_window_merges_its_part_with_its_secrets_hidden() {
+        let part = window_part(&window(
+            "Floti desktop 2.0.0.",
+            json!({ "desktop": { "version": "2.0.0" }, "hosts": [{ "id": "box", "lastError": format!("key {TOKEN}") }, { "id": "vm", "lastError": "sent Bearer abc" }] }),
+        ))
+        .unwrap();
+        let (text, structured) = text_of(&status_answer(&host_status(), Ok(part)));
+        assert!(
+            text.ends_with("Floti's window:\nFloti desktop 2.0.0."),
+            "{text}"
+        );
+        assert_eq!(structured["window"]["desktop"]["version"], "2.0.0");
+        assert_eq!(
+            structured["window"]["hosts"][0]["lastError"],
+            "key [hidden]"
+        );
+        assert_eq!(
+            structured["window"]["hosts"][1]["lastError"],
+            "sent Bearer [hidden]"
+        );
+        assert!(structured.get("needsWindow").is_none());
+        // A window that answered with an error, or without its part, is no part.
+        let refused = to_payload(
+            &json!({ "content": [{ "type": "text", "text": "Could not." }], "isError": true }),
+        )
+        .unwrap();
+        assert_eq!(window_part(&refused), Err("Could not.".to_owned()));
+        let bare = to_payload(&json!({ "content": [{ "type": "text", "text": "Hi." }] })).unwrap();
+        assert!(window_part(&bare).unwrap_err().contains("without its part"));
+    }
+
+    #[test]
+    fn a_log_answers_the_hosts_lines_and_mains_or_why_not() {
+        let path = PathBuf::from("logs dir").join(LOG_FILE);
+        let main = window_part(&window(
+            "main.log (x), its last 1 lines:\nmain started",
+            json!({ "path": "x", "lines": ["main started"] }),
+        ))
+        .unwrap();
+        let (text, structured) = text_of(&log_answer(
+            &path,
+            Ok(Some(vec!["host started".to_owned()])),
+            Some("started"),
+            Ok(main),
+        ));
+        assert!(
+            text.contains("its last 1 lines holding \"started\":\nhost started"),
+            "{text}"
+        );
+        assert!(text.ends_with("main started"), "{text}");
+        assert_eq!(structured["host"]["lines"], json!(["host started"]));
+        assert_eq!(structured["main"]["lines"], json!(["main started"]));
+
+        let (text, structured) = text_of(&log_answer(
+            &path,
+            Ok(None),
+            None,
+            Err("no Floti window is attached".to_owned()),
+        ));
+        assert!(text.contains("is not there yet."), "{text}");
+        assert!(
+            text.contains(
+                "Main's log is read through a Floti window: no Floti window is attached."
+            ),
+            "{text}"
+        );
+        assert_eq!(structured["main"], Value::Null);
+    }
+
+    #[test]
+    fn a_log_call_takes_lines_from_1_to_500_and_a_word() {
+        assert_eq!(log_arguments(&object(json!({}))), Ok((LOG_LINES, None)));
+        assert_eq!(
+            log_arguments(&object(json!({ "lines": 500, "word": " plugin " }))),
+            Ok((500, Some("plugin".to_owned())))
+        );
+        assert_eq!(
+            log_arguments(&object(json!({ "word": "" }))),
+            Ok((LOG_LINES, None))
+        );
+        for (arguments, says) in [
+            (json!({ "lines": 0 }), "from 1 to 500"),
+            (json!({ "lines": 501 }), "from 1 to 500"),
+            (json!({ "lines": "9" }), "from 1 to 500"),
+            (json!({ "word": 3 }), "text each line"),
+            (json!({ "since": "now" }), "takes lines and word"),
+        ] {
+            let refused = log_arguments(&object(arguments.clone())).unwrap_err();
+            assert!(refused.contains(says), "{arguments}: {refused}");
+        }
     }
 
     #[test]
@@ -734,14 +1272,22 @@ mod tests {
         let tools = DesktopTools::new(Arc::new(DesktopRelay::new(&events, focus, |_| None)));
         assert_eq!(
             tools.allowed_tools(),
-            [DESKTOP_OPEN, DESKTOP_SETTINGS, DESKTOP_SET]
+            [
+                DESKTOP_OPEN,
+                DESKTOP_SETTINGS,
+                DESKTOP_SET,
+                DESKTOP_STATUS,
+                DESKTOP_LOG
+            ]
         );
         assert_eq!(
             tools.allowed_commands(),
             [
                 "floti desktop open",
                 "floti desktop settings",
-                "floti desktop set"
+                "floti desktop set",
+                "floti desktop status",
+                "floti desktop log"
             ]
         );
         // No window attached: a launch now is not given it.

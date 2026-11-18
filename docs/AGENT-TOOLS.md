@@ -144,7 +144,7 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   reach and local-only rule, the five agent limits, plugins' switches and the
   folders Floti scans, each kept folder compared exactly) or what Floti or
   its sessions do on their own (`updateCheck`, `browserSearch`,
-  `quitSessions`, which moves only toward end in end < ask < keep, and
+  `quitSessions`, which a session may only move to end, and
   `restoreWithoutAsking`) may be
   narrowed and never widened from a session; a set that would widen one is
   refused saying the user changes it in Settings. The `claude` executable, the project shell and the archive's
@@ -161,21 +161,55 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   `host` names another. Main tells only this PC's host the settings it keeps
   for sessions, so the answer to a session on a host on another computer says
   that host is not told, rather than claim it follows.
+- `desktop_status` says how Floti stands, for an agent asked why something
+  does not work. The host answers its own part with no window
+  (`crates/host/src/status.rs`): its and the protocol's versions, each agent
+  CLI's version against its tested range and its sign-in as `setup:status`
+  judges it (a sign-in artefact existing, or Unknown; nothing under an
+  agent's credential paths is opened), its data, config and log folders,
+  each plugin with its load state and error, the families on and the
+  listener's address, and the five agent limits. It then asks the window
+  (`app/desktopDiagnosis.ts`) for what only the window can tell: the
+  desktop's version, the hosts it knows with how each is connected and its
+  last error, and where main's log is. With no window attached, or one that
+  leaves or fails, the answer is the host's part, naming the parts only a
+  window can tell. `floti doctor` reports the same versions, agent CLIs and
+  plugins of this computer's host through the same module, from the host's
+  `app:info`, `setup:status`, `plugins:list` and `settings:read`.
+- `desktop_log` answers the latest lines (100 unless `lines` says, at most
+  500), oldest first, of the host's `host.log`, which the host reads back
+  from the end (`host_log::tail`), and of main's `main.log`, which the window
+  asks main for on the client-only `ownLog:tail`; with `word`, only lines
+  holding it, in any case. Main writes `main.log` beside `host.log`, in the
+  logs folder of the host it starts, rotated as `host.log` is
+  (`main/mainLog.ts`): owner-only on macOS and Linux, and on Windows with
+  the access of that folder, which is in the user's own data folder. With
+  no window attached, the answer is the host's
+  lines and says main's log is read through a window.
+- Neither answer holds a token, key or credential. The logs hold none by
+  design (a key is named by its fingerprint), and every line and string in
+  both answers, the window's part included, also has what is shaped like a
+  secret hidden as `[hidden]`: the value after `Bearer ` or `Bearer:`, what
+  follows a known key's prefix (`sk-ant-`, `ghp_`, `gho_`, `ghu_`, `ghs_`,
+  `github_pat_`), and a run of 64 or more hex digits (`hide_secrets`, and
+  `hideSecrets` in main).
 - From a session's shell it is `floti desktop open <view> ...`
   (`crates/host/src/desktop_cli.rs`: `file <path> [--line <n>]`,
   `folder <path>`, `project <path>`, `history [<search>...]`,
-  `settings [<section>]`), `floti desktop settings` and
-  `floti desktop set <name> <value> [<name> <value>...] [--host <id>]`, each
+  `settings [<section>]`), `floti desktop settings`,
+  `floti desktop set <name> <value> [<name> <value>...] [--host <id>]`,
+  `floti desktop status` and `floti desktop log [<word>] [--lines <n>]`, each
   with `--json`. A value is read as JSON where it is JSON and as text
   otherwise. Each reaches the family at `FLOTI_AGENT_DESKTOP_URL` with the
   session's token; `open` makes a relative path absolute against the shell's
-  own folder. Each prints the window's sentence and exits 1 on a refusal. All
-  three tools and all three commands are allowed at launch, each named on its
+  own folder. Each prints the tool's sentence and exits 1 on a refusal. All
+  five tools and all five commands are allowed at launch, each named on its
   own (`mcp__floti-desktop__desktop_open`, `..._desktop_settings`,
-  `..._desktop_set`, `Bash(floti desktop open:*)`,
-  `Bash(floti desktop settings:*)`, `Bash(floti desktop set:*)`);
-  `desktop_settings` is marked `readOnlyHint`, and a user's deny rule still
-  wins.
+  `..._desktop_set`, `..._desktop_status`, `..._desktop_log`,
+  `Bash(floti desktop open:*)`, `Bash(floti desktop settings:*)`,
+  `Bash(floti desktop set:*)`, `Bash(floti desktop status:*)`,
+  `Bash(floti desktop log:*)`); `desktop_settings`, `desktop_status` and
+  `desktop_log` are marked `readOnlyHint`, and a user's deny rule still wins.
 
 ## floti-sessions
 
