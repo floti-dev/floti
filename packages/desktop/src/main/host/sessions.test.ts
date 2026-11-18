@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, type SessionRecord } from '@floti/core'
+import { settingsTable } from '@floti/core/types'
 import { FakeConnection, fakeLink } from '../../../test/host-connection'
 import type { ConfirmRequest } from './session-host'
 import type * as P from './protocol'
@@ -838,6 +839,16 @@ describe('sessions through the local host', () => {
     it('tells the host whether sessions can use Floti’s window: on until the user turns it off', () => {
       expect(hostSettingsFor(DEFAULT_SETTINGS, null)).toMatchObject({ desktopMcp: true })
       expect(hostSettingsFor({ ...DEFAULT_SETTINGS, desktopMcp: false }, null)).toMatchObject({ desktopMcp: false })
+    })
+
+    it('tells the host exactly the settings the settings table says it is told', () => {
+      const told = Object.keys(hostSettingsFor(DEFAULT_SETTINGS, 'C:\\claude.exe')).map((key) =>
+        key === 'backendPaths' ? 'claudePath' : key
+      )
+      const marked = settingsTable()
+        .filter((entry) => entry.toldToHost)
+        .map((entry) => entry.key)
+      expect(marked.sort()).toEqual(told.sort())
     })
 
     it('tells the host no limit on heavy agents, whatever an earlier version kept', () => {

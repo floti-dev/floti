@@ -12,6 +12,8 @@ import {
   deriveAccent,
   PANE_GAP,
   PROJECT_SHELL_HEIGHT_PCT,
+  settingEntry,
+  settingHint,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_FONT_SIZE,
   TERMINAL_SCROLLBACK,
@@ -24,6 +26,7 @@ import {
   type DetectedShell,
   type QuitSessions,
   type HostSystem,
+  type SettingKey,
   type TerminalCursorStyle,
   type Density,
   type ThemeDefinition,
@@ -256,8 +259,9 @@ export interface SettingsPaneProps {
   sessionAgents: boolean
   onSessionAgentsChange: (next: boolean) => void
   /**
-   * Whether the sessions a host starts can open Floti's views in this window
-   * (the floti-desktop tools). Told to the host like the other families.
+   * Whether the sessions a host starts can use this window: open Floti's
+   * views and read and change its settings (the floti-desktop tools). Told to
+   * the host like the other families.
    */
   desktopMcp: boolean
   onDesktopMcpChange: (next: boolean) => void
@@ -360,6 +364,14 @@ export type AgentLimitSettings = Pick<
 
 /** What a fact reads when there is nothing to put in it. */
 const NOTHING = '-'
+
+/**
+ * What a row calls its setting, and what it writes under it, from the
+ * settings table a session reads them from too (`settingsTable` in core), so
+ * the page and the floti-desktop tools cannot say different things.
+ */
+const labelOf = (key: SettingKey): string => settingEntry(key).label
+const hintOf = settingHint
 
 export function SettingsPane({
   section,
@@ -473,11 +485,7 @@ export function SettingsPane({
     >
           {section === 'general' && (
             <>
-                <Group
-                  name="claude"
-                  title="Claude CLI"
-                  hint="The claude executable Floti runs. Found on PATH unless you set one."
-                >
+                <Group name="claude" title={labelOf('claudePath')} hint={hintOf('claudePath')}>
                   <div className="pb-1">
                     <Verdict
                       tone={status === null ? 'todo' : found ? (status.tested ? 'ok' : 'warn') : 'warn'}
@@ -627,9 +635,9 @@ export function SettingsPane({
                       sidebar cannot be: its Pinned section shows a vanished folder as
                       one row saying so, and a list of the paths is what says *which*
                       path, in a form that can be compared with what is on disk. */}
-                  <p className="text-[12.5px] text-fg">Pinned projects</p>
+                  <p className="text-[12.5px] text-fg">{labelOf('pinnedProjects')}</p>
                   <p className="mt-0.5 mb-2 text-[11px] leading-[1.55] text-fg-subtle">
-                    Shown first in the sidebar. Pin one with the star on its row.
+                    {hintOf('pinnedProjects')}
                   </p>
 
                   {pinnedProjects.length === 0 ? (
@@ -866,7 +874,7 @@ function AppearanceGroup({
     >
       <div
         role="radiogroup"
-        aria-label="Theme"
+        aria-label={labelOf('theme')}
         data-settings-theme={settings.theme}
         className="grid grid-cols-[repeat(auto-fill,minmax(164px,1fr))] gap-2.5 pt-1"
       >
@@ -945,15 +953,12 @@ function AppearanceGroup({
       </div>
 
       <div className="mt-2">
-        <Row
-          label="Space between panes"
-          hint={`Pixels of canvas between islands, ${String(PANE_GAP.min)} to ${String(PANE_GAP.max)}.`}
-        >
+        <Row label={labelOf('paneGap')} hint={hintOf('paneGap')}>
           <Stepper
             value={settings.paneGap}
             min={PANE_GAP.min}
             max={PANE_GAP.max}
-            label="Space between panes"
+            label={labelOf('paneGap')}
             data-settings-gap={String(settings.paneGap)}
             onChange={(paneGap) => onChange({ paneGap })}
           />
@@ -961,12 +966,12 @@ function AppearanceGroup({
 
         <Divider />
 
-        <Row label="Corner radius" hint="Panels take it; buttons, fields and popups are one pixel rounder.">
+        <Row label={labelOf('cornerRadius')} hint={hintOf('cornerRadius')}>
           <Stepper
             value={settings.cornerRadius}
             min={CORNER_RADIUS.min}
             max={CORNER_RADIUS.max}
-            label="Corner radius"
+            label={labelOf('cornerRadius')}
             data-settings-radius={String(settings.cornerRadius)}
             onChange={(cornerRadius) => onChange({ cornerRadius })}
           />
@@ -974,10 +979,10 @@ function AppearanceGroup({
 
         <Divider />
 
-        <Row label="Density" hint="How tightly lists and the tab strip pack. Text keeps its size.">
+        <Row label={labelOf('density')} hint={hintOf('density')}>
           <div
             role="radiogroup"
-            aria-label="Density"
+            aria-label={labelOf('density')}
             className="flex items-center gap-0.5 rounded-well border border-border bg-surface-sunken p-0.5"
           >
             {DENSITY_MODES.map((mode) => (
@@ -1001,11 +1006,8 @@ function AppearanceGroup({
 
         <Divider />
 
-        <Row
-          label="Accent"
-          hint="The theme's own, or one of these, fitted to stay readable on it."
-        >
-          <div role="radiogroup" aria-label="Accent" className="flex items-center gap-2.5 px-1">
+        <Row label={labelOf('accentColor')} hint={hintOf('accentColor')}>
+          <div role="radiogroup" aria-label={labelOf('accentColor')} className="flex items-center gap-2.5 px-1">
             <AccentSwatch
               name={`${showing?.name ?? 'The theme'}'s own`}
               mark="theme"
@@ -1338,10 +1340,7 @@ function ArchiveGroup({
 
       <Divider />
 
-      <Row
-        label="Keep at most"
-        hint="At the limit the oldest conversation is dropped whole. Lowering it can drop some at once."
-      >
+      <Row label={labelOf('transcriptArchiveMaxBytes')} hint={hintOf('transcriptArchiveMaxBytes')}>
         <Select
           value={String(maxBytes)}
           label="How much of the database the archive may use"
@@ -1471,7 +1470,7 @@ function checkedWhen(checkedAt: string | null): string {
 function FilesGroup({ wrap, onWrapChange }: { wrap: boolean; onWrapChange: (wrap: boolean) => void }): JSX.Element {
   return (
     <Group name="files" title="Files" hint="How a file read from the Files view is shown.">
-      <Row label="Wrap long lines" hint="Notes always wrap while you edit them.">
+      <Row label={labelOf('filesWrap')} hint={hintOf('filesWrap')}>
         <span data-settings-files-wrap={String(wrap)}>
           <Checkbox checked={wrap} onChange={() => onWrapChange(!wrap)} label="Wrap long lines in files" />
         </span>
@@ -1515,21 +1514,13 @@ function BrowserGroup({
   mcpLocalOnly: boolean
   onMcpLocalOnlyChange: (next: boolean) => void
 }): JSX.Element {
-  const engine = browserSearchName(search)
   return (
     <Group
       name="browser"
       title="Browser"
       hint="Pages in the Browser tab. Sites may copy to your clipboard and go full screen; downloads go to your own browser, and nothing else a site asks for is allowed."
     >
-      <Row
-        label="Where the pane may go"
-        hint={
-          reach === 'local'
-            ? 'This machine only. Anything that is not localhost, 127.0.0.1 or ::1 is refused with a sentence and nothing is fetched.'
-            : 'Anywhere. Floti still opens no page you did not ask for - the pane fetches the address you navigate to and nothing else.'
-        }
-      >
+      <Row label={labelOf('browserReach')} hint={hintOf('browserReach', reach)}>
         <Select
           value={reach}
           label="Where the browser pane may go"
@@ -1541,17 +1532,10 @@ function BrowserGroup({
         </Select>
       </Row>
 
-      <Row
-        label="Search from the address bar"
-        hint={
-          engine === null
-            ? 'Off. Something that is not an address gets a sentence saying so, and nothing is fetched.'
-            : `Something that is not an address goes to ${engine} when you press Enter. Nothing is sent while you type.`
-        }
-      >
+      <Row label={labelOf('browserSearch')} hint={hintOf('browserSearch', search)}>
         <Select
           value={search}
-          label="Search from the address bar"
+          label={labelOf('browserSearch')}
           data-settings-browser-search={search}
           onChange={(value) => onSearchChange(value as BrowserSearch)}
         >
@@ -1563,31 +1547,17 @@ function BrowserGroup({
         </Select>
       </Row>
 
-      <Row
-        label="Let Claude drive the browser"
-        hint={
-          mcp
-            ? 'Sessions Floti hosts can open pages of their own, read them, click and type, and drive a page of yours only once you share it from the browser bar. Floti serves the tools on a loopback port with a token unique to each session.'
-            : 'Off. Floti opens no port at all and sessions are started without the tools, exactly as they were before.'
-        }
-      >
+      <Row label={labelOf('browserMcp')} hint={hintOf('browserMcp', mcp)}>
         <span data-settings-browser-mcp={String(mcp)}>
           <Checkbox
             checked={mcp}
             onChange={() => onMcpChange(!mcp)}
-            label="Let Claude drive the browser"
+            label={labelOf('browserMcp')}
           />
         </span>
       </Row>
 
-      <Row
-        label="…but only on this machine"
-        hint={
-          mcpLocalOnly
-            ? 'Claude’s tools are held to localhost even where the pane may go further. You can still navigate the pane anywhere yourself.'
-            : 'Claude’s tools reach as far as the pane does, and never further - the narrower of these two settings always wins.'
-        }
-      >
+      <Row label={labelOf('browserMcpLocalOnly')} hint={hintOf('browserMcpLocalOnly', mcpLocalOnly)}>
         {/* Not disabled when the tools are off, deliberately. The value is a
             standing preference: somebody who has confined the tools and then
             turns them off for an afternoon should find them still confined when
@@ -1639,50 +1609,29 @@ function SessionsGroup({
       title="Sessions"
       hint="What a session Floti hosts may know about the others on this machine, so it can stay out of a working tree somebody else is in. Read-only, and never another session’s conversation."
     >
-      <Row
-        label="Let Claude see the other sessions"
-        hint={
-          mcp
-            ? 'Sessions Floti hosts can list every Claude Code session running here - its name, its directory, whether it is busy or waiting on you - and, for the ones Floti started, what they are holding: child processes and listening ports. Each can also give itself a title saying what it is doing, shown beside its name here and in History. Not their conversations, and not the arguments they were launched with.'
-            : 'Off. Floti serves the tools to nobody, sessions are started without them and give themselves no titles.'
-        }
-      >
+      <Row label={labelOf('sessionMcp')} hint={hintOf('sessionMcp', mcp)}>
         <span data-settings-session-mcp={String(mcp)}>
           <Checkbox
             checked={mcp}
             onChange={() => onMcpChange(!mcp)}
-            label="Let Claude see the other sessions"
+            label={labelOf('sessionMcp')}
           />
         </span>
       </Row>
-      <Row
-        label="Resume after a crash without asking"
-        hint={
-          restore
-            ? 'When Floti stops without shutting down, the next start reopens every session it was running, in the tab it had, and says what it could not.'
-            : 'When Floti stops without shutting down, the next start lists the sessions it was running and asks which to reopen.'
-        }
-      >
+      <Row label={labelOf('restoreWithoutAsking')} hint={hintOf('restoreWithoutAsking', restore)}>
         <span data-settings-restore-without-asking={String(restore)}>
           <Checkbox
             checked={restore}
             onChange={() => onRestoreChange(!restore)}
-            label="Resume after a crash without asking"
+            label={labelOf('restoreWithoutAsking')}
           />
         </span>
       </Row>
       {/* Only this PC's host: the one a desktop runs its sessions in. */}
-      <Row
-        label="When you quit Floti"
-        hint={
-          quit === 'end'
-            ? 'For this PC’s host. Quitting ends the sessions Floti started there, after asking when any are running. Kept on this device.'
-            : 'For this PC’s host. Quitting leaves the sessions Floti started running there, and they are back in their tabs when Floti opens again. Kept on this device.'
-        }
-      >
+      <Row label={labelOf('quitSessions')} hint={hintOf('quitSessions', quit)}>
         <Select
           value={quit}
-          label="When you quit Floti"
+          label={labelOf('quitSessions')}
           data-settings-quit-sessions={quit}
           onChange={(value) => onQuitChange(value === 'keep' ? 'keep' : 'end')}
         >
@@ -1762,41 +1711,32 @@ function AgentsGroup({
           </span>
         </Row>
       )}
-      <CheckRow
-        label="Sessions can start agents"
-        hint="Every session you start gets the floti-agents tools and floti agent. A profile can turn it off for its own sessions."
-      >
+      <CheckRow label={labelOf('sessionAgents')} hint={settingEntry('sessionAgents').description}>
         <span data-settings-session-agents={String(enabled)}>
           <Checkbox
             checked={enabled}
             onChange={() => onEnabledChange(!enabled)}
-            label="Sessions can start agents"
+            label={labelOf('sessionAgents')}
           />
         </span>
       </CheckRow>
 
-      <CheckRow
-        label="Sessions can use Floti's window"
-        hint="Every session you start gets the floti-desktop tools and floti desktop open: asked to show you something, it opens a file, Files, a project's page, History or Settings beside its tab, and the keyboard stays in its terminal."
-      >
+      <CheckRow label={labelOf('desktopMcp')} hint={settingEntry('desktopMcp').description}>
         <span data-settings-desktop-mcp={String(desktop)}>
           <Checkbox
             checked={desktop}
             onChange={() => onDesktopChange(!desktop)}
-            label="Sessions can use Floti's window"
+            label={labelOf('desktopMcp')}
           />
         </span>
       </CheckRow>
 
-      <CheckRow
-        label="Show children in their parent's tab"
-        hint="On this device. A parent's tab shows its running children beside its terminal while its pane has room, and never takes the focus from it. Off, the parent shows alone, with its children as chips in its crumb and rows in the tree."
-      >
+      <CheckRow label={labelOf('showChildrenInParentTab')} hint={settingEntry('showChildrenInParentTab').description}>
         <span data-settings-children-in-parent-tab={String(inParentTab)}>
           <Checkbox
             checked={inParentTab}
             onChange={() => onInParentTabChange(!inParentTab)}
-            label="Show children in their parent's tab"
+            label={labelOf('showChildrenInParentTab')}
           />
         </span>
       </CheckRow>
@@ -1827,15 +1767,12 @@ function AgentLimitsGroup({
       title="Limits"
       hint="The host enforces each of these whether or not a window is open. Sessions you start yourself count toward none of them."
     >
-      <Row
-        label="Children per parent"
-        hint="Sessions one session may have running at once that it started. A start past it is refused."
-      >
+      <Row label={labelOf('agentChildrenPerParent')} hint={hintOf('agentChildrenPerParent')}>
         <NumberField
           value={limits.agentChildrenPerParent}
           min={AGENT_CHILDREN_PER_PARENT.min}
           max={AGENT_CHILDREN_PER_PARENT.max}
-          label="Children per parent"
+          label={labelOf('agentChildrenPerParent')}
           data-settings-agent-children-per-parent={String(limits.agentChildrenPerParent)}
           onCommit={(agentChildrenPerParent) => onLimitsChange({ agentChildrenPerParent })}
         />
@@ -1843,15 +1780,12 @@ function AgentLimitsGroup({
 
       <Divider />
 
-      <Row
-        label="Command children per parent"
-        hint="Commands one session may have running at once that it started with floti agent run. Counted apart from the agent limits: a command takes none of their places, and an agent takes none of this one. A run past it is refused."
-      >
+      <Row label={labelOf('agentCommandsPerParent')} hint={hintOf('agentCommandsPerParent')}>
         <NumberField
           value={limits.agentCommandsPerParent}
           min={AGENT_COMMANDS_PER_PARENT.min}
           max={AGENT_COMMANDS_PER_PARENT.max}
-          label="Command children per parent"
+          label={labelOf('agentCommandsPerParent')}
           data-settings-agent-commands-per-parent={String(limits.agentCommandsPerParent)}
           onCommit={(agentCommandsPerParent) => onLimitsChange({ agentCommandsPerParent })}
         />
@@ -1859,15 +1793,12 @@ function AgentLimitsGroup({
 
       <Divider />
 
-      <Row
-        label="Agent sessions per host"
-        hint="Sessions started by agents that may run on one host at once. Sessions you start yourself count toward none of these limits."
-      >
+      <Row label={labelOf('agentSessionsPerHost')} hint={hintOf('agentSessionsPerHost')}>
         <NumberField
           value={limits.agentSessionsPerHost}
           min={AGENT_SESSIONS_PER_HOST.min}
           max={AGENT_SESSIONS_PER_HOST.max}
-          label="Agent sessions per host"
+          label={labelOf('agentSessionsPerHost')}
           data-settings-agent-sessions-per-host={String(limits.agentSessionsPerHost)}
           onCommit={(agentSessionsPerHost) => onLimitsChange({ agentSessionsPerHost })}
         />
@@ -1875,15 +1806,12 @@ function AgentLimitsGroup({
 
       <Divider />
 
-      <Row
-        label="Depth"
-        hint="How many generations a family may reach. 2 is a session, the sessions it starts and the ones they start, and no further."
-      >
+      <Row label={labelOf('agentDepth')} hint={hintOf('agentDepth')}>
         <NumberField
           value={limits.agentDepth}
           min={AGENT_DEPTH.min}
           max={AGENT_DEPTH.max}
-          label="Depth"
+          label={labelOf('agentDepth')}
           data-settings-agent-depth={String(limits.agentDepth)}
           onCommit={(agentDepth) => onLimitsChange({ agentDepth })}
         />
@@ -1891,15 +1819,12 @@ function AgentLimitsGroup({
 
       <Divider />
 
-      <Row
-        label="Starts per parent"
-        hint="Sessions one session may start in its life, whether or not they are still running."
-      >
+      <Row label={labelOf('agentStartsPerParent')} hint={hintOf('agentStartsPerParent')}>
         <NumberField
           value={limits.agentStartsPerParent}
           min={AGENT_STARTS_PER_PARENT.min}
           max={AGENT_STARTS_PER_PARENT.max}
-          label="Starts per parent"
+          label={labelOf('agentStartsPerParent')}
           data-settings-agent-starts-per-parent={String(limits.agentStartsPerParent)}
           onCommit={(agentStartsPerParent) => onLimitsChange({ agentStartsPerParent })}
         />
@@ -1977,10 +1902,7 @@ function UpdatesGroup({
 
       <Divider />
 
-      <Row
-        label="Update floti by itself"
-        hint="This PC's host looks for a newer floti at most once a day and installs it without ending a session. Check now works either way."
-      >
+      <Row label={labelOf('updateCheck')} hint={hintOf('updateCheck')}>
         <span data-settings-update-check={String(updateCheck)}>
           <Checkbox
             checked={updateCheck}
@@ -2091,7 +2013,7 @@ function TerminalGroup({
 
       <Divider />
 
-      <Row label="Size" hint={`Point size, ${String(TERMINAL_FONT_SIZE.min)} to ${String(TERMINAL_FONT_SIZE.max)}.`}>
+      <Row label={labelOf('terminalFontSize')} hint={hintOf('terminalFontSize')}>
         <Stepper
           value={terminal.terminalFontSize}
           min={TERMINAL_FONT_SIZE.min}
@@ -2104,7 +2026,7 @@ function TerminalGroup({
 
       <Divider />
 
-      <Row label="Cursor">
+      <Row label={labelOf('terminalCursorStyle')} hint={hintOf('terminalCursorStyle')}>
         <div
           role="radiogroup"
           aria-label="Cursor style"
@@ -2133,7 +2055,7 @@ function TerminalGroup({
 
       <Divider />
 
-      <Row label="Blink the cursor">
+      <Row label={labelOf('terminalCursorBlink')} hint={hintOf('terminalCursorBlink')}>
         <span data-settings-terminal-blink={String(terminal.terminalCursorBlink)}>
           <Checkbox
             checked={terminal.terminalCursorBlink}
@@ -2145,10 +2067,7 @@ function TerminalGroup({
 
       <Divider />
 
-      <Row
-        label="Scrollback"
-        hint="Lines of history each terminal keeps. Shrinking it discards what is already past that point."
-      >
+      <Row label={labelOf('terminalScrollback')} hint={hintOf('terminalScrollback')}>
         <NumberField
           value={terminal.terminalScrollback}
           min={TERMINAL_SCROLLBACK.min}
@@ -2161,10 +2080,7 @@ function TerminalGroup({
 
       <Divider />
 
-      <Row
-        label="Shell for project panes"
-        hint="Claude sessions are unaffected. A project page can override it."
-      >
+      <Row label={labelOf('terminalShell')} hint={hintOf('terminalShell')}>
         <div className="flex flex-col items-stretch gap-1.5">
           <div className="flex items-center gap-2">
             <Select
@@ -2195,10 +2111,7 @@ function TerminalGroup({
           silly can be typed back. Which is also why it is a field rather than a
           stepper: nobody nudges this while watching it, because the thing it
           moves is on a different tab. */}
-      <Row
-        label="Shell height"
-        hint="Share of a project page the shell takes, up to half. Dragging its handle changes it too."
-      >
+      <Row label={labelOf('projectShellHeightPct')} hint={hintOf('projectShellHeightPct')}>
         <NumberField
           value={terminal.projectShellHeightPct}
           min={PROJECT_SHELL_HEIGHT_PCT.min}
@@ -2268,10 +2181,7 @@ function FontRow({
   }
 
   return (
-    <Row
-      label="Font"
-      hint="One family name. It goes in front of the built-in stack - Cascadia Mono, SF Mono, Menlo, Consolas - rather than replacing it, so anything it lacks still draws."
-    >
+    <Row label={labelOf('terminalFontFamily')} hint={hintOf('terminalFontFamily')}>
       <div className="flex flex-col items-end gap-1.5">
         <div className="flex items-center gap-2">
           <input

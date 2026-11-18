@@ -3,7 +3,12 @@
 //! `floti desktop open <view> ...` opens one of Floti's views beside the
 //! session's tab, as its `desktop_open` tool does: `file <path> [--line <n>]`,
 //! `folder <path>`, `project <path>`, `history [<search>...]` and
-//! `settings [<section>]`. Each subcommand is one tool of the family, called
+//! `settings [<section>]`. `floti desktop settings` lists Floti's settings, as
+//! `desktop_settings` does, and `floti desktop set <name> <value> ...` changes
+//! one or several, as `desktop_set` does: a value is read as JSON where it is
+//! JSON (`false`, `3`, `["C:\\work"]`, `null`) and as text otherwise
+//! (`local`), and `--host <id>` names the host a per-host setting or a
+//! plugin's switch changes on. Each subcommand is one tool of the family, called
 //! over the same endpoint the session's agent tools use, so the host answers
 //! one way whoever asks and the same folder rule applies. The session is
 //! known by the bearer token in `FLOTI_AGENT_TOKEN` and the address in
@@ -31,7 +36,7 @@ use crate::agent_cli::{Family, Outcome, TOKEN_VAR, address_and_token, call, prin
 pub const DESKTOP_URL_VAR: &str = "FLOTI_AGENT_DESKTOP_URL";
 
 /// What `floti desktop` accepts.
-pub const USAGE: &str = "usage: floti desktop open file <path> [--line <n>] [--json]\n       floti desktop open folder <path> [--json]\n       floti desktop open project <path> [--json]\n       floti desktop open history [<search>...] [--json]\n       floti desktop open settings [<section>] [--json]";
+pub const USAGE: &str = "usage: floti desktop open file <path> [--line <n>] [--json]\n       floti desktop open folder <path> [--json]\n       floti desktop open project <path> [--json]\n       floti desktop open history [<search>...] [--json]\n       floti desktop open settings [<section>] [--json]\n       floti desktop settings [--json]\n       floti desktop set <name> <value> [<name> <value>...] [--host <id>] [--json]";
 
 const DESKTOP: Family = Family {
     url_var: DESKTOP_URL_VAR,
@@ -40,6 +45,10 @@ const DESKTOP: Family = Family {
 
 /// The tool `floti desktop open` calls.
 const OPEN_TOOL: &str = "desktop_open";
+/// The tool `floti desktop settings` calls.
+const SETTINGS_TOOL: &str = "desktop_settings";
+/// The tool `floti desktop set` calls.
+const SET_TOOL: &str = "desktop_set";
 
 /// A subcommand, as parsed: the tool it calls and the arguments it passes.
 #[derive(Debug, Clone, PartialEq)]
@@ -57,12 +66,93 @@ pub struct Command {
 /// A sentence naming what is missing or not understood.
 pub fn parse(args: &[String], here: &Path) -> Result<Command, String> {
     let Some((subcommand, rest)) = args.split_first() else {
-        return Err("Say what to do: open.".to_owned());
+        return Err("Say what to do: open, settings or set.".to_owned());
     };
     match subcommand.as_str() {
         "open" => parse_open(rest, here),
+        "settings" => parse_settings(rest),
+        "set" => parse_set(rest),
         other => Err(format!("`{other}` is not a floti desktop command.")),
     }
+}
+
+/// `settings`: nothing but `--json`.
+fn parse_settings(args: &[String]) -> Result<Command, String> {
+    let mut json = false;
+    for arg in args {
+        match arg.as_str() {
+            "--json" => json = true,
+            other => {
+                return Err(format!(
+                    "`{other}` is not something floti desktop settings takes: it lists every setting."
+                ));
+            }
+        }
+    }
+    Ok(Command {
+        tool: SETTINGS_TOOL,
+        arguments: json!({}),
+        json,
+    })
+}
+
+/// `set <name> <value> [<name> <value>...] [--host <id>]`.
+fn parse_set(args: &[String]) -> Result<Command, String> {
+    let mut json = false;
+    let mut host: Option<String> = None;
+    let mut words: Vec<&str> = Vec::new();
+    let mut flags_done = false;
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            word if flags_done => words.push(word),
+            "--" => flags_done = true,
+            "--json" => json = true,
+            "--host" => {
+                let value = rest
+                    .next()
+                    .ok_or_else(|| "`--host` takes the host's id.".to_owned())?;
+                host = Some(value.clone());
+            }
+            flag if flag.starts_with("--host=") => host = Some(flag["--host=".len()..].to_owned()),
+            flag if flag.starts_with("--") => {
+                return Err(format!("`{flag}` is not a floti desktop set option."));
+            }
+            word => words.push(word),
+        }
+    }
+    let (pairs, odd) = words.as_chunks::<2>();
+    if pairs.is_empty() || !odd.is_empty() {
+        return Err("Give each setting its new value: floti desktop set <name> <value> [<name> <value>...].".to_owned());
+    }
+    let mut changes = Map::new();
+    for [name, value] in pairs {
+        if changes.contains_key(*name) {
+            return Err(format!(
+                "`{name}` is named twice: give each setting one value."
+            ));
+        }
+        changes.insert((*name).to_owned(), setting_value(value));
+    }
+    let mut arguments = Map::new();
+    arguments.insert("changes".to_owned(), Value::Object(changes));
+    if let Some(host) = host {
+        if host.trim().is_empty() {
+            return Err("`--host` takes the host's id.".to_owned());
+        }
+        arguments.insert("host".to_owned(), json!(host));
+    }
+    Ok(Command {
+        tool: SET_TOOL,
+        arguments: Value::Object(arguments),
+        json,
+    })
+}
+
+/// A value as typed: JSON where it reads as JSON, else the text itself, so
+/// `false` and `3` are what they say and `local` or a path is a string.
+fn setting_value(typed: &str) -> Value {
+    serde_json::from_str(typed).unwrap_or_else(|_| Value::String(typed.to_owned()))
 }
 
 /// `open <view> ...`.
@@ -269,6 +359,104 @@ mod tests {
                 false
             ))
         );
+    }
+
+    #[test]
+    fn settings_takes_only_json_and_set_takes_names_and_values_read_as_json_where_they_are() {
+        assert_eq!(
+            parse(&args(&["settings"]), &here()),
+            Ok(Command {
+                tool: "desktop_settings",
+                arguments: json!({}),
+                json: false
+            })
+        );
+        assert_eq!(
+            parse(&args(&["settings", "--json"]), &here()).map(|command| command.json),
+            Ok(true)
+        );
+        let folder = here().display().to_string();
+        let roots = json!([folder]).to_string();
+        assert_eq!(
+            parse(
+                &args(&[
+                    "set",
+                    "sessionAgents",
+                    "false",
+                    "agentDepth",
+                    "1",
+                    "browserReach",
+                    "local",
+                    "accentColor",
+                    "null",
+                    "scanRoots",
+                    &roots,
+                    "--host",
+                    "build-box",
+                    "--json"
+                ]),
+                &here()
+            ),
+            Ok(Command {
+                tool: "desktop_set",
+                arguments: json!({
+                    "changes": {
+                        "sessionAgents": false,
+                        "agentDepth": 1,
+                        "browserReach": "local",
+                        "accentColor": null,
+                        "scanRoots": [folder],
+                    },
+                    "host": "build-box",
+                }),
+                json: true
+            })
+        );
+        // A path that is not JSON is the text as typed; `--` keeps a value
+        // that starts with dashes.
+        assert_eq!(
+            parse(
+                &args(&["set", "--host=laptop", "--", "terminalFontFamily", "--odd"]),
+                &here()
+            ),
+            Ok(Command {
+                tool: "desktop_set",
+                arguments: json!({
+                    "changes": { "terminalFontFamily": "--odd" },
+                    "host": "laptop",
+                }),
+                json: false
+            })
+        );
+        assert_eq!(
+            parse(
+                &args(&["set", "terminalShell", "C:\\shells\\pwsh.exe"]),
+                &here()
+            )
+            .map(|command| command.arguments),
+            Ok(json!({ "changes": { "terminalShell": "C:\\shells\\pwsh.exe" } }))
+        );
+        for (words, says) in [
+            (&["settings", "agents"][..], "lists every setting"),
+            (&["set"][..], "Give each setting its new value"),
+            (
+                &["set", "sessionAgents"][..],
+                "Give each setting its new value",
+            ),
+            (
+                &["set", "agentDepth", "1", "agentDepth", "2"][..],
+                "named twice",
+            ),
+            (&["set", "agentDepth", "1", "--host"][..], "takes the host"),
+            (&["set", "agentDepth", "1", "--host="][..], "takes the host"),
+            (
+                &["set", "agentDepth", "1", "--wait"][..],
+                "not a floti desktop set option",
+            ),
+        ] {
+            let refused = parse(&args(words), &here()).unwrap_err();
+            assert!(refused.contains(says), "{words:?}: {refused}");
+        }
     }
 
     #[test]

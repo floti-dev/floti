@@ -2,7 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState, type JSX } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS } from '@floti/core/types'
+import { DEFAULT_SETTINGS, settingEntry } from '@floti/core/types'
 import { SettingsPane, type SettingsPaneProps } from './SettingsPane'
 
 /**
@@ -182,11 +182,15 @@ describe('SettingsPane - Agents', () => {
       expect(tick.compareDocumentPosition(words) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(row.firstElementChild?.contains(tick)).toBe(true)
     }
-    expect(rows.map((row) => row.textContent)).toEqual([
-      'Sessions can start agentsEvery session you start gets the floti-agents tools and floti agent. A profile can turn it off for its own sessions.',
-      "Sessions can use Floti's windowEvery session you start gets the floti-desktop tools and floti desktop open: asked to show you something, it opens a file, Files, a project's page, History or Settings beside its tab, and the keyboard stays in its terminal.",
-      "Show children in their parent's tabOn this device. A parent's tab shows its running children beside its terminal while its pane has room, and never takes the focus from it. Off, the parent shows alone, with its children as chips in its crumb and rows in the tree."
-    ])
+    // Each label and sentence is the settings table's, which the floti-desktop tools read too.
+    expect(rows.map((row) => row.textContent)).toEqual(
+      (['sessionAgents', 'desktopMcp', 'showChildrenInParentTab'] as const).map(
+        (key) => `${settingEntry(key).label}${settingEntry(key).description}`
+      )
+    )
+    expect(rows[0]?.textContent).toBe(
+      'Sessions can start agentsEvery session you start gets the floti-agents tools and floti agent. A profile can turn it off for its own sessions.'
+    )
     // No limit field and no hint of the group's own in it.
     expect(within(group()).queryAllByRole('textbox')).toHaveLength(0)
     expect(group().querySelector('header p')).toBeNull()
