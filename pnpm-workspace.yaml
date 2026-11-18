@@ -32,19 +32,23 @@ ignoredBuiltDependencies:
 # moves a dependency to another major. A floor can go once every package that
 # asks for that line asks for the patched release itself.
 #
-# drizzle-kit 0.31 still loads its config through @esbuild-kit, which asks for
-# esbuild 0.18; the dev-server advisory is fixed only from 0.25, and
-# esbuild-kit calls nothing but `transform`, which 0.25 keeps.
+# esbuild is one version, 0.28. With the hoisted layout a second version puts
+# one release's JS beside another's platform binary, and electron-vite fails
+# loading its config ("Host version does not match binary version"). Vite 7
+# and the desktop ask for 0.28 themselves; electron-vite 5 asks for ^0.25,
+# drizzle-kit 0.31 for ^0.25 and, through @esbuild-kit, 0.18. The dev-server
+# advisory is fixed from 0.25, and these call only `build` and `transform`,
+# which 0.28 keeps.
 #
 # minimatch has none: its fix exists only in 11, a rewrite that drops `makeRe`
 # and `AST`, and eslint, typescript-eslint and electron-builder ask for 3, 5, 9
 # and 10. Every pattern they match is this repository's own.
 overrides:
-  '@esbuild-kit/core-utils>esbuild': ^0.25.12
   '@xmldom/xmldom@0.8': ^0.8.15
   brace-expansion@1: ^1.1.22
   brace-expansion@2: ^2.1.8
   brace-expansion@5: ^5.0.13
+  esbuild: ^0.28.2
   fast-uri@3: ^3.1.9
   js-yaml@4: ^4.3.2
   source-map-js@1: ^1.2.2
