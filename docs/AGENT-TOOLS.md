@@ -28,13 +28,17 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   `crates/host/src/server/browser_tools.json`, `desktop_tools.json`,
   `session_tools.json` and `floti_agents.json`. Main reads the browser table
   too, for the tools it answers.
-- Main tells the host `browserMcp`, `browserMcpLocalOnly`, `desktopMcp`
-  ("Sessions can use Floti's window"), `sessionMcp`, `sessionAgents`
-  ("Sessions can start agents") and the four agent limits
-  (`agentChildrenPerParent`, `agentSessionsPerHost`, `agentDepth`,
+- `browserMcp`, `desktopMcp` ("Sessions can use Floti's window"),
+  `sessionMcp`, `sessionAgents` ("Sessions can start agents"), the four agent
+  limits (`agentChildrenPerParent`, `agentSessionsPerHost`, `agentDepth`,
   `agentStartsPerParent`) and the command-children limit
-  (`agentCommandsPerParent`, counted apart from the agent limits) on each
-  connect and each change (`hostSettingsFor`).
+  (`agentCommandsPerParent`, counted apart from the agent limits) are each
+  host's own settings, kept in its `floti.db` and changed from any window
+  attached to it (Settings > Floti host > Tools and Agents); the families and
+  limits follow a change on that host at once, with no client attached.
+  `browserMcpLocalOnly` ("Hold Claude to localhost", Settings > Floti desktop >
+  Browser) is the desktop's, because it limits the desktop's browser pane:
+  main applies it to every agent navigation, from whichever host's session.
 - Agent tools are registered per launch for every backend that takes them,
   never through an
   agent's own add command or global config. For Claude Code that is a
@@ -135,9 +139,9 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   `plugin.<id>.on` and `plugin.<id>.tools`.
 - The host checks only a call's shape and passes both on as they are; the
   window judges and applies them (`app/desktopSettings.ts`) through the save
-  the Settings page makes: settings through `settings:write`, so desktop.db,
-  the host's own keys and `hostSettingsFor` follow as they do for a click, a
-  host's own keys on that host, and plugins' switches through that host's
+  the Settings page makes: this device's settings into desktop.db, a host's
+  settings on the host they are for, over that host's own connection, as a
+  click in Settings does, and plugins' switches through that host's
   `plugins:setEnabled` and `plugins:setTools`. A set is judged whole before
   anything is written. A setting that decides what agents may reach or do
   (the tool families' switches, Sessions can start agents, the browser's
@@ -156,11 +160,13 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   written in steps that land whole or not at all (this device's settings, the
   host's own, then each plugin's switch); when one fails, what was already
   written still gets the toast and its Undo, and the answer says what changed,
-  where each change landed, and what failed. A setting
-  kept per host and a plugin's switch change on the caller's own host unless
-  `host` names another. Main tells only this PC's host the settings it keeps
-  for sessions, so the answer to a session on a host on another computer says
-  that host is not told, rather than claim it follows.
+  where each change landed, and what failed. A host setting and a plugin's
+  switch are read and changed on the caller's own host, the one whose
+  connection delivered the call, unless `host` names another the window is
+  connected to. Every answer, a list, a set or a refusal, names the host it
+  read or changed by its name and id, and the narrow-only rule judges a
+  change against that host's current value. Every window attached to that
+  host hears the change (`settings:changed`).
 - `desktop_status` says how Floti stands, for an agent asked why something
   does not work. The host answers its own part with no window
   (`crates/host/src/status.rs`): its and the protocol's versions, each agent
