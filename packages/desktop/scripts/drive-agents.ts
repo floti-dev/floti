@@ -5,9 +5,10 @@
 // restore, a History resume or an agent-started child would otherwise run the
 // real `claude` and spend the user's account on it. So each fake is written as
 // a program under the dev run's own folder and chosen in the dev database,
-// after its copy from the installed app and on every launch. Main sends that
-// choice to the host on every connect, before anything can launch, and the
-// host starts a chosen program as given, never one it finds by name.
+// after its copy from the installed app and on every launch, with the carry
+// of host settings asked for again: main's first connect carries that choice
+// to the dev host before anything can launch, and the host starts a chosen
+// program as given, never one it finds by name.
 //
 // Claude Code's config folder moves with it (`CLAUDE_CONFIG_DIR`), to a folder
 // beside the fakes, so what the fake writes (its session records, history and
@@ -18,7 +19,7 @@
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openStore, settleWalkthrough, writeSettings, type AppSettings } from '@floti/core'
+import { carryHostSettingsAgain, openStore, settleWalkthrough, writeSettings, type AppSettings } from '@floti/core'
 import { FAKE_AGENTS, writeFakeAgent, type FakeBackend } from '../../../test/fake-agents/programs.mjs'
 
 /** The setting that chooses each backend's program in the desktop. */
@@ -79,6 +80,8 @@ export function prepareDriveAgents(root: string, dataDir: string, options: Drive
     // window then opens on the walkthrough.
     settleWalkthrough(store)
     writeSettings(store, patch)
+    // The program is the host's setting: main's next connect carries it there.
+    carryHostSettingsAgain(store)
   } finally {
     store.close()
   }

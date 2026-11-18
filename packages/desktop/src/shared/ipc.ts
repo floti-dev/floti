@@ -1038,9 +1038,9 @@ export interface IpcRequests {
   'settings:write': { request: Partial<AppSettings>; response: AppSettings }
 
   /**
-   * The settings the desktop keeps for itself: everything but the host's scan
-   * roots, pins and setup stamp. A write applies the theme, tells the host
-   * what it is told of them, and answers the desktop's own settings after.
+   * The settings the desktop keeps for itself: everything but what a host
+   * keeps (`HOST_WORKSPACE_KEYS`), which a write refuses. A write applies the
+   * theme and answers the desktop's own settings after.
    */
   'ownSettings:read': { request: void; response: AppSettings }
   'ownSettings:write': { request: Partial<AppSettings>; response: AppSettings }
@@ -1434,8 +1434,8 @@ export interface IpcRequests {
       cols: number
       rows: number
       /**
-       * Open this pane under a specific executable. Absent means the
-       * `terminalShell` setting, and failing that whatever the desktop detects.
+       * Open this pane under a specific executable. Absent means the host's
+       * `terminalShell` setting, and failing that the first shell the host finds.
        */
       shell?: string
       /** A shell of its own, for a terminal tab, rather than the project's one. */

@@ -73,6 +73,9 @@ export {
 export { reconcileRunningSessions, type LostSession } from './sessions'
 export { deleteSecret, readSecret, readSecrets, writeSecret, type SecretRow } from './secrets'
 export {
+  carryHostSettingsAgain,
+  finishHostSettingsCarry,
+  hostSettingsToCarry,
   readSettings,
   validateSetting,
   writeSetting,

@@ -118,6 +118,14 @@ describe('the host client', { timeout: PATIENCE }, () => {
     })
   })
 
+  it('says it has no browser when its browser pane cannot run, so the host grants no session the browser tools', async () => {
+    const host = new FakeHost()
+    const connecting = connectHost({ transport: host.transport, appVersion: '2.4.0', browser: false })
+    expect(await host.next()).toMatchObject({ type: 'hello', capabilities: ['terminal', 'files', 'pluginPages'] })
+    host.send({ type: 'welcome', ...WELCOME })
+    await connecting
+  })
+
   it('rejects with the host’s sentence when the hello is refused, and ends the connection', async () => {
     const host = new FakeHost()
     const connecting = connectHost({

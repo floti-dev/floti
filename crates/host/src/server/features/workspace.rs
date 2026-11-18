@@ -48,14 +48,21 @@ pub(crate) struct WorkspaceContext {
 
 impl WorkspaceContext {
     /// The settings over the host's store, with each backend set to run the
-    /// executable they choose for it, and the known folders: the store's
-    /// and each hosted session's working directory.
+    /// executable they choose for it and plain terminals the shell they
+    /// choose, and the known folders: the store's and each hosted session's
+    /// working directory.
     pub fn new(hosted: &Arc<Hosted>, folders: Folders, run: HostRun) -> crate::Result<Self> {
         let store = hosted.ledger().shared_store();
         let settings = Arc::new(SettingsService::new(Arc::clone(&store)));
-        use_chosen_executables(hosted.backends(), &settings.read()?);
+        let initial = settings.read()?;
+        use_chosen_executables(hosted.backends(), &initial);
+        hosted.terminals().use_shell(initial.terminal_shell);
         let backends: Vec<Arc<dyn AgentBackend>> = hosted.backends().to_vec();
-        settings.on_change(move |settings| use_chosen_executables(&backends, settings));
+        let terminals = Arc::clone(hosted);
+        settings.on_change(move |settings| {
+            use_chosen_executables(&backends, settings);
+            terminals.terminals().use_shell(settings.terminal_shell.clone());
+        });
         let sessions = Arc::clone(hosted);
         let roots = Arc::new(KnownRoots::new(store, move || {
             sessions

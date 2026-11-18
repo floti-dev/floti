@@ -18,6 +18,7 @@ import { createWorkspaceAdapter } from './workspace'
 const HUB = '/work dir/hub'
 const ALPHA = '/work dir/hub/repos/alpha'
 const PICKED = '/tools dir/claude.exe'
+const PI = '/tools dir/pi.exe'
 
 const UNREACHABLE = 'No local host answered on its socket.'
 
@@ -27,7 +28,7 @@ const hostSettings = (patch: Partial<P.HostSettings> = {}): P.HostSettings => ({
   firstRunCompletedAt: null,
   backendPaths: {},
   terminalShell: null,
-  transcriptArchiveMaxBytes: 1024,
+  transcriptArchiveMaxBytes: DEFAULT_SETTINGS.transcriptArchiveMaxBytes,
   browserMcp: true,
   browserMcpLocalOnly: true,
   sessionMcp: true,
@@ -322,7 +323,7 @@ describe('the window’s workspace over its own connection', () => {
     const { connection, emitted, listen, link } = world()
     listen()
     await link.connect()
-    connection.snapshot('settings:changed', { scanRoots: [ALPHA], pinnedProjects: [], firstRunCompletedAt: null } as never)
+    connection.snapshot('settings:changed', hostSettings({ scanRoots: [ALPHA] }))
     connection.snapshot('discovery:updated', scanResult(1) as never)
     await settle()
     const order = emitted.map((e) => e.channel).filter((c) => c === 'settings:changed' || c === 'discovery:updated')
@@ -343,8 +344,16 @@ describe('the window’s workspace over its own connection', () => {
     expect(connection.payloads('git:refresh')).toEqual([null])
   })
 
-  it('locates claude with the window’s picker, and Floti keeps it only once the host checked and kept it', async () => {
-    const { adapter, own, connection } = world()
+  it('locates claude with the window’s picker, and shows it once the host checked and kept it, with no copy on this device', async () => {
+    const { adapter, own, connection, emitted, listen } = world()
+    let kept: string | null = null
+    connection
+      .answer('settings:read', () => hostSettings({ backendPaths: kept === null ? {} : { 'claude-code': kept } }))
+      .answer('setup:locateBackend', ({ path }) => {
+        kept = path
+        return backend()
+      })
+    listen()
     own.picks.push(null)
     await ask(adapter, 'setup:locateClaude')
     expect(connection.payloads('setup:locateBackend')).toEqual([])
@@ -353,12 +362,97 @@ describe('the window’s workspace over its own connection', () => {
     const status = await ask(adapter, 'setup:locateClaude')
     expect(connection.payloads('setup:locateBackend')).toEqual([{ backend: 'claude-code', path: PICKED }])
     expect(status.path).toBe(PICKED)
-    expect(own.writes).toEqual([{ claudePath: PICKED }])
+    await settle()
+    const told = emitted.filter((e) => e.channel === 'settings:changed').map((e) => e.payload as AppSettings)
+    expect(told.at(-1)?.claudePath).toBe(PICKED)
+    expect(own.writes).toEqual([])
 
     connection.answer('setup:locateBackend', () => backend({ installed: false, error: 'not a program' }))
     own.picks.push('/tools dir/notes.txt')
     await ask(adapter, 'setup:locateClaude')
-    expect(own.writes).toEqual([{ claudePath: PICKED }])
+    expect(own.writes).toEqual([])
+  })
+
+  it('writes every setting a host keeps for its sessions to that host, keeping its other executables, and none to this device', async () => {
+    const { adapter, own, connection } = world()
+    let current = hostSettings({ backendPaths: { pi: PI } })
+    connection
+      .answer('settings:read', () => current)
+      .answer('settings:write', (patch) => (current = { ...current, ...patch }))
+    const next = await ask(adapter, 'settings:write', {
+      sessionAgents: false,
+      agentDepth: 1,
+      terminalShell: '/bin/zsh',
+      claudePath: PICKED,
+      browserMcpLocalOnly: true
+    })
+    expect(connection.payloads('settings:write')).toEqual([
+      { sessionAgents: false, agentDepth: 1, terminalShell: '/bin/zsh', backendPaths: { 'claude-code': PICKED, pi: PI } }
+    ])
+    // What limits this device's own browser pane is this device's.
+    expect(own.writes).toEqual([{ browserMcpLocalOnly: true }])
+    expect(next).toMatchObject({
+      sessionAgents: false,
+      agentDepth: 1,
+      terminalShell: '/bin/zsh',
+      claudePath: PICKED,
+      browserMcpLocalOnly: true
+    })
+  })
+
+  it('changes the claude only once it knows the host’s other executables, and refuses with nothing written while it cannot read them', async () => {
+    const { adapter, own, connection } = world()
+    let readable = false
+    let current = hostSettings({ backendPaths: { pi: PI } })
+    connection
+      .answer('settings:read', () => {
+        if (!readable) throw new Error('the store is locked')
+        return current
+      })
+      .answer('settings:write', (patch) => (current = { ...current, ...patch }))
+
+    await expect(ask(adapter, 'settings:write', { claudePath: PICKED, theme: 'dark' })).rejects.toThrow(
+      /claude was not changed.*the store is locked/
+    )
+    expect(connection.payloads('settings:write')).toEqual([])
+    expect(own.writes).toEqual([])
+
+    readable = true
+    await ask(adapter, 'settings:write', { claudePath: PICKED, theme: 'dark' })
+    expect(connection.payloads('settings:write')).toEqual([{ backendPaths: { 'claude-code': PICKED, pi: PI } }])
+    expect(own.writes).toEqual([{ theme: 'dark' }])
+  })
+
+  it('hears a host setting another window changed, and shows the host’s value over whatever this device once kept', async () => {
+    const { adapter, connection, emitted, listen, link } = world(new FakeConnection(), ownBridge({ sessionAgents: true }))
+    listen()
+    await link.connect()
+    await ask(adapter, 'settings:read')
+    connection.push('settings:changed', hostSettings({ sessionAgents: false, agentChildrenPerParent: 1 }))
+    await settle()
+    const told = emitted.filter((e) => e.channel === 'settings:changed').map((e) => e.payload as AppSettings)
+    expect(told.at(-1)).toMatchObject({ sessionAgents: false, agentChildrenPerParent: 1 })
+    // The window carries nothing to a host: that is main's, once, for this PC's.
+    expect(connection.payloads('settings:write')).toEqual([])
+  })
+
+  it('carries nothing to a host on another computer: it keeps what it holds, and a change to it goes over its own connection', async () => {
+    const connection = new FakeConnection()
+    let current = hostSettings()
+    connection
+      .answer('settings:read', () => current)
+      .answer('settings:write', (patch) => (current = { ...current, ...patch }))
+    const own = ownBridge({ sessionAgents: false, agentDepth: 1 })
+    const link = fakeReach(connection, UNREACHABLE)
+    const adapter = createWorkspaceAdapter({ link, own: own.bridge, remote: { name: () => 'build-box' } })
+    const read = await ask(adapter, 'settings:read')
+    expect(connection.payloads('settings:write')).toEqual([])
+    expect(read).toMatchObject({ sessionAgents: true, agentDepth: 2 })
+
+    await ask(adapter, 'settings:write', { sessionAgents: false })
+    expect(connection.payloads('settings:write')).toEqual([{ sessionAgents: false }])
+    expect(own.writes).toEqual([])
+    await expect(ask(adapter, 'setup:locateClaude')).rejects.toThrow(/cannot choose the claude build-box runs/)
   })
 
   it('finishes setup and accepts a scan root in the host', async () => {

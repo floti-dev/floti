@@ -1,6 +1,7 @@
 import { DEFAULT_SETTINGS, LOCAL_HOST_KEY } from "@floti/core/types";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeConnection, fakeReach } from "../../../../../test/fake-connection";
+import type * as P from "../../../../shared/host/protocol";
 import type { RemoteHostStates } from "../../../../shared/ipc";
 import { bridge } from "../bridge.testkit";
 import {
@@ -15,10 +16,25 @@ import type { PageLink } from "./link";
 import type { RemoteHostView } from "./remoteHosts";
 import { ownSettingsElsewhere } from "./workspace";
 
-const HOST_SETTINGS = {
+const HOST_SETTINGS: P.HostSettings = {
   scanRoots: ["/srv"],
   pinnedProjects: [],
   firstRunCompletedAt: null,
+  backendPaths: {},
+  terminalShell: null,
+  transcriptArchiveMaxBytes: DEFAULT_SETTINGS.transcriptArchiveMaxBytes,
+  browserMcp: true,
+  browserMcpLocalOnly: false,
+  sessionMcp: true,
+  desktopMcp: true,
+  restoreWithoutAsking: false,
+  sessionAgents: true,
+  agentChildrenPerParent: 4,
+  agentSessionsPerHost: 8,
+  agentDepth: 2,
+  agentStartsPerParent: 16,
+  agentCommandsPerParent: 4,
+  updateCheck: true,
 };
 
 /** A host that answers the few requests these tests make, and records every one. */

@@ -28,6 +28,8 @@ export interface MainConnectOptions {
   log?: (line: string) => void
   /** The protocol the `hello` names, only ever set by a test (`ConnectOptions.protocol`). */
   protocol?: ProtocolVersion
+  /** Whether main says it has a browser (`mainCapabilities`); it does unless told otherwise. */
+  browser?: boolean
 }
 
 /**
@@ -37,6 +39,15 @@ export interface MainConnectOptions {
  * `files`: the window's sessions, terminals and files it still relays.
  */
 export const MAIN_CAPABILITIES: readonly Capability[] = ['terminal', 'files', 'browser', 'pluginPages']
+
+/**
+ * Main's capabilities, with `browser` only while its browser pane can run: a
+ * host grants its sessions the browser tools only while a client that has a
+ * browser is attached, so a desktop whose pane cannot run gives them none.
+ */
+export function mainCapabilities(browser: boolean): readonly Capability[] {
+  return browser ? MAIN_CAPABILITIES : MAIN_CAPABILITIES.filter((capability) => capability !== 'browser')
+}
 
 /** A byte transport over a pair of Node streams. */
 export function streamTransport(input: Readable, output: Writable): ByteTransport {
@@ -65,7 +76,7 @@ export function connectHost(options: MainConnectOptions): Promise<HostConnection
   return connectOver({
     transport: streamTransport(options.transport.input, options.transport.output),
     appVersion: options.appVersion,
-    capabilities: MAIN_CAPABILITIES,
+    capabilities: mainCapabilities(options.browser ?? true),
     ...(options.deviceName !== undefined ? { deviceName: options.deviceName } : {}),
     ...(options.log !== undefined ? { log: options.log } : {}),
     ...(options.protocol !== undefined ? { protocol: options.protocol } : {})

@@ -4968,7 +4968,7 @@
           "type": "boolean"
         },
         "browserMcpLocalOnly": {
-          "description": "Whether those tools are confined to this machine.",
+          "description": "Whether those tools are confined to the browser's own machine. No\nhost reads it: it limits a desktop's own browser pane, which keeps it\nper device and enforces it on every navigation. Kept here for clients\nthat still send it.",
           "type": "boolean"
         },
         "desktopMcp": {

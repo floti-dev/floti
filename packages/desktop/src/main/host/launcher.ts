@@ -177,6 +177,8 @@ export interface LauncherDeps {
   clearTimeout: (timer: unknown) => void
   /** The protocol the `hello` names, only ever set by a test; `PROTOCOL_VERSION` otherwise. */
   protocol?: ProtocolVersion
+  /** Whether main's connection says it has a browser; it does when absent (`mainCapabilities`). */
+  browser?: boolean
 }
 
 /** A connection to the local host. */
@@ -573,6 +575,7 @@ export async function startLocalHost(
         appVersion: deps.appVersion,
         ...(deps.deviceName !== undefined ? { deviceName: deps.deviceName } : {}),
         ...(deps.protocol !== undefined ? { protocol: deps.protocol } : {}),
+        ...(deps.browser !== undefined ? { browser: deps.browser } : {}),
         log: deps.log
       })
       return { connection, exited, child }

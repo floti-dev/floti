@@ -4,6 +4,8 @@ import {
   DEFAULT_SETTINGS,
   describeSettingValues,
   findSettingEntry,
+  HOST_SETTING_KEYS,
+  HOST_WORKSPACE_KEYS,
   settingEntry,
   settingHint,
   settingsTable,
@@ -172,12 +174,18 @@ describe('the settings table', () => {
     }
   })
 
-  it('marks what the desktop tells its host', () => {
-    const told = settingsTable()
-      .filter((entry) => entry.toldToHost)
-      .map((entry) => entry.key)
-    expect(told).toContain('sessionAgents')
-    expect(told).not.toContain('theme')
+  it('keeps per host every setting a host keeps, and the reach of the browser pane per device', () => {
+    const shown = settingsTable().map((entry) => entry.key)
+    for (const key of HOST_WORKSPACE_KEYS) {
+      if (shown.includes(key)) expect(settingEntry(key).scope, key).toBe('host')
+    }
+    // Every setting that governs a host's sessions is one the page shows.
+    for (const key of HOST_SETTING_KEYS) expect(shown, key).toContain(key)
+    expect(settingEntry('browserMcpLocalOnly').scope).toBe('device')
+    expect(settingEntry('theme').scope).toBe('device')
+    // Kept per host, but on this device: what quitting does to each host's sessions.
+    expect(settingEntry('quitSessions').scope).toBe('host')
+    expect(HOST_WORKSPACE_KEYS as readonly string[]).not.toContain('quitSessions')
   })
 
   it('gives the page a hint per value where the page has one, and none where it shows none', () => {

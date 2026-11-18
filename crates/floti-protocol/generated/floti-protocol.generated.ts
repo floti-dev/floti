@@ -1945,7 +1945,10 @@ transcriptArchiveMaxBytes: number,
  */
 browserMcp: boolean, 
 /**
- * Whether those tools are confined to this machine.
+ * Whether those tools are confined to the browser's own machine. No
+ * host reads it: it limits a desktop's own browser pane, which keeps it
+ * per device and enforces it on every navigation. Kept here for clients
+ * that still send it.
  */
 browserMcpLocalOnly: boolean, 
 /**

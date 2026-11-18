@@ -46,7 +46,9 @@ use floti_protocol::channels::sessions::{
     SessionList, SessionRemove, SessionRestore, SessionStart, SessionToRestore,
     StartSessionRequest,
 };
-use floti_protocol::channels::workspace::{HostSettingsPatch, WriteSettings};
+use floti_protocol::channels::workspace::{
+    HostSettings, HostSettingsPatch, SettingsChanged, WriteSettings,
+};
 use floti_protocol::{BackendId, Knowable, Message};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -1224,6 +1226,53 @@ async fn s2_with_the_setting_off_or_the_profile_off_a_session_has_no_entry_no_to
         })
         .await;
     assert_eq!(parent.status_of("tools/list").await, 200);
+    host.stop(HostStopReason::Stop).await;
+}
+
+/// A client turns "Sessions can start agents" off on the host. Another client
+/// attached to the same host hears it at once, and a session the host starts
+/// after has no floti-agents, whichever client started it: the setting is the
+/// host's, not any one device's.
+#[tokio::test(flavor = "multi_thread")]
+async fn agents_turned_off_by_one_client_reach_every_client_and_every_later_session() {
+    const SETTINGS: u64 = 1;
+    let world = World::new();
+    let host = world.host().await;
+    let mut other_device = world.client().await;
+    let before: HostSettings = match other_device.subscribe_on(SETTINGS, SettingsChanged::NAME).await {
+        Message::Snapshot(snapshot) => from_payload(&snapshot.state).unwrap(),
+        other => panic!("settings:changed starts with its state, not {other:?}"),
+    };
+    assert!(before.session_agents);
+
+    world
+        .settings(HostSettingsPatch {
+            session_agents: Some(false),
+            ..HostSettingsPatch::default()
+        })
+        .await;
+    let deadline = Instant::now() + PATIENCE;
+    let heard: HostSettings = loop {
+        match other_device
+            .next(deadline.saturating_duration_since(Instant::now()))
+            .await
+        {
+            Some(Message::Event(event)) if event.subscription == SETTINGS => {
+                break from_payload(&event.payload).unwrap();
+            }
+            Some(_) => {}
+            None => panic!("the other client heard no settings:changed within {PATIENCE:?}"),
+        }
+    };
+    assert!(!heard.session_agents);
+
+    let agent = world.session(CLAUDE, &world.project("after"), "after").await;
+    assert!(
+        !agent.run.server_names().contains(&FAMILY.to_owned()),
+        "{:?}",
+        agent.run.server_names()
+    );
+    assert_eq!(agent.status_of("tools/list").await, 404);
     host.stop(HostStopReason::Stop).await;
 }
 

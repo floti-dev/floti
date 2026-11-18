@@ -20,6 +20,9 @@ import { MIGRATIONS } from './migrations.generated'
 import { sessions } from './schema'
 import { reconcileRunningSessions } from './sessions'
 import {
+  carryHostSettingsAgain,
+  finishHostSettingsCarry,
+  hostSettingsToCarry,
   readSettings,
   settleWalkthrough,
   validateSetting,
@@ -581,6 +584,39 @@ function nested(depth: number): unknown {
   }
   return node
 }
+
+describe('the carry of host settings to the local host', () => {
+  const row = (key: string, value: string): void => {
+    store.raw.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(key, value)
+  }
+  const keys = (): string[] =>
+    (store.raw.prepare('SELECT key FROM app_settings ORDER BY key').all() as Array<{ key: string }>).map((each) => each.key)
+
+  it('reads this device’s rows for the settings a host keeps, each validated, and nothing else', () => {
+    writeSettings(store, { sessionAgents: false, agentDepth: 3, theme: 'dark', browserMcpLocalOnly: true })
+    row('terminalShell', 'null')
+    row('agentChildrenPerParent', '99')
+    row('claudePath', '{not json')
+    expect(hostSettingsToCarry(store)).toEqual({ sessionAgents: false, agentDepth: 3, terminalShell: null })
+  })
+
+  it('keeps none of them once carried, never carries again, and reads the defaults after', () => {
+    writeSettings(store, { sessionAgents: false, desktopMcp: false, theme: 'dark' })
+    finishHostSettingsCarry(store, '2026-11-17T10:00:00.000Z')
+    expect(hostSettingsToCarry(store)).toBeNull()
+    expect(keys()).toEqual(['hostSettingsCarriedAt', 'theme'])
+    // The marker is no setting.
+    expect(readSettings(store)).toEqual({ ...DEFAULT_SETTINGS, theme: 'dark' })
+  })
+
+  it('carries again only when a dev run or a test asks, with the rows it wrote', () => {
+    finishHostSettingsCarry(store)
+    writeSettings(store, { claudePath: join(dir, 'claude.exe') })
+    expect(hostSettingsToCarry(store)).toBeNull()
+    carryHostSettingsAgain(store)
+    expect(hostSettingsToCarry(store)).toEqual({ claudePath: join(dir, 'claude.exe') })
+  })
+})
 
 describe('settings validation', () => {
   /**

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, type AppSettings } from '@floti/core'
+import { DEFAULT_SETTINGS, type AppSettings, type HostSettingKey } from '@floti/core'
 import { FakeConnection, fakeLink, reconnectingLink } from '../../../test/host-connection'
 import type { HostLink } from './link'
 import type * as P from './protocol'
@@ -10,6 +10,8 @@ const HUB = resolve('/work dir/hub')
 const ALPHA = resolve('/work dir/hub/repos/alpha')
 const ELSEWHERE = resolve('/work dir/elsewhere')
 const PICKED = resolve('/tools dir/claude.exe')
+const FOUND = resolve('/home dir/.local/bin/claude.exe')
+const PI = resolve('/tools dir/pi.exe')
 
 const UNREACHABLE = 'No local host answered on its socket.'
 
@@ -19,7 +21,7 @@ const hostSettings = (patch: Partial<P.HostSettings> = {}): P.HostSettings => ({
   firstRunCompletedAt: null,
   backendPaths: {},
   terminalShell: null,
-  transcriptArchiveMaxBytes: 1024,
+  transcriptArchiveMaxBytes: DEFAULT_SETTINGS.transcriptArchiveMaxBytes,
   browserMcp: true,
   browserMcpLocalOnly: true,
   sessionMcp: true,
@@ -108,10 +110,30 @@ function ownSettings(patch: Partial<AppSettings> = {}) {
   }
 }
 
+/**
+ * This device's rows for the settings a host keeps, as `desktop.db` holds
+ * them until the carry: null once carried. `discovered` is the `claude` this
+ * computer finds by itself.
+ */
+function carryRows(rows: Partial<Pick<AppSettings, HostSettingKey>> | null = {}, discovered: string | null = null) {
+  let pending = rows
+  const state = {
+    finished: 0,
+    discovered,
+    toCarry: () => pending,
+    carried: () => {
+      pending = null
+      state.finished += 1
+    }
+  }
+  return state
+}
+
 function world(
   connection: FakeConnection | null = new FakeConnection(),
   own = ownSettings(),
-  link: HostLink & { connect?: () => Promise<void> } = fakeLink(connection, UNREACHABLE)
+  link: HostLink & { connect?: () => Promise<void> } = fakeLink(connection, UNREACHABLE),
+  carry = carryRows()
 ) {
   let host = hostSettings()
   connection
@@ -161,24 +183,27 @@ function world(
     )
     .answer('template:delete', () => ({ ok: true, problems: [] }) as unknown as P.TemplateDeleteResult)
   const emitted: Array<{ channel: string; payload: unknown }> = []
-  const picked: string[] = []
+  const chosen: Array<string | null> = []
+  const logged: string[] = []
   const workspace = createHostWorkspace({
     link,
     emit: (channel, payload) => emitted.push({ channel, payload }),
     own: own.own,
     writeOwn: own.writeOwn,
-    claudePicked: (path) => {
-      picked.push(path)
-      own.writeOwn({ claudePath: path })
-    },
-    log: () => undefined
+    hostSettingsToCarry: carry.toCarry,
+    hostSettingsCarried: carry.carried,
+    discoveredClaude: () => carry.discovered,
+    claudeChosen: (path) => chosen.push(path),
+    log: (line) => logged.push(line)
   })
   return {
     connection: connection ?? new FakeConnection(),
     link,
     workspace,
     emitted,
-    picked,
+    chosen,
+    logged,
+    carry,
     own,
     host: () => host,
     setHost: (next: P.HostSettings) => {
@@ -355,6 +380,122 @@ describe('the workspace through the local host', () => {
     expect((await w.workspace.settings()).updateCheck).toBe(true)
   })
 
+  it('carries this device’s settings for its host to the local host once, in one write, and keeps none after', async () => {
+    const first = new FakeConnection()
+    const link = reconnectingLink(first)
+    const carry = carryRows({
+      claudePath: PICKED,
+      terminalShell: '/bin/zsh',
+      sessionAgents: false,
+      agentDepth: 1,
+      // At its default: nothing to say.
+      browserMcp: true
+    })
+    const w = world(first, ownSettings(), link, carry)
+    w.setHost(hostSettings({ backendPaths: { pi: PI } }))
+
+    const settings = await w.workspace.settings()
+    expect(first.payloads('settings:write')).toEqual([
+      { backendPaths: { 'claude-code': PICKED, pi: PI }, terminalShell: '/bin/zsh', sessionAgents: false, agentDepth: 1 }
+    ])
+    expect(carry.finished).toBe(1)
+    expect(settings).toMatchObject({ claudePath: PICKED, terminalShell: '/bin/zsh', sessionAgents: false, agentDepth: 1 })
+    expect(w.chosen.at(-1)).toBe(PICKED)
+
+    // Carried, it never runs again, whatever the host holds since.
+    const second = new FakeConnection()
+      .answer('settings:read', () => hostSettings({ sessionAgents: true }))
+      .answer('settings:write', () => hostSettings())
+    await link.reconnect(second)
+    expect(second.payloads('settings:write')).toEqual([])
+    expect(carry.finished).toBe(1)
+    expect((await w.workspace.settings()).sessionAgents).toBe(true)
+  })
+
+  it('writes nothing to the host when every one of this device’s values is its default, and still finishes the carry', async () => {
+    const carry = carryRows({ sessionAgents: true, agentDepth: DEFAULT_SETTINGS.agentDepth, terminalShell: null })
+    const w = world(new FakeConnection(), ownSettings(), undefined, carry)
+    await w.workspace.settings()
+    expect(w.connection.payloads('settings:write')).toEqual([])
+    expect(carry.finished).toBe(1)
+  })
+
+  it('takes out of the host the claude this computer found by itself, and leaves one the host chose otherwise', async () => {
+    const found = world(new FakeConnection(), ownSettings(), undefined, carryRows({}, FOUND))
+    found.setHost(hostSettings({ backendPaths: { 'claude-code': FOUND, pi: PI } }))
+    await found.workspace.settings()
+    expect(found.connection.payloads('settings:write')).toEqual([{ backendPaths: { pi: PI } }])
+    expect(found.chosen.at(-1)).toBeNull()
+
+    const other = world(new FakeConnection(), ownSettings(), undefined, carryRows({}, FOUND))
+    other.setHost(hostSettings({ backendPaths: { 'claude-code': PICKED } }))
+    await other.workspace.settings()
+    expect(other.connection.payloads('settings:write')).toEqual([])
+    expect(other.chosen.at(-1)).toBe(PICKED)
+  })
+
+  it('keeps this device’s values when the host refuses the carry, and carries them on the next connect', async () => {
+    const first = new FakeConnection()
+    const link = reconnectingLink(first)
+    const carry = carryRows({ agentDepth: 3 })
+    const w = world(first, ownSettings(), link, carry)
+    first.answer('settings:write', () => {
+      throw new Error('agentDepth: out of range')
+    })
+
+    const settings = await w.workspace.settings()
+    expect(carry.finished).toBe(0)
+    expect(carry.toCarry()).toEqual({ agentDepth: 3 })
+    expect(settings.agentDepth).toBe(DEFAULT_SETTINGS.agentDepth)
+    expect(w.logged.join('\n')).toMatch(/not carried to the local host.*agentDepth: out of range/)
+
+    let host = hostSettings()
+    const second = new FakeConnection()
+      .answer('settings:read', () => host)
+      .answer('settings:write', (patch) => (host = { ...host, ...patch }))
+    await link.reconnect(second)
+    expect(second.payloads('settings:write')).toEqual([{ agentDepth: 3 }])
+    expect(carry.finished).toBe(1)
+    expect((await w.workspace.settings()).agentDepth).toBe(3)
+  })
+
+  it('writes every setting a host keeps for its sessions to the host, never to this device', async () => {
+    const w = world()
+    w.setHost(hostSettings({ backendPaths: { pi: PI } }))
+    await w.workspace.settings()
+    const after = await w.workspace.writeSettings({ sessionAgents: false, claudePath: PICKED, theme: 'dark' })
+    expect(w.connection.payloads('settings:write')).toEqual([
+      { sessionAgents: false, backendPaths: { 'claude-code': PICKED, pi: PI } }
+    ])
+    expect(w.own.writes).toEqual([{ theme: 'dark' }])
+    expect(after).toMatchObject({ sessionAgents: false, claudePath: PICKED, theme: 'dark' })
+    expect(w.own.own()).toMatchObject({ sessionAgents: true, claudePath: null })
+    expect(w.chosen.at(-1)).toBe(PICKED)
+  })
+
+  it('changes the claude only once it knows the host’s other executables, and refuses with nothing written while it cannot read them', async () => {
+    const w = world()
+    let readable = false
+    let current = hostSettings({ backendPaths: { pi: PI } })
+    w.connection
+      .answer('settings:read', () => {
+        if (!readable) throw new Error('the store is locked')
+        return current
+      })
+      .answer('settings:write', (patch) => (current = { ...current, ...patch }))
+
+    await expect(w.workspace.writeSettings({ claudePath: PICKED, theme: 'dark' })).rejects.toThrow(
+      /claude was not changed.*the store is locked/
+    )
+    expect(w.connection.payloads('settings:write')).toEqual([])
+    expect(w.own.writes).toEqual([])
+
+    readable = true
+    await w.workspace.writeSettings({ claudePath: PICKED, theme: 'dark' })
+    expect(w.connection.payloads('settings:write')).toEqual([{ backendPaths: { 'claude-code': PICKED, pi: PI } }])
+    expect(w.own.writes).toEqual([{ theme: 'dark' }])
+  })
+
   it('writes the workspace keys to the host and every other key to Floti, and lays the host’s over Floti’s', async () => {
     const w = world()
     const after = await w.workspace.writeSettings({
@@ -458,7 +599,7 @@ describe('the workspace through the local host', () => {
     await expect(w.workspace.setupStatus()).rejects.toThrow(/no Claude Code backend/)
   })
 
-  it('keeps a picked executable in Floti’s Settings only once the host checked and kept it', async () => {
+  it('shows a picked executable once the host checked and kept it, and keeps no copy on this device', async () => {
     const w = world()
     w.connection.answer('setup:locateBackend', () =>
       backend({
@@ -468,15 +609,19 @@ describe('the workspace through the local host', () => {
       })
     )
     expect((await w.workspace.locateClaude(PICKED)).error).toBe('It did not answer a version.')
-    expect(w.picked).toEqual([])
+    expect(w.chosen).not.toContain(PICKED)
 
-    w.connection.answer('setup:locateBackend', () => backend())
+    w.connection.answer('setup:locateBackend', ({ path }) => {
+      w.setHost({ ...w.host(), backendPaths: { 'claude-code': path } })
+      return backend()
+    })
     expect((await w.workspace.locateClaude(PICKED)).path).toBe(PICKED)
-    expect(w.picked).toEqual([PICKED])
+    expect(w.chosen.at(-1)).toBe(PICKED)
     expect(w.emitted.at(-1)).toMatchObject({
       channel: 'settings:changed',
       payload: { claudePath: PICKED }
     })
+    expect(w.own.writes).toEqual([])
   })
 
   it('finishes setup on the host, so the next start does not show it', async () => {

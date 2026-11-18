@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS } from '@floti/core'
 import { FakeConnection, fakeLocalHost } from '../../../test/host-connection'
 import type { HostConnection } from '../../shared/host/client'
 import type * as P from '../../shared/host/protocol'
 import { RECONNECT_MOST_MS } from '../../shared/host/reconnect'
 import { HOST_RETRY_MS, LocalHostError, LocalHostRefusedError, type LocalHost } from './launcher'
 import { HOST_STOP_DEADLINE_MS, createHostLink } from './link'
-import { hostSettingsFor } from './sessions'
 
 /** What a host says of itself, as `app:info` answers. */
 const appInfo = (desktop: boolean): P.AppInfo =>
@@ -39,12 +37,11 @@ function steppedTimers() {
 }
 
 describe('the link to the local host', () => {
-  it('writes Floti’s claude and shell on connect, before anything else uses the connection', async () => {
+  it('writes no settings on connect: the host keeps its own, and the listeners run before anything else uses it', async () => {
     const connection = new FakeConnection()
     const order: string[] = []
     const link = createHostLink({
       start: () => Promise.resolve(fakeLocalHost(connection)),
-      settings: () => ({ backendPaths: { 'claude-code': '/bin/claude' }, terminalShell: '/bin/zsh' }),
       log: () => undefined,
       ...steppedTimers()
     })
@@ -53,10 +50,8 @@ describe('the link to the local host', () => {
     })
     await link.connection()
 
-    expect(connection.payloads('settings:write')).toEqual([
-      { backendPaths: { 'claude-code': '/bin/claude' }, terminalShell: '/bin/zsh' }
-    ])
-    expect(order).toEqual(['settings:write', 'listener'])
+    expect(connection.payloads('settings:write')).toEqual([])
+    expect(order).toEqual(['listener'])
     expect(link.current()).toBe(connection.asConnection())
   })
 
@@ -70,7 +65,6 @@ describe('the link to the local host', () => {
           ? Promise.reject(new LocalHostError('No local host answered on its socket; turn it off.'))
           : Promise.resolve(fakeLocalHost(connection))
       },
-      settings: () => ({}),
       log: () => undefined,
       ...steppedTimers()
     })
@@ -121,7 +115,6 @@ describe('the link to the local host', () => {
     const local = fakeLocalHost(connection, true)
     const link = createHostLink({
       start: () => Promise.resolve(local),
-      settings: () => ({}),
       log: () => undefined,
       ...steppedTimers()
     })
@@ -139,7 +132,6 @@ describe('the link to the local host', () => {
     const local = fakeLocalHost(connection, false)
     const link = createHostLink({
       start: () => Promise.resolve(local),
-      settings: () => ({}),
       log: () => undefined,
       ...steppedTimers()
     })
@@ -159,7 +151,6 @@ describe('the link to the local host', () => {
     const timers = steppedTimers()
     const link = createHostLink({
       start: () => Promise.resolve(local),
-      settings: () => ({}),
       log: () => undefined,
       ...timers
     })
@@ -187,7 +178,6 @@ describe('the link to the local host', () => {
     let starts = 0
     const link = createHostLink({
       start: () => Promise.resolve(started[starts++] as ReturnType<typeof fakeLocalHost>),
-      settings: () => ({}),
       log: () => undefined,
       ...steppedTimers()
     })
@@ -351,7 +341,6 @@ describe('the link to the local host', () => {
           const next = outcomes.shift()
           return next === undefined ? Promise.reject(new LocalHostError('No local host answered.')) : next()
         },
-        settings: () => ({}),
         log: () => undefined,
         ...timers
       })
@@ -405,8 +394,8 @@ describe('the link to the local host', () => {
 
       expect(w.link.current()).toBe(second.asConnection())
       expect(w.connected).toEqual([w.firstConnection.asConnection(), second.asConnection()])
-      // The desktop's settings are written to the new host before anything else.
-      expect(second.sent[0]?.channel).toBe('settings:write')
+      // Nothing of the desktop's settings is written to the new host.
+      expect(second.payloads('settings:write')).toEqual([])
       // Connected: no more tries, and the next loss starts from the first wait again.
       expect(w.timers.pending()).toEqual([])
       second.close()
@@ -477,47 +466,25 @@ describe('the link to the local host', () => {
       expect(w.starts).toEqual([true])
     })
 
-    it('tells the new host whether sessions can start agents and the limits as they are now, not as they were when the old one connected', async () => {
-      let settings = { ...DEFAULT_SETTINGS }
+    it('writes no settings to a host reached again after a crash: what its sessions may do is the host\'s own', async () => {
       const timers = steppedTimers()
       const first = new FakeConnection()
       const second = new FakeConnection()
       const outcomes = [first, second]
       const link = createHostLink({
         start: () => Promise.resolve(fakeLocalHost(outcomes.shift() as FakeConnection, true)),
-        settings: () => hostSettingsFor(settings, null),
         log: () => undefined,
         ...timers
       })
       await link.connection()
-      expect(first.payloads('settings:write')).toEqual([
-        expect.objectContaining({
-          sessionAgents: true,
-          agentChildrenPerParent: 4,
-          agentSessionsPerHost: 8,
-          agentDepth: 2,
-          agentStartsPerParent: 16,
-          agentCommandsPerParent: 4
-        })
-      ])
-
-      // Changed while the host was away, then the host came back.
-      settings = { ...settings, sessionAgents: false, agentChildrenPerParent: 2, agentDepth: 1 }
       first.close()
       await settle()
       timers.fireAll()
       await settle()
 
       expect(link.current()).toBe(second.asConnection())
-      expect(second.payloads('settings:write')).toEqual([
-        expect.objectContaining({
-          sessionAgents: false,
-          agentChildrenPerParent: 2,
-          agentSessionsPerHost: 8,
-          agentDepth: 1,
-          agentStartsPerParent: 16
-        })
-      ])
+      expect(first.payloads('settings:write')).toEqual([])
+      expect(second.payloads('settings:write')).toEqual([])
     })
 
     it('stops trying once Floti quits while it waits to try again', async () => {
@@ -531,19 +498,6 @@ describe('the link to the local host', () => {
       expect(w.timers.pending()).toEqual([])
       expect(w.starts).toEqual([true])
     })
-  })
-
-  it('sends the claude chosen in Settings, or the one Floti finds, and the terminal shell', () => {
-    const base = { claudePath: null, terminalShell: null } as Parameters<typeof hostSettingsFor>[0]
-    expect(hostSettingsFor({ ...base, claudePath: '/chosen/claude' }, '/found/claude')).toEqual({
-      backendPaths: { 'claude-code': '/chosen/claude' },
-      terminalShell: null
-    })
-    expect(hostSettingsFor({ ...base, terminalShell: 'pwsh.exe' }, '/found/claude')).toEqual({
-      backendPaths: { 'claude-code': '/found/claude' },
-      terminalShell: 'pwsh.exe'
-    })
-    expect(hostSettingsFor(base, null)).toEqual({ terminalShell: null })
   })
 })
 

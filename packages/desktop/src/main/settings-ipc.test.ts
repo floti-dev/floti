@@ -2,7 +2,14 @@ import { existsSync, writeFileSync } from 'node:fs'
 import { delimiter, dirname, join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
-import { readSettings, type ThemeListing, type ThemeState } from '@floti/core'
+import {
+  HOST_SETTING_KEYS,
+  readSettings,
+  type AppSettings,
+  type HostSettingKey,
+  type ThemeListing,
+  type ThemeState
+} from '@floti/core'
 import { createWorld, disposeWorld, seedSettings, type World } from '../../test/world'
 import type { EventChannel, RequestChannel, RequestPayload, RequestResult } from '../shared/ipc'
 import type { Services } from './services'
@@ -68,8 +75,6 @@ describe('settings over IPC', () => {
   let themesDir: string
   let nativeTheme: Electron.NativeTheme
   const events: Array<{ channel: EventChannel; payload: unknown }> = []
-  /** What tells the local host the desktop's settings again, as `index.ts` passes it. */
-  const hostSettingsChanged = vi.fn()
   /** The windows the walkthrough's hand-overs reach, as `index.ts` passes them. */
   const walkthrough = { openShell: vi.fn(), open: vi.fn() }
   /** The folders the window's picker handed to the host's scan roots. */
@@ -143,8 +148,7 @@ describe('settings over IPC', () => {
       ownData: {} as never,
       mainLog: {} as never,
       rendererReady: () => undefined,
-      walkthrough,
-      hostSettingsChanged
+      walkthrough
     })
   })
 
@@ -181,74 +185,39 @@ describe('settings over IPC', () => {
     })
   })
 
-  describe('the local host', () => {
-    it('tells the host at once when the browser tools are switched off or on or held to this machine, and not for what it is not given', async () => {
-      hostSettingsChanged.mockClear()
-      await invoke('ownSettings:write', { browserMcp: false })
-      expect(hostSettingsChanged).toHaveBeenCalledTimes(1)
-      await invoke('ownSettings:write', { browserMcp: true })
-      await invoke('ownSettings:write', { browserMcpLocalOnly: true })
-      await invoke('ownSettings:write', { browserMcpLocalOnly: false })
-      expect(hostSettingsChanged).toHaveBeenCalledTimes(4)
-      expect(stored()).toMatchObject({ browserMcp: true, browserMcpLocalOnly: false })
+  describe('the settings a host keeps', () => {
+    /** A value each setting that governs a host's sessions takes, so a refusal is never its validator's. */
+    const VALID: { [K in HostSettingKey]: AppSettings[K] } = {
+      claudePath: join(dirname(process.execPath), 'claude'),
+      terminalShell: process.execPath,
+      transcriptArchiveMaxBytes: 512 * 1024 * 1024,
+      browserMcp: false,
+      sessionMcp: false,
+      desktopMcp: false,
+      sessionAgents: false,
+      agentChildrenPerParent: 6,
+      agentSessionsPerHost: 12,
+      agentDepth: 3,
+      agentStartsPerParent: 20,
+      agentCommandsPerParent: 2
+    }
 
-      await invoke('ownSettings:write', { browserSearch: 'off' })
-      expect(hostSettingsChanged).toHaveBeenCalledTimes(4)
-    })
-
-    it('tells the host at once when the archive’s ceiling changes', async () => {
-      hostSettingsChanged.mockClear()
-      await invoke('ownSettings:write', { transcriptArchiveMaxBytes: 512 * 1024 * 1024 })
-      expect(hostSettingsChanged).toHaveBeenCalledTimes(1)
-      expect(stored()).toMatchObject({ transcriptArchiveMaxBytes: 512 * 1024 * 1024 })
-    })
-
-    it('tells the host at once when the session tools are switched off or on', async () => {
-      hostSettingsChanged.mockClear()
-      await invoke('ownSettings:write', { sessionMcp: false })
-      expect(hostSettingsChanged).toHaveBeenCalledTimes(1)
-      await invoke('ownSettings:write', { sessionMcp: true })
-      expect(hostSettingsChanged).toHaveBeenCalledTimes(2)
-      expect(stored()).toMatchObject({ sessionMcp: true })
-    })
-
-    it('tells the host at once when sessions are allowed to start agents or not, and when any limit on them changes', async () => {
-      hostSettingsChanged.mockClear()
-      await invoke('ownSettings:write', { sessionAgents: false })
-      expect(hostSettingsChanged).toHaveBeenCalledTimes(1)
-      await invoke('ownSettings:write', { sessionAgents: true })
-      expect(hostSettingsChanged).toHaveBeenCalledTimes(2)
-
-      for (const [key, value] of [
-        ['agentChildrenPerParent', 6],
-        ['agentSessionsPerHost', 12],
-        ['agentDepth', 3],
-        ['agentStartsPerParent', 20],
-        ['agentCommandsPerParent', 2]
-      ] as const) {
-        const before = hostSettingsChanged.mock.calls.length
-        await invoke('ownSettings:write', { [key]: value })
-        expect(hostSettingsChanged).toHaveBeenCalledTimes(before + 1)
+    it('refuses each one whole on this device, writing nothing of the patch it came in', async () => {
+      const before = stored()
+      for (const key of HOST_SETTING_KEYS) {
+        await expect(invoke('ownSettings:write', { [key]: VALID[key], theme: 'light' })).rejects.toThrow(
+          new RegExp(`${key}: kept by each host`)
+        )
       }
-      expect(stored()).toMatchObject({
-        sessionAgents: true,
-        agentChildrenPerParent: 6,
-        agentSessionsPerHost: 12,
-        agentDepth: 3,
-        agentStartsPerParent: 20,
-        agentCommandsPerParent: 2
-      })
+      expect(stored()).toEqual(before)
+      expect(emitted('ownSettings:changed')).toEqual([])
     })
 
-    it('keeps the limits it was given and tells the host nothing when one is refused', async () => {
-      hostSettingsChanged.mockClear()
-      await expect(invoke('ownSettings:write', { agentDepth: 0 })).rejects.toThrow(/agentDepth/)
-      await expect(invoke('ownSettings:write', { agentChildrenPerParent: 2.5 })).rejects.toThrow(
-        /agentChildrenPerParent/
-      )
-      await expect(invoke('ownSettings:write', { sessionAgents: 'false' as never })).rejects.toThrow(/sessionAgents/)
-      expect(hostSettingsChanged).not.toHaveBeenCalled()
-      expect(stored()).toMatchObject({ agentDepth: 3, agentChildrenPerParent: 6, sessionAgents: true })
+    it('keeps whether the browser tools are held to this machine on this device, for its own browser pane', async () => {
+      await invoke('ownSettings:write', { browserMcpLocalOnly: true })
+      expect(stored().browserMcpLocalOnly).toBe(true)
+      await invoke('ownSettings:write', { browserMcpLocalOnly: false })
+      expect(stored().browserMcpLocalOnly).toBe(false)
     })
   })
 

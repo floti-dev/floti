@@ -15,12 +15,25 @@ const plugin = (id: string, enabled: boolean, tools: boolean | null): PluginInfo
     agent: tools === null ? null : { enabled: tools, server: `floti-plugin-${id}`, instructions: null, tools: [] }
   }) as unknown as PluginInfo
 
-/** A window over this device's settings and each host's own keys and plugins, recording every write. */
-function windowWith(initial: Partial<AppSettings> = {}) {
-  let device: AppSettings = { ...DEFAULT_SETTINGS, ...initial }
+const hostKept = (key: string): boolean => (HOST_WORKSPACE_KEYS as readonly string[]).includes(key)
+
+/** `patch`'s settings this device keeps, and the ones a host keeps. */
+const byKeeper = (patch: Partial<AppSettings>): [Partial<AppSettings>, Partial<AppSettings>] => [
+  Object.fromEntries(Object.entries(patch).filter(([key]) => !hostKept(key))),
+  Object.fromEntries(Object.entries(patch).filter(([key]) => hostKept(key)))
+]
+
+/**
+ * A window over this device's settings and each host's own keys and plugins,
+ * recording every write. What `initial` gives a host keeps goes to This PC's
+ * host; `onBuildBox` is the build box's own.
+ */
+function windowWith(initial: Partial<AppSettings> = {}, onBuildBox: Partial<AppSettings> = {}) {
+  const [mine, local] = byKeeper(initial)
+  let device: AppSettings = { ...DEFAULT_SETTINGS, ...mine }
   const kept: Record<string, Partial<AppSettings>> = {
-    [LOCAL_HOST_KEY]: { scanRoots: ['C:\\work', 'C:\\play'] },
-    [BUILD_BOX]: { scanRoots: ['/srv'], updateCheck: false }
+    [LOCAL_HOST_KEY]: { scanRoots: ['C:\\work', 'C:\\play'], ...local },
+    [BUILD_BOX]: { scanRoots: ['/srv'], updateCheck: false, ...onBuildBox }
   }
   const plugins: Record<string, PluginInfo[]> = {
     [LOCAL_HOST_KEY]: [plugin('trackr', true, true), plugin('quiet', false, null)],
@@ -40,7 +53,7 @@ function windowWith(initial: Partial<AppSettings> = {}) {
     save: (host, patch) => {
       saves.push([host, patch])
       for (const [key, value] of Object.entries(patch)) {
-        if ((HOST_WORKSPACE_KEYS as readonly string[]).includes(key)) kept[host] = { ...kept[host], [key]: value }
+        if (hostKept(key)) kept[host] = { ...kept[host], [key]: value }
         else device = { ...device, [key]: value }
       }
       return Promise.resolve()
@@ -91,9 +104,9 @@ describe('desktop_settings in the window', () => {
       description: settingsTable().find((entry) => entry.key === 'agentDepth')!.description,
       values: 'a whole number from 1 to 8',
       default: 2,
-      scope: 'device',
+      scope: 'host',
       session: 'narrow',
-      value: 3
+      byHost: { [LOCAL_HOST_KEY]: 3, [BUILD_BOX]: 2 }
     })
     // Kept per host: each host's own value, and each host's own default where they differ.
     expect(listed.settings.find((each) => each.name === 'scanRoots')?.byHost).toEqual({
@@ -113,8 +126,10 @@ describe('desktop_settings in the window', () => {
       { id: BUILD_BOX, name: 'Build box', yours: false }
     ])
     // The words a person reads: every setting by name, with what it is and takes.
-    expect(sentence).toContain('agentDepth = 3')
-    expect(sentence).toContain('Depth (Agents; narrow only')
+    expect(sentence).toContain(`agentDepth ${LOCAL_HOST_KEY}: 3 · ${BUILD_BOX}: 2`)
+    expect(sentence).toContain('Depth (Agents, kept per host; narrow only')
+    // This device's own: one value.
+    expect(sentence).toContain('browserMcpLocalOnly = false')
     expect(sentence).toContain('Takes a whole number from 1 to 8. Default 2.')
     // No secret is a setting.
     expect(json).not.toMatch(/secret/i)
@@ -151,12 +166,12 @@ describe('desktop_set in the window', () => {
     expect(w.settingsOn(LOCAL_HOST_KEY).sessionAgents).toBe(false)
     const [sentence, json] = texts(result)
     expect(sentence).toBe(
-      'Changed Sessions can start agents: off (sessionAgents) on this device. The user sees a toast naming your session, with Undo. Floti’s host follows at once: sessions started from now on get what it says.'
+      'Changed for This PC (local): Sessions can start agents: off (sessionAgents) on This PC. The user sees a toast naming your session, with Undo. This PC follows at once: sessions it starts from now on get what it says.'
     )
     expect(JSON.parse(json!)).toEqual({
-      changed: [{ name: 'sessionAgents', from: true, to: false, landed: 'on this device' }],
+      changed: [{ name: 'sessionAgents', from: true, to: false, landed: 'on This PC' }],
       host: LOCAL_HOST_KEY,
-      yourHostFollows: true
+      hostName: 'This PC'
     })
     expect(w.toasts.map(({ title, detail }) => ({ title, detail }))).toEqual([
       { title: 'lead changed a setting', detail: 'Sessions can start agents: off' }
@@ -175,8 +190,8 @@ describe('desktop_set in the window', () => {
     )
     // This device's settings in one save, the host's own in another, then the plugin.
     expect(w.saves).toEqual([
-      [LOCAL_HOST_KEY, { agentDepth: 1, browserReach: 'local', theme: 'dark' }],
-      [LOCAL_HOST_KEY, { scanRoots: ['C:\\work'] }]
+      [LOCAL_HOST_KEY, { browserReach: 'local', theme: 'dark' }],
+      [LOCAL_HOST_KEY, { agentDepth: 1, scanRoots: ['C:\\work'] }]
     ])
     expect(w.switched).toEqual([[LOCAL_HOST_KEY, 'C:\\plugins\\trackr', 'tools', false]])
     expect(w.toasts[0]?.title).toBe('lead changed 5 settings')
@@ -212,7 +227,7 @@ describe('desktop_set in the window', () => {
       const result = await setSettings(set(changes), w.window)
       expect(result.isError, JSON.stringify(changes)).toBe(true)
       expect(texts(result)[0]).toContain(says)
-      expect(texts(result)[0]).toMatch(/Nothing was changed\.$/)
+      expect(texts(result)[0]).toMatch(/Nothing was changed on This PC \(local\)\.$/)
       expect(w.saves).toEqual([])
       expect(w.switched).toEqual([])
       expect(w.toasts).toEqual([])
@@ -245,12 +260,14 @@ describe('desktop_set in the window', () => {
     expect(sentence).toContain('constructor is not one of Floti’s settings')
     expect(sentence).toContain('toString is not one of Floti’s settings')
     const proto = await setSettings(call('desktop_set', JSON.parse('{"changes":{"__proto__":1}}')), w.window)
-    expect(texts(proto)[0]).toBe('__proto__ is not one of Floti’s settings: desktop_settings lists them by name. Nothing was changed.')
+    expect(texts(proto)[0]).toBe(
+      '__proto__ is not one of Floti’s settings: desktop_settings lists them by name. Nothing was changed on This PC (local).'
+    )
     expect(sentence).toContain('plugin.gone.on is not a plugin switch on This PC: it has plugin.trackr.on, plugin.trackr.tools, plugin.quiet.on.')
     expect(w.saves).toEqual([])
   })
 
-  it('changes a per-host setting on the caller’s own host, or the one named, and says a remote host is not told what only this PC’s host is', async () => {
+  it('changes a host setting on the caller’s own host, or the one named, and names that host in every answer', async () => {
     const w = windowWith()
     const onBuildBox = await setSettings(set({ quitSessions: 'end', scanRoots: [] }, {}, BUILD_BOX), w.window)
     expect(onBuildBox.isError).toBeUndefined()
@@ -260,25 +277,32 @@ describe('desktop_set in the window', () => {
     ])
     expect(w.toasts[0]?.title).toBe('build-box:7 changed 2 settings')
     expect(texts(onBuildBox)[0]).toContain(
-      'Changed When you quit Floti: End the sessions it started (quitSessions) on this device, for Build box; Folders Floti scans: none (scanRoots) on Build box.'
+      'Changed for Build box (build-box): When you quit Floti: End the sessions it started (quitSessions) on this device, for Build box; Folders Floti scans: none (scanRoots) on Build box.'
     )
 
+    // A session on the build box turns agents off there, and only there.
     const fromRemote = await setSettings(set({ sessionAgents: false }, {}, BUILD_BOX), w.window)
     const [sentence, json] = texts(fromRemote)
-    expect(sentence).toContain(
-      'This PC’s host follows at once, but Build box, the host your session runs on, is not told this setting: its sessions go on as they were.'
+    expect(w.saves.at(-1)).toEqual([BUILD_BOX, { sessionAgents: false }])
+    expect(w.settingsOn(BUILD_BOX).sessionAgents).toBe(false)
+    expect(w.settingsOn(LOCAL_HOST_KEY).sessionAgents).toBe(true)
+    expect(sentence).toBe(
+      'Changed for Build box (build-box): Sessions can start agents: off (sessionAgents) on Build box. The user sees a toast naming your session, with Undo. Build box follows at once: sessions it starts from now on get what it says.'
     )
-    expect(sentence).not.toContain('Floti’s host follows at once: sessions started')
-    expect(JSON.parse(json!)).toMatchObject({ yourHostFollows: false })
+    expect(JSON.parse(json!)).toEqual({
+      changed: [{ name: 'sessionAgents', from: true, to: false, landed: 'on Build box' }],
+      host: BUILD_BOX,
+      hostName: 'Build box'
+    })
 
     // Naming another host: what this device keeps still lands here, and the answer says so.
     const named = await setSettings(set({ density: 'compact', updateCheck: false }, { host: 'local' }, BUILD_BOX), w.window)
     expect(texts(named)[0]).toContain(
-      'Changed Density: Compact (density) on this device; Update floti by itself: off (updateCheck) on This PC.'
+      'Changed for This PC (local): Density: Compact (density) on this device; Update floti by itself: off (updateCheck) on This PC.'
     )
     const elsewhere = await setSettings(set({ terminalFontSize: 16 }, { host: BUILD_BOX }), w.window)
-    expect(texts(elsewhere)[0]).toContain('Size: 16 (terminalFontSize) on this device.')
-    expect(texts(elsewhere)[0]).not.toContain('on Build box')
+    expect(texts(elsewhere)[0]).toContain('Changed for Build box (build-box): Size: 16 (terminalFontSize) on this device.')
+    expect(texts(elsewhere)[0]).not.toContain('follows at once')
 
     const unknown = await setSettings(set({ updateCheck: true }, { host: 'laptop' }), w.window)
     expect(texts(unknown)[0]).toBe(
@@ -286,10 +310,41 @@ describe('desktop_set in the window', () => {
     )
   })
 
+  it('judges a narrow-only setting against the named host’s own value, never another host’s', async () => {
+    const w = windowWith({}, { sessionAgents: false, agentDepth: 1 })
+    // Off on the build box: turning it on there widens, though it is on here.
+    const widen = await setSettings(set({ sessionAgents: true }, { host: BUILD_BOX }), w.window)
+    expect(widen.isError).toBe(true)
+    expect(texts(widen)[0]).toContain('Sessions can start agents (sessionAgents) can only be narrowed from a session')
+    expect(texts(widen)[0]).toMatch(/Nothing was changed on Build box \(build-box\)\.$/)
+    const deeper = await setSettings(set({ agentDepth: 2 }, {}, BUILD_BOX), w.window)
+    expect(deeper.isError).toBe(true)
+    expect(w.saves).toEqual([])
+
+    // Here it is 2, so 2 from a build box session asking for This PC is nothing to change, and 1 narrows it.
+    const same = await setSettings(set({ agentDepth: 2 }, { host: LOCAL_HOST_KEY }, BUILD_BOX), w.window)
+    expect(texts(same)[0]).toBe('Nothing to change on This PC (local): agentDepth is already as asked.')
+    const narrower = await setSettings(set({ agentDepth: 1 }, { host: LOCAL_HOST_KEY }, BUILD_BOX), w.window)
+    expect(narrower.isError).toBeUndefined()
+    expect(w.saves).toEqual([[LOCAL_HOST_KEY, { agentDepth: 1 }]])
+  })
+
+  it('names the host when it could not read its settings', async () => {
+    const w = windowWith()
+    const failing: DesktopSettingsWindow = {
+      ...w.window,
+      settingsOn: (host) => (host === BUILD_BOX ? Promise.reject(new Error('the link is down')) : w.window.settingsOn(host))
+    }
+    const result = await setSettings(set({ sessionAgents: false }, { host: BUILD_BOX }), failing)
+    expect(texts(result)[0]).toBe(
+      'Floti’s window could not read the settings on Build box (build-box): the link is down. Nothing was changed.'
+    )
+  })
+
   it('changes nothing and raises no toast when every value is already as asked', async () => {
     const w = windowWith()
     const result = await setSettings(set({ sessionAgents: true, 'plugin.trackr.on': true }), w.window)
-    expect(texts(result)[0]).toBe('Nothing to change: sessionAgents, plugin.trackr.on are already as asked.')
+    expect(texts(result)[0]).toBe('Nothing to change on This PC (local): sessionAgents, plugin.trackr.on are already as asked.')
     expect(w.saves).toEqual([])
     expect(w.switched).toEqual([])
     expect(w.toasts).toEqual([])
@@ -301,7 +356,7 @@ describe('desktop_set in the window', () => {
     const result = await setSettings(set({ density: 'compact', 'plugin.trackr.on': false }), failing)
     expect(result.isError).toBe(true)
     expect(texts(result)[0]).toBe(
-      'Floti could not save Density: Compact (density): the database is locked. Trackr is on: off (plugin.trackr.on) was not tried. Nothing was changed.'
+      'Floti could not save Density: Compact (density) on This PC (local): the database is locked. Trackr is on: off (plugin.trackr.on) was not tried. Nothing was changed.'
     )
     expect(w.toasts).toEqual([])
     expect(w.switched).toEqual([])
@@ -325,7 +380,7 @@ describe('desktop_set in the window', () => {
     )
     expect(result.isError).toBe(true)
     expect(texts(result)[0]).toBe(
-      'Changed Sessions can start agents: off (sessionAgents) on this device; Folders Floti scans: none (scanRoots) on This PC; Trackr’s tools: off (plugin.trackr.tools) on This PC, but Floti could not save quiet is on: off (plugin.quiet.on): the plugin is busy. The user sees a toast naming your session, with Undo, for what changed. Floti’s host follows at once: sessions started from now on get what it says.'
+      'Changed for This PC (local): Sessions can start agents: off (sessionAgents) on This PC; Folders Floti scans: none (scanRoots) on This PC; Trackr’s tools: off (plugin.trackr.tools) on This PC, but Floti could not save quiet is on: off (plugin.quiet.on): the plugin is busy. The user sees a toast naming your session, with Undo, for what changed. This PC follows at once: sessions it starts from now on get what it says.'
     )
     expect(w.toasts.map(({ title, detail }) => ({ title, detail }))).toEqual([
       {
@@ -346,6 +401,7 @@ describe('desktop_set in the window', () => {
       const result = await setSettings(call('desktop_set', args), w.window)
       expect(result.isError).toBe(true)
       expect(texts(result)[0]).toContain('Say what to change')
+      expect(texts(result)[0]).toContain('Nothing was changed on This PC (local).')
     }
   })
 })

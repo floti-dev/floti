@@ -15,7 +15,6 @@ import type { BrowserMcpHost } from './browser-mcp'
 import type { FilesService } from './files'
 import { applyWindowTheme } from './chrome'
 import type { ThemeService } from './themes'
-import { setClaudeOverride } from './claude-cli'
 import { RELEASES_PAGE } from './update'
 import { appMode, dataDir, dbFile } from './paths'
 import type { PluginHost } from './plugins/host'
@@ -161,12 +160,6 @@ export interface IpcContext {
    */
   walkthrough: WalkthroughWindows
   /**
-   * Called when the `claude` path, the terminal shell, the archive's ceiling,
-   * either browser tools setting or the session tools setting changes: the
-   * local host is told all of them.
-   */
-  hostSettingsChanged: () => void
-  /**
    * Stands in for the native file and directory pickers.
    *
    * A native dialog has no automation surface, so the first-run driver - which
@@ -240,38 +233,14 @@ export function registerIpc(ctx: IpcContext): void {
   })
 
   /**
-   * What follows any write to the desktop's settings, from either half: the session
-   * host reads the override, not the settings, so a picked CLI written here has
-   * to reach it too - otherwise sessions launch from one path and
-   * `claude mcp add` from another.
+   * What follows any write to the desktop's own settings. The settings that
+   * govern a host's sessions are that host's, written over the window's own
+   * connection, so nothing here tells a host anything.
    */
   const settingsWritten = (patch: Partial<AppSettings>, next: AppSettings): void => {
-    if (patch.claudePath !== undefined) setClaudeOverride(next.claudePath)
     // A host added starts its link; one removed has its link let go of, with
     // nothing said to it, and its client folder removed.
     if (patch.hosts !== undefined) ctx.remoteHosts?.sync(next.hosts)
-    // Sessions run the `claude` and open the shell the host was told, and get
-    // the browser and session tools and the browser's reach as it was told,
-    // and can start agents of their own within the limits it was told, and
-    // the host holds its archive to the ceiling it was told, so it is told
-    // again at once when any of those changes.
-    if (
-      patch.claudePath !== undefined ||
-      patch.terminalShell !== undefined ||
-      patch.transcriptArchiveMaxBytes !== undefined ||
-      patch.browserMcp !== undefined ||
-      patch.browserMcpLocalOnly !== undefined ||
-      patch.sessionMcp !== undefined ||
-      patch.desktopMcp !== undefined ||
-      patch.sessionAgents !== undefined ||
-      patch.agentChildrenPerParent !== undefined ||
-      patch.agentSessionsPerHost !== undefined ||
-      patch.agentDepth !== undefined ||
-      patch.agentStartsPerParent !== undefined ||
-      patch.agentCommandsPerParent !== undefined
-    ) {
-      ctx.hostSettingsChanged()
-    }
     if (patch.theme !== undefined) nativeTheme.themeSource = patch.theme
     if (
       patch.theme !== undefined ||

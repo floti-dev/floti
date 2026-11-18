@@ -5,6 +5,10 @@
 //!
 //! A folder has one shell that every open of it reattaches to, unless an open
 //! asks for a shell of its own.
+//!
+//! A terminal runs the shell its open names; else the one the host's settings
+//! choose (`terminalShell`, [`Terminals::use_shell`]); else the first shell
+//! this machine has.
 
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -64,6 +68,8 @@ pub struct Terminals {
     /// Each folder's own shell, by its lower-cased path.
     by_folder: Mutex<HashMap<String, SessionId>>,
     shells: OnceLock<Vec<DetectedShell>>,
+    /// The shell the host's settings choose, or none to take the first found.
+    chosen: Mutex<Option<String>>,
 }
 
 impl Terminals {
@@ -98,7 +104,15 @@ impl Terminals {
             env,
             by_folder: Mutex::new(HashMap::new()),
             shells: OnceLock::new(),
+            chosen: Mutex::new(None),
         }
+    }
+
+    /// Opens a terminal whose open names no shell in `shell` from now on, or
+    /// in the first shell found when it is `None` or blank. A shell already
+    /// running goes on as it is.
+    pub fn use_shell(&self, shell: Option<String>) {
+        *lock(&self.chosen) = shell.filter(|shell| !shell.trim().is_empty());
     }
 
     /// Takes back a shell the keeper held when the host started, under the
@@ -176,6 +190,7 @@ impl Terminals {
             .shell
             .clone()
             .filter(|shell| !shell.trim().is_empty())
+            .or_else(|| lock(&self.chosen).clone())
             .unwrap_or_else(|| self.default_shell());
         let size = TermSize::new(request.cols, request.rows);
         let spawn = |shell: &str| self.spawn(shell, &folder, size, client, opened_by.clone());
@@ -413,6 +428,43 @@ mod tests {
                 .problem
                 .is_some_and(|problem| problem.contains("runs instead"))
         );
+        terminals.end_all();
+    }
+
+    #[test]
+    fn a_terminal_opens_in_the_chosen_shell_unless_its_open_names_one() {
+        let dirs = TestDirs::new();
+        let folder = dirs.folder("a project");
+        let terminals = terminals();
+        // A chosen shell that is not there shows in the answer as the one
+        // asked for, beside the one that runs instead.
+        let chosen = dirs.root().join("chosen shell").join("gone.exe");
+        let chosen = chosen.to_string_lossy().into_owned();
+        terminals.use_shell(Some(chosen.clone()));
+        let first = open(&terminals, &folder, true);
+        assert_eq!(first.requested.as_deref(), Some(chosen.as_str()));
+
+        let named = dirs.root().join("named shell").join("gone.exe");
+        let named = named.to_string_lossy().into_owned();
+        let asked = terminals
+            .open(
+                A,
+                PtermOpenRequest {
+                    path: folder.to_string_lossy().into_owned(),
+                    cols: 80,
+                    rows: 24,
+                    shell: Some(named.clone()),
+                    separate: true,
+                },
+                None,
+            )
+            .expect("another shell opens");
+        assert_eq!(asked.requested.as_deref(), Some(named.as_str()));
+
+        // Cleared, or blank, the first shell found runs as asked.
+        terminals.use_shell(Some("  ".to_owned()));
+        let detected = open(&terminals, &folder, true);
+        assert_eq!(detected.requested, None);
         terminals.end_all();
     }
 
