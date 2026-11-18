@@ -1156,6 +1156,7 @@ async fn a_name_is_made_unique_against_the_running_sessions_on_launch_and_rename
     client
         .request::<SessionFocus>(&SessionFocusRequest {
             ids: vec![first.id],
+            active: None,
         })
         .await
         .unwrap();
@@ -1255,12 +1256,14 @@ async fn an_exit_is_sent_for_a_notification_only_to_the_clients_whose_user_canno
     watching
         .request::<SessionFocus>(&SessionFocusRequest {
             ids: vec![first.id, second.id],
+            active: None,
         })
         .await
         .unwrap();
     elsewhere
         .request::<SessionFocus>(&SessionFocusRequest {
             ids: vec![second.id],
+            active: None,
         })
         .await
         .unwrap();

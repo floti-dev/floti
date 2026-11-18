@@ -211,6 +211,7 @@ fn settings() -> HostSettings {
         browser_mcp: true,
         browser_mcp_local_only: false,
         session_mcp: true,
+        desktop_mcp: false,
         restore_without_asking: false,
         session_agents: false,
         agent_children_per_parent: 3,

@@ -646,8 +646,17 @@ pub struct SessionSizeResult {
 #[serde(rename_all = "camelCase")]
 pub struct SessionFocusRequest {
     /// The sessions on screen: the front tab of each pane showing one.
+    /// A client that sends no `active` sends none while its window is not
+    /// in front.
     #[ts(type = "number[]")]
     pub ids: Vec<u64>,
+    /// Whether the client's window is in front: sent when its OS window
+    /// gains or loses focus, with the sessions on screen either way. Absent
+    /// from a client before protocol 4.3, whose `ids` are empty while its
+    /// window is not in front.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub active: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]

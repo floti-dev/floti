@@ -30,7 +30,11 @@ use floti_host::testkit::{
     GitRepo, OtherAgent, OtherAgentRecord, PATIENCE, RunningHost, ShellRun, TestClient, TestDirs,
     link_folder,
 };
-use floti_protocol::channel::EventChannel;
+use floti_protocol::channel::{EventChannel, from_payload, to_payload};
+use floti_protocol::channels::agent_desktop::{
+    AgentDesktopAnswer, AgentDesktopCalls, AgentDesktopOutcome, AgentDesktopToolAnswer,
+    AgentDesktopToolCall, DesktopOpen,
+};
 use floti_protocol::channels::common::{PermissionMode, SessionRecord};
 use floti_protocol::channels::host::{
     HostQuit, HostQuitRequest, HostStop, HostStopReason, HostStopRequest,
@@ -38,11 +42,12 @@ use floti_protocol::channels::host::{
 use floti_protocol::channels::sessions::{
     CloseSessionRequest, HistoryRefresh, HistoryResume, RemoveSessionsRequest,
     RestoreSessionsRequest, ResumeSessionRequest, SessionClose, SessionConfirmAnswer,
-    SessionConfirmRequest, SessionConfirmed, SessionExit, SessionList, SessionRemove,
-    SessionRestore, SessionStart, SessionToRestore, StartSessionRequest,
+    SessionConfirmRequest, SessionConfirmed, SessionExit, SessionFocus, SessionFocusRequest,
+    SessionList, SessionRemove, SessionRestore, SessionStart, SessionToRestore,
+    StartSessionRequest,
 };
 use floti_protocol::channels::workspace::{HostSettingsPatch, WriteSettings};
-use floti_protocol::{BackendId, Knowable};
+use floti_protocol::{BackendId, Knowable, Message};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -5923,5 +5928,380 @@ async fn a_session_titles_itself_by_its_tool_and_from_its_shell_and_reaches_no_o
             Some("Fix the login form")
         );
     }
+    host.stop(HostStopReason::Stop).await;
+}
+
+// ---------------------------------------------------------------------------
+// floti-desktop: Floti's views, opened in the window attached
+// ---------------------------------------------------------------------------
+
+/// The family that opens Floti's views.
+const DESKTOP: &str = "floti-desktop";
+
+/// What the desktop's window declares on its own connection to a host.
+const WINDOW: &[&str] = &["terminal", "files", "pluginPages", "desktop"];
+
+/// The subscription a window hears desktop tool calls on.
+const DESKTOP_CALLS: u64 = 41;
+
+impl World {
+    /// A window listening for desktop tool calls, as the desktop's is.
+    async fn window(&self) -> TestClient {
+        let mut window = TestClient::connect(&self.endpoint, WINDOW).await;
+        window
+            .subscribe_quietly(DESKTOP_CALLS, AgentDesktopCalls::NAME)
+            .await;
+        // Messages are handled in order: once this is answered, the
+        // subscription is in.
+        window
+            .request::<SessionList>(&())
+            .await
+            .expect("the sessions are listed");
+        window
+    }
+
+    /// Switches floti-desktop, as Settings > Agents does.
+    async fn desktop_tools(&self, on: bool) {
+        self.client()
+            .await
+            .request::<WriteSettings>(&HostSettingsPatch {
+                desktop_mcp: Some(on),
+                ..HostSettingsPatch::default()
+            })
+            .await
+            .expect("the settings are written");
+    }
+}
+
+/// `window` says it has `ids` on screen, its OS window in front or not.
+async fn shows(window: &mut TestClient, ids: &[u64], active: bool) {
+    window
+        .request::<SessionFocus>(&SessionFocusRequest {
+            ids: ids.to_vec(),
+            active: Some(active),
+        })
+        .await
+        .expect("the focus is taken");
+}
+
+/// The next desktop tool call `window` is sent.
+async fn desktop_call(window: &mut TestClient) -> AgentDesktopToolCall {
+    loop {
+        match window.next(PATIENCE).await {
+            Some(Message::Event(event)) if event.subscription == DESKTOP_CALLS => {
+                return from_payload(&event.payload).expect("a desktop tool call");
+            }
+            Some(_) => {}
+            None => panic!("no desktop tool call within {PATIENCE:?}"),
+        }
+    }
+}
+
+/// `window` answers `call` with the sentence `said`, as a window that opened
+/// what it was asked to.
+async fn opened(window: &mut TestClient, call: &AgentDesktopToolCall, said: &str) {
+    let result = json!({
+        "content": [
+            { "type": "text", "text": said },
+            { "type": "text", "text": json!({ "opened": true }).to_string() },
+        ],
+    });
+    window
+        .request::<AgentDesktopAnswer>(&AgentDesktopToolAnswer {
+            call_id: call.call_id,
+            outcome: AgentDesktopOutcome::Done {
+                value: to_payload(&result).expect("encode a tool result"),
+            },
+        })
+        .await
+        .expect("the window's answer is taken");
+}
+
+/// What a desktop tool call asked the window to open.
+fn asked(call: &AgentDesktopToolCall) -> DesktopOpen {
+    from_payload(&call.arguments).expect("a desktop_open target")
+}
+
+fn same_path(a: &str, b: &Path) -> bool {
+    resolved(Path::new(a)) == resolved(b)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn desktop_open_goes_to_the_window_showing_the_callers_tab_with_its_path_resolved_from_its_folder()
+ {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("shown project");
+    std::fs::create_dir_all(folder.join("src dir")).unwrap();
+    std::fs::write(folder.join("src dir").join("notes.md"), "one\ntwo\nthree\n").unwrap();
+    let mut showing = world.window().await;
+    let mut in_front = world.window().await;
+    let alpha = world.session(CLAUDE, &folder, "alpha").await;
+
+    // Given the family, its tool allowed and its command too, each by name.
+    assert!(
+        alpha.run.servers.contains_key(DESKTOP),
+        "{:?}",
+        alpha.run.servers.keys()
+    );
+    let allowed = alpha.run.allowed();
+    for rule in [
+        "mcp__floti-desktop__desktop_open",
+        "Bash(floti desktop open:*)",
+    ] {
+        assert!(
+            allowed.iter().any(|got| got == rule),
+            "{rule} in {allowed:?}"
+        );
+    }
+    assert!(
+        !allowed.iter().any(|got| got.contains("floti desktop:")),
+        "{allowed:?}"
+    );
+
+    // One window shows alpha's tab but is behind; the other is in front.
+    shows(&mut showing, &[alpha.id()], false).await;
+    shows(&mut in_front, &[], true).await;
+
+    let (url, token) = alpha.run.servers[DESKTOP].clone();
+    let calling = tokio::spawn({
+        let (url, token) = (url.clone(), token.clone());
+        async move {
+            called(
+                &url,
+                &token,
+                "desktop_open",
+                json!({ "view": "file", "path": "src dir/notes.md", "line": 3 }),
+            )
+            .await
+        }
+    });
+    let call = desktop_call(&mut showing).await;
+    assert_eq!(call.session, alpha.id());
+    assert_eq!(call.tool, "desktop_open");
+    let DesktopOpen::File { root, path, line } = asked(&call) else {
+        panic!("a file: {call:?}")
+    };
+    assert!(same_path(&root, &folder), "{root}");
+    assert!(
+        same_path(&path, &folder.join("src dir").join("notes.md")),
+        "{path}"
+    );
+    assert_eq!(line, Some(3));
+    opened(
+        &mut showing,
+        &call,
+        "Opened notes.md beside your tab, at line 3.",
+    )
+    .await;
+    let answer = calling.await.unwrap();
+    assert_eq!(answer.text(), "Opened notes.md beside your tab, at line 3.");
+
+    // Outside every folder Floti knows: refused naming the rule, and no
+    // window is asked. The next call is the next either window hears.
+    let elsewhere = world.outside("not tracked");
+    std::fs::write(elsewhere.join("secret.txt"), "no\n").unwrap();
+    let refused = called(
+        &url,
+        &token,
+        "desktop_open",
+        json!({ "view": "file", "path": text(&elsewhere.join("secret.txt")) }),
+    )
+    .await;
+    assert!(
+        refused
+            .refused()
+            .contains("not inside a folder Floti knows"),
+        "{refused:?}"
+    );
+    let calling = tokio::spawn({
+        let (url, token) = (url.clone(), token.clone());
+        async move {
+            called(
+                &url,
+                &token,
+                "desktop_open",
+                json!({ "view": "history", "search": "login" }),
+            )
+            .await
+        }
+    });
+    let call = desktop_call(&mut showing).await;
+    assert_eq!(
+        asked(&call),
+        DesktopOpen::History {
+            search: "login".to_owned()
+        }
+    );
+    opened(&mut showing, &call, "Opened History searching for login.").await;
+    assert!(!calling.await.unwrap().failed);
+
+    // From alpha's own shell, a relative path from its folder, by the same
+    // window; a refusal exits 1 naming the rule.
+    let (ran, ()) = tokio::join!(
+        world.shell(&alpha, "floti desktop open folder \"src dir\""),
+        async {
+            let call = desktop_call(&mut showing).await;
+            let DesktopOpen::Folder { path, .. } = asked(&call) else {
+                panic!("a folder: {call:?}")
+            };
+            assert!(same_path(&path, &folder.join("src dir")), "{path}");
+            opened(&mut showing, &call, "Showed src dir in the Files view.").await;
+        }
+    );
+    assert_eq!(ran.code, Some(0), "{ran:?}");
+    assert!(
+        ran.stdout.contains("Showed src dir in the Files view."),
+        "{ran:?}"
+    );
+    let ran = world
+        .shell(
+            &alpha,
+            &format!(
+                "floti desktop open file \"{}\"",
+                text(&elsewhere.join("secret.txt"))
+            ),
+        )
+        .await;
+    assert_eq!(ran.code, Some(1), "{ran:?}");
+    assert!(
+        ran.stderr.contains("not inside a folder Floti knows"),
+        "{ran:?}"
+    );
+    assert!(!ran.stderr.contains(&token), "{ran:?}");
+
+    // Shown nowhere now: the window in front last takes the call.
+    shows(&mut showing, &[], false).await;
+    let calling = tokio::spawn(async move {
+        called(
+            &url,
+            &token,
+            "desktop_open",
+            json!({ "view": "settings", "section": "agents" }),
+        )
+        .await
+    });
+    let call = desktop_call(&mut in_front).await;
+    assert_eq!(
+        asked(&call),
+        DesktopOpen::Settings {
+            section: Some("agents".to_owned())
+        }
+    );
+    opened(
+        &mut in_front,
+        &call,
+        "Opened Settings on Agents beside your tab.",
+    )
+    .await;
+    assert!(!calling.await.unwrap().failed);
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn desktop_tools_need_a_window_a_call_with_none_fails_at_once_and_one_that_leaves_fails_its_calls()
+ {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("windowless");
+
+    // No window attached: no entry, no route, no command.
+    let alone = world.session(CLAUDE, &folder, "alone").await;
+    assert!(
+        !alone.run.servers.contains_key(DESKTOP),
+        "{:?}",
+        alone.run.servers.keys()
+    );
+    assert!(
+        !alone
+            .run
+            .allowed()
+            .iter()
+            .any(|rule| rule.contains("desktop"))
+    );
+    let (agents_url, token) = alone.run.servers[FAMILY].clone();
+    let route = agents_url.replace("/mcp/agents", "/mcp/desktop");
+    assert_eq!(
+        rpc(&route, Some(&token), "tools/list", json!({}))
+            .await
+            .status,
+        404
+    );
+    let ran = world.shell(&alone, "floti desktop open history").await;
+    assert_eq!(ran.code, Some(1), "{ran:?}");
+    assert!(ran.stderr.contains("FLOTI_AGENT_DESKTOP_URL"), "{ran:?}");
+
+    // A window attaches: a later launch is given it.
+    let mut window = world.window().await;
+    let given = world.session(CLAUDE, &folder, "given").await;
+    let (url, token) = given.run.servers[DESKTOP].clone();
+
+    // The window leaves with a call waiting: it fails at once, saying why.
+    let calling = tokio::spawn({
+        let (url, token) = (url.clone(), token.clone());
+        async move { called(&url, &token, "desktop_open", json!({ "view": "history" })).await }
+    });
+    let _call = desktop_call(&mut window).await;
+    drop(window);
+    let failed = calling.await.unwrap();
+    assert!(
+        failed.refused().contains("No window is attached"),
+        "{failed:?}"
+    );
+
+    // Made with none attached: the same, at once.
+    let failed = called(&url, &token, "desktop_open", json!({ "view": "history" })).await;
+    assert!(
+        failed.refused().contains("No window is attached"),
+        "{failed:?}"
+    );
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn desktop_tools_switched_off_leave_later_launches_without_them_and_answer_running_ones_404()
+{
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("switched");
+    let _window = world.window().await;
+    let before = world.session(CLAUDE, &folder, "before").await;
+    let (url, token) = before.run.servers[DESKTOP].clone();
+    assert_eq!(
+        rpc(&url, Some(&token), "tools/list", json!({}))
+            .await
+            .status,
+        200
+    );
+
+    world.desktop_tools(false).await;
+    assert_eq!(
+        rpc(&url, Some(&token), "tools/list", json!({}))
+            .await
+            .status,
+        404
+    );
+    let after = world.session(CLAUDE, &folder, "after").await;
+    assert!(
+        !after.run.servers.contains_key(DESKTOP),
+        "{:?}",
+        after.run.servers.keys()
+    );
+    assert!(
+        !after
+            .run
+            .allowed()
+            .iter()
+            .any(|rule| rule.contains("desktop"))
+    );
+
+    // On again: the route is back for the session that was given it.
+    world.desktop_tools(true).await;
+    assert_eq!(
+        rpc(&url, Some(&token), "tools/list", json!({}))
+            .await
+            .status,
+        200
+    );
     host.stop(HostStopReason::Stop).await;
 }

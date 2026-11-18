@@ -62,8 +62,6 @@ export interface SessionsState {
   rename: (id: number, label: string | null) => Promise<void>
   /** Moves a session tab to `toIndex` within the session tabs. */
   reorder: (id: number, toIndex: number) => void
-  /** Tells main which pane is on screen, for the exit notification. */
-  reportFocus: (ids: readonly number[]) => void
 }
 
 /**
@@ -257,10 +255,6 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
     })
   }, [])
 
-  const reportFocus = useCallback((ids: readonly number[]) => {
-    desktop.send('session:focus', { ids: [...ids] })
-  }, [])
-
   const dismissLaunchError = useCallback(() => setLaunchError(null), [])
 
   return {
@@ -275,7 +269,6 @@ export function useSessions(onActivate: (id: number) => void, reconnects = 0): S
     adopt,
     close,
     rename,
-    reorder,
-    reportFocus
+    reorder
   }
 }

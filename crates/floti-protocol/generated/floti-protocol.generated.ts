@@ -1,7 +1,7 @@
 // Generated from the floti-protocol crate by `cargo run -p floti-protocol --bin generate`. Do not edit.
 
 /** The protocol version these declarations describe. */
-export const PROTOCOL_VERSION = { major: 4, minor: 2 } as const;
+export const PROTOCOL_VERSION = { major: 4, minor: 3 } as const;
 
 /** The link version of the session keeper a host of this build takes back. */
 export const KEEPER_LINK_VERSION = 1;
@@ -88,6 +88,42 @@ onDiskHash: string | null,
  * The file's text now; null when there is no file.
  */
 onDiskText: string | null, };
+
+/**
+ * What a floti-desktop tool call came to.
+ */
+export type AgentDesktopOutcome = { "status": "done", value: unknown, } | { "status": "failed", message: string, };
+
+/**
+ * The client's answer to a floti-desktop tool call.
+ */
+export type AgentDesktopToolAnswer = { 
+/**
+ * The `callId` of the call it answers.
+ */
+callId: number, outcome: AgentDesktopOutcome, };
+
+/**
+ * One floti-desktop tool call.
+ */
+export type AgentDesktopToolCall = { 
+/**
+ * Chosen by the host; the answer names it.
+ */
+callId: number, 
+/**
+ * The id of the hosted session whose agent called the tool.
+ */
+session: number, 
+/**
+ * The tool's name, such as `desktop_open`.
+ */
+tool: string, 
+/**
+ * The tool's arguments as the host passes them on: for `desktop_open`
+ * a [`DesktopOpen`].
+ */
+arguments: unknown, };
 
 /**
  * An agent's fields, as a start reads them.
@@ -764,7 +800,7 @@ lastSeenAt: string,
  */
 template: string | null, };
 
-export type Capability = "terminal" | "files" | "pluginPages" | "browser";
+export type Capability = "terminal" | "files" | "pluginPages" | "browser" | "desktop";
 
 /**
  * An archived conversation's row as the client kept it.
@@ -1218,6 +1254,12 @@ export type DeleteAgentRequest = { name: string,
  * nothing.
  */
 expectedHash: string | null, };
+
+/**
+ * What `desktop_open` asks the window to show, with every path already
+ * resolved, made absolute and checked by the host.
+ */
+export type DesktopOpen = { "view": "file", root: string, path: string, line?: number, } | { "view": "folder", root: string, path: string, } | { "view": "project", path: string, } | { "view": "history", search: string, } | { "view": "settings", section?: string, };
 
 /**
  * A shell found on the host's machine.
@@ -1911,6 +1953,12 @@ browserMcpLocalOnly: boolean,
  */
 sessionMcp: boolean, 
 /**
+ * Whether the host serves floti-desktop, which opens Floti's views in an
+ * attached window, to the sessions it hosts. A host before protocol 4.3
+ * sends none, which reads as on.
+ */
+desktopMcp: boolean, 
+/**
  * Reopen the sessions a crash took without asking first.
  */
 restoreWithoutAsking: boolean, 
@@ -1956,7 +2004,7 @@ export type HostSettingsPatch = { scanRoots?: Array<string>, pinnedProjects?: Ar
 /**
  * Replaces the whole map.
  */
-backendPaths?: { [key in BackendId]?: string }, terminalShell?: string | null, transcriptArchiveMaxBytes?: number, browserMcp?: boolean, browserMcpLocalOnly?: boolean, sessionMcp?: boolean, restoreWithoutAsking?: boolean, sessionAgents?: boolean, agentChildrenPerParent?: number, agentSessionsPerHost?: number, agentDepth?: number, agentStartsPerParent?: number, agentCommandsPerParent?: number, updateCheck?: boolean, };
+backendPaths?: { [key in BackendId]?: string }, terminalShell?: string | null, transcriptArchiveMaxBytes?: number, browserMcp?: boolean, browserMcpLocalOnly?: boolean, sessionMcp?: boolean, desktopMcp?: boolean, restoreWithoutAsking?: boolean, sessionAgents?: boolean, agentChildrenPerParent?: number, agentSessionsPerHost?: number, agentDepth?: number, agentStartsPerParent?: number, agentCommandsPerParent?: number, updateCheck?: boolean, };
 
 /**
  * Why the host is being stopped, which decides what its sessions become.
@@ -3348,8 +3396,17 @@ export type SessionEndingsRequest = { ids: number[], };
 export type SessionFocusRequest = { 
 /**
  * The sessions on screen: the front tab of each pane showing one.
+ * A client that sends no `active` sends none while its window is not
+ * in front.
  */
-ids: number[], };
+ids: number[], 
+/**
+ * Whether the client's window is in front: sent when its OS window
+ * gains or loses focus, with the sessions on screen either way. Absent
+ * from a client before protocol 4.3, whose `ids` are empty while its
+ * window is not in front.
+ */
+active?: boolean, };
 
 /**
  * A listening socket held somewhere in a session's process tree.
@@ -4342,6 +4399,7 @@ floti?: string, };
 /** Every request channel: what it takes, what it answers and the capability it needs. */
 export interface RequestChannels {
   "agentBrowser:answer": { request: AgentBrowserToolAnswer; response: null; capability: "browser" };
+  "agentDesktop:answer": { request: AgentDesktopToolAnswer; response: null; capability: "desktop" };
   "agentPlugin:answer": { request: AgentPluginToolAnswer; response: null; capability: null };
   "agentPlugin:offer": { request: AgentPluginServers; response: null; capability: null };
   "agents:addShipped": { request: AgentName; response: AgentChange; capability: null };
@@ -4472,6 +4530,7 @@ export interface RequestChannels {
 /** Every event channel: its events, its snapshot (null when it carries no state) and the capability it needs. */
 export interface EventChannels {
   "agentBrowser:call": { event: AgentBrowserToolCall; snapshot: null; capability: "browser" };
+  "agentDesktop:call": { event: AgentDesktopToolCall; snapshot: null; capability: "desktop" };
   "agentPlugin:call": { event: AgentPluginToolCall; snapshot: null; capability: null };
   "agentPlugin:cancel": { event: AgentPluginCallCancel; snapshot: null; capability: null };
   "agents:changed": { event: AgentsChange; snapshot: null; capability: null };
@@ -4512,6 +4571,8 @@ export interface StreamChannels {
 export const CHANNELS = [
   { name: "agentBrowser:answer", kind: "request", capability: "browser" },
   { name: "agentBrowser:call", kind: "event", capability: "browser" },
+  { name: "agentDesktop:answer", kind: "request", capability: "desktop" },
+  { name: "agentDesktop:call", kind: "event", capability: "desktop" },
   { name: "agentPlugin:answer", kind: "request", capability: null },
   { name: "agentPlugin:call", kind: "event", capability: null },
   { name: "agentPlugin:cancel", kind: "event", capability: null },

@@ -86,19 +86,62 @@ struct Confirms {
     pending: HashMap<u64, u64>,
 }
 
-/// Which sessions each client's user can see now, as each last said, and
-/// which sessions a client closed.
+/// Which sessions each client has on screen now, as each last said, whether
+/// its window is in front, which client was in front last, and which sessions
+/// a client closed.
 #[derive(Debug, Default)]
 pub(crate) struct Focus {
     seen: HashMap<ClientId, BTreeSet<u64>>,
+    /// The clients whose window is not in front, as each last said. A client
+    /// before protocol 4.3 never says, and sends no sessions instead.
+    behind: BTreeSet<ClientId>,
+    /// When each client's window last came to the front or said it was
+    /// there, in the order those moments came: the higher, the more recent.
+    fronted: HashMap<ClientId, u64>,
+    /// The last moment handed out in `fronted`.
+    moment: u64,
     /// Sessions a client asked to end, whose exit is expected.
     closed: BTreeSet<u64>,
 }
 
 impl Focus {
-    /// `client`'s user can see `ids` now, and nothing else.
-    pub fn set(&mut self, client: ClientId, ids: impl IntoIterator<Item = u64>) {
+    /// `client` has `ids` on screen now, and nothing else, and its window is
+    /// in front or not as `active` says; `None` from a client that does not
+    /// say, whose `ids` are what its user can see.
+    pub fn set(
+        &mut self,
+        client: ClientId,
+        ids: impl IntoIterator<Item = u64>,
+        active: Option<bool>,
+    ) {
         self.seen.insert(client, ids.into_iter().collect());
+        match active {
+            Some(false) => {
+                self.behind.insert(client);
+            }
+            Some(true) => {
+                self.behind.remove(&client);
+                self.moment += 1;
+                self.fronted.insert(client, self.moment);
+            }
+            None => {
+                self.behind.remove(&client);
+            }
+        }
+    }
+
+    /// Whether `client` has any of `ids` on screen, its window in front or
+    /// not.
+    pub fn shows_any(&self, client: ClientId, ids: &[u64]) -> bool {
+        self.seen
+            .get(&client)
+            .is_some_and(|seen| ids.iter().any(|id| seen.contains(id)))
+    }
+
+    /// How recently `client`'s window was in front: higher is more recent,
+    /// and 0 is never, as a client that never said.
+    pub fn fronted(&self, client: ClientId) -> u64 {
+        self.fronted.get(&client).copied().unwrap_or(0)
     }
 
     /// A client asked for session `id` to end: as in today's app, where a
@@ -119,16 +162,21 @@ impl Focus {
     /// `client` has gone, and what it saw with it.
     pub fn leave(&mut self, client: ClientId) {
         self.seen.remove(&client);
+        self.behind.remove(&client);
+        self.fronted.remove(&client);
     }
 
     /// Whether session `id` ending is worth a notification for `client`, as
     /// today's app judges it: only when its user cannot see the session. A
     /// session in a background tab is as unwatched as one in a window that
     /// is not in front, so a client whose window is not in front says it
-    /// sees nothing. A client that never said is watching nothing. A
-    /// session a client closed is worth a notification for nobody.
+    /// sees nothing, or says it is not in front. A client that never said
+    /// is watching nothing. A session a client closed is worth a
+    /// notification for nobody.
     pub fn worth_notifying(&self, client: ClientId, id: u64) -> bool {
-        !self.closed.contains(&id) && !self.seen.get(&client).is_some_and(|ids| ids.contains(&id))
+        let watched = !self.behind.contains(&client)
+            && self.seen.get(&client).is_some_and(|ids| ids.contains(&id));
+        !self.closed.contains(&id) && !watched
     }
 }
 
@@ -194,6 +242,12 @@ impl Sessions {
     /// The activity pass, for what inside the host reads the listing.
     pub fn activity(&self) -> ActivityHandle {
         self.activity.clone()
+    }
+
+    /// What each client has on screen and which was in front last, for the
+    /// floti-desktop relay to choose a window by.
+    pub fn focus(&self) -> Arc<Mutex<Focus>> {
+        Arc::clone(&self.focus)
     }
 
     /// The activity pass runs now: something it reads has just moved.
@@ -393,7 +447,7 @@ impl Feature for Sessions {
                 })
             })
             .handle::<SessionFocus>(move |request| {
-                lock(&self.focus).set(client, request.ids);
+                lock(&self.focus).set(client, request.ids, request.active);
                 Ok(())
             })
             .handle::<SessionRestorable>(|()| Ok(hosted.restorable()))
@@ -742,14 +796,14 @@ mod tests {
         // Nobody has said what they see: every exit is unwatched.
         assert!(focus.worth_notifying(A, 7));
 
-        focus.set(A, [7, 9]);
-        focus.set(B, [9]);
+        focus.set(A, [7, 9], None);
+        focus.set(B, [9], None);
         assert!(!focus.worth_notifying(A, 7), "on A's screen");
         assert!(focus.worth_notifying(B, 7), "in a tab B's user cannot see");
         assert!(!focus.worth_notifying(B, 9));
 
         // A window that is not in front sees nothing.
-        focus.set(A, []);
+        focus.set(A, [], None);
         assert!(focus.worth_notifying(A, 7));
 
         // An ended session leaves every screen.
@@ -757,9 +811,40 @@ mod tests {
         assert!(focus.worth_notifying(B, 9));
 
         // A client that has gone takes what it saw with it.
-        focus.set(B, [4]);
+        focus.set(B, [4], None);
         focus.leave(B);
         assert!(focus.worth_notifying(B, 4));
+    }
+
+    #[test]
+    fn a_window_that_says_it_is_behind_keeps_its_sessions_on_screen_but_watches_none() {
+        let mut focus = Focus::default();
+        assert_eq!(focus.fronted(A), 0, "never said");
+
+        focus.set(A, [7], Some(true));
+        focus.set(B, [9], Some(true));
+        assert!(
+            focus.fronted(B) > focus.fronted(A),
+            "B came to the front last"
+        );
+        assert!(!focus.worth_notifying(A, 7));
+
+        // Behind: still showing 7, but nobody is watching it.
+        focus.set(A, [7], Some(false));
+        assert!(focus.shows_any(A, &[3, 7]));
+        assert!(!focus.shows_any(A, &[9]));
+        assert!(focus.worth_notifying(A, 7));
+        // Going behind is no moment in front.
+        assert!(focus.fronted(B) > focus.fronted(A));
+
+        // In front again: the most recent.
+        focus.set(A, [7], Some(true));
+        assert!(focus.fronted(A) > focus.fronted(B));
+        assert!(!focus.worth_notifying(A, 7));
+
+        focus.leave(A);
+        assert_eq!(focus.fronted(A), 0);
+        assert!(!focus.shows_any(A, &[7]));
     }
 
     fn ended(
@@ -845,7 +930,7 @@ mod tests {
     #[test]
     fn a_session_a_client_closed_is_worth_a_notification_for_nobody_until_it_has_ended() {
         let mut focus = Focus::default();
-        focus.set(A, []);
+        focus.set(A, [], None);
         focus.closing(7);
         assert!(!focus.worth_notifying(A, 7));
         assert!(!focus.worth_notifying(B, 7), "a client that never said");

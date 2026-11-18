@@ -22,6 +22,13 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   any other channel at once. `e2e/boundary.spec.ts` fails naming any channel
   that crossed. Main runs no session, terminal, config reader, content,
   template or scan service of its own; those are the host's.
+- What a window answers for a host, it answers on its own connection to that
+  host: the floti-desktop tools (`agentDesktop:call`, which it declares
+  `desktop` for, `renderer/src/app/host/desktopTools.ts`), and which of that
+  host's sessions are on screen and whether its OS window is in front
+  (`session:focus`). Main's link to this PC's host answers the browser tools
+  (`agentBrowser:call`, declared with `browser`), because the browser pane is
+  main's ([AGENT-TOOLS.md](AGENT-TOOLS.md#floti-desktop)).
 - The host never opens `desktop.db` or learns Floti's data folder. What only
   `desktop.db` holds (archived conversations whose transcript is gone, their
   usage, History's names) main reads through core's
@@ -201,7 +208,10 @@ means it is not showing.
   (`hostLink:open` names it). Floti adds no ssh option, never skips a
   host-key check, reads or writes nothing under `~/.ssh` and holds no SSH
   secret: a transport that needs a password or a key accepted fails with its
-  last line, and the fix is `ssh <target>` in a terminal. Adding a host is
+  last line, and the fix is `ssh <target>` in a terminal. A window's page
+  link to a host on another computer declares `desktop` as its link to this
+  PC's does, so a session there opens that host's views in the window
+  attached to it (`desktop_open`). Adding a host is
   connecting to it: the first connection pins the key it proves, and
   nothing is approved or typed on the host. A drop ends nothing there;
   Remove ends the link and removes the host's client folder, and ends

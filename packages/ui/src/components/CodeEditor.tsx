@@ -106,8 +106,12 @@ export interface EditorLineMarks {
 
 export interface CodeEditorHandle {
   focus: () => void
-  /** Selects an absolute range and scrolls it into view. */
-  select: (start: number, end: number) => void
+  /**
+   * Selects an absolute range and scrolls it into view, taking the keyboard
+   * unless `focus` is false: a line opened for a session's agent leaves the
+   * keyboard in the terminal.
+   */
+  select: (start: number, end: number, focus?: boolean) => void
 }
 
 export interface CodeEditorProps {
@@ -428,10 +432,10 @@ export function CodeEditor({
   const lineHeightOf = (area: HTMLTextAreaElement): number =>
     parseFloat(getComputedStyle(area).lineHeight) || 18
 
-  const reveal = useCallback((start: number, end: number): void => {
+  const reveal = useCallback((start: number, end: number, focus = true): void => {
     const area = areaRef.current
     if (!area) return
-    area.focus()
+    if (focus) area.focus()
     area.setSelectionRange(start, end)
     // Scrolling to a selection has no API, so this puts the line about a third
     // of the way down the box rather than at its very top - which is where a
@@ -489,8 +493,8 @@ export function CodeEditor({
     ref,
     () => ({
       focus: () => areaRef.current?.focus(),
-      select: (start: number, end: number) => {
-        reveal(start, end)
+      select: (start: number, end: number, focus = true) => {
+        reveal(start, end, focus)
         readCaret()
       }
     }),

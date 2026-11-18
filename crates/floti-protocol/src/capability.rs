@@ -23,14 +23,19 @@ pub enum Capability {
     PluginPages,
     /// Has a browser pane, so agent browser tools can reach it.
     Browser,
+    /// Opens Floti's views (a file, Files, a project page, History, a
+    /// Settings section) when a session's agent asks, through the
+    /// floti-desktop tools.
+    Desktop,
 }
 
 impl Capability {
-    pub const ALL: [Capability; 4] = [
+    pub const ALL: [Capability; 5] = [
         Capability::Terminal,
         Capability::Files,
         Capability::PluginPages,
         Capability::Browser,
+        Capability::Desktop,
     ];
 
     /// The wire name, as a client writes it in `hello`.
@@ -40,6 +45,7 @@ impl Capability {
             Capability::Files => "files",
             Capability::PluginPages => "pluginPages",
             Capability::Browser => "browser",
+            Capability::Desktop => "desktop",
         }
     }
 

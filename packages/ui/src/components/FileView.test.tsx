@@ -182,4 +182,17 @@ describe('FileView: opened on a text match', () => {
     rerender(<FileView {...props} view={{ ...VIEW }} reveal={reveal} />)
     expect([box.selectionStart, box.selectionEnd]).toEqual([0, 0])
   })
+
+  it('goes to a line without taking the keyboard when the reveal says not to', () => {
+    const terminal = document.createElement('textarea')
+    document.body.append(terminal)
+    terminal.focus()
+    const reveal = { line: 3, term: null, focus: false }
+    const { rerender, props } = renderView({ view: null, reveal })
+    rerender(<FileView {...props} view={VIEW} reveal={reveal} />)
+    const box = screen.getByRole('textbox', { name: 'Contents of src/a.ts' }) as HTMLTextAreaElement
+    expect([box.selectionStart, box.selectionEnd]).toEqual([8, 8])
+    expect(document.activeElement).toBe(terminal)
+    terminal.remove()
+  })
 })

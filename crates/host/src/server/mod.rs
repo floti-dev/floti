@@ -47,6 +47,7 @@ mod agent_tools;
 mod attached;
 mod browser_tools;
 mod connection;
+mod desktop_tools;
 mod events;
 mod features;
 pub(crate) mod floti_agents;
@@ -99,6 +100,7 @@ use crate::{Error, Result};
 
 use agent_tools::HostAgentTools;
 use connection::{Admission, ConnectionContext};
+use desktop_tools::HostDesktopWorld;
 use features::Features;
 use hosted::Hosted;
 pub use hosted::Occupancy;
@@ -741,6 +743,7 @@ fn start_background_update(features: &Features, data: PathBuf, binary: PathBuf, 
 fn start_agent_tools(hosted: &Arc<Hosted>, features: &Features) -> Result<Arc<HostAgentTools>> {
     let tools = Arc::new(HostAgentTools::new(
         Arc::clone(features.browser()),
+        Arc::clone(features.desktop()),
         Arc::clone(features.host_plugin_tools()),
     ));
     // A plugin switched off can leave nothing to serve: the port goes then.
@@ -762,6 +765,10 @@ fn start_agent_tools(hosted: &Arc<Hosted>, features: &Features) -> Result<Arc<Ho
         hosted: Arc::downgrade(hosted),
         activity: features.activity().clone(),
         resources: features.resources().clone(),
+    }));
+    tools.open_through(Arc::new(HostDesktopWorld {
+        hosted: Arc::downgrade(hosted),
+        roots: Arc::downgrade(features.roots()),
     }));
     tokio::spawn(agent_tools::revoke_at_exit(
         hosted.ledger().exits(),

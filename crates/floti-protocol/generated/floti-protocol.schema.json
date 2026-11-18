@@ -157,6 +157,93 @@
       },
       "type": "object"
     },
+    "AgentDesktopOutcome": {
+      "description": "What a floti-desktop tool call came to.",
+      "oneOf": [
+        {
+          "description": "The tool ran; `value` is its result for the agent, an MCP tool result.",
+          "properties": {
+            "status": {
+              "const": "done",
+              "type": "string"
+            },
+            "value": true
+          },
+          "required": [
+            "status",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The tool could not run; `message` is the sentence the agent reads.",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "status": {
+              "const": "failed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "message"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AgentDesktopToolAnswer": {
+      "description": "The client's answer to a floti-desktop tool call.",
+      "properties": {
+        "callId": {
+          "description": "The `callId` of the call it answers.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "outcome": {
+          "$ref": "#/$defs/AgentDesktopOutcome"
+        }
+      },
+      "required": [
+        "callId",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "AgentDesktopToolCall": {
+      "description": "One floti-desktop tool call.",
+      "properties": {
+        "arguments": {
+          "description": "The tool's arguments as the host passes them on: for `desktop_open`\na [`DesktopOpen`]."
+        },
+        "callId": {
+          "description": "Chosen by the host; the answer names it.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "session": {
+          "description": "The id of the hosted session whose agent called the tool.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tool": {
+          "description": "The tool's name, such as `desktop_open`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "callId",
+        "session",
+        "tool",
+        "arguments"
+      ],
+      "type": "object"
+    },
     "AgentFields": {
       "description": "An agent's fields, as a start reads them.",
       "properties": {
@@ -1555,6 +1642,11 @@
         {
           "const": "browser",
           "description": "Has a browser pane, so agent browser tools can reach it.",
+          "type": "string"
+        },
+        {
+          "const": "desktop",
+          "description": "Opens Floti's views (a file, Files, a project page, History, a\nSettings section) when a session's agent asks, through the\nfloti-desktop tools.",
           "type": "string"
         }
       ]
@@ -2964,6 +3056,114 @@
         "name"
       ],
       "type": "object"
+    },
+    "DesktopOpen": {
+      "description": "What `desktop_open` asks the window to show, with every path already\nresolved, made absolute and checked by the host.",
+      "oneOf": [
+        {
+          "description": "A file's tab beside the caller's, scrolled to `line` when one is\ngiven. `root` is the known folder holding it.",
+          "properties": {
+            "line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "root": {
+              "type": "string"
+            },
+            "view": {
+              "const": "file",
+              "type": "string"
+            }
+          },
+          "required": [
+            "view",
+            "root",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The Files view on `root`, the known folder holding `path`, with the\nfolder `path` revealed.",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "root": {
+              "type": "string"
+            },
+            "view": {
+              "const": "folder",
+              "type": "string"
+            }
+          },
+          "required": [
+            "view",
+            "root",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A project's page beside the caller's tab: `path` is the project's\nfolder as discovery knows it.",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "view": {
+              "const": "project",
+              "type": "string"
+            }
+          },
+          "required": [
+            "view",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The History palette with `search` typed into it.",
+          "properties": {
+            "search": {
+              "type": "string"
+            },
+            "view": {
+              "const": "history",
+              "type": "string"
+            }
+          },
+          "required": [
+            "view",
+            "search"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A Settings tab beside the caller's, on `section` when one is given.",
+          "properties": {
+            "section": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "view": {
+              "const": "settings",
+              "type": "string"
+            }
+          },
+          "required": [
+            "view"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "DetectedShell": {
       "description": "A shell found on the host's machine.",
@@ -4771,6 +4971,11 @@
           "description": "Whether those tools are confined to this machine.",
           "type": "boolean"
         },
+        "desktopMcp": {
+          "default": true,
+          "description": "Whether the host serves floti-desktop, which opens Floti's views in an\nattached window, to the sessions it hosts. A host before protocol 4.3\nsends none, which reads as on.",
+          "type": "boolean"
+        },
         "firstRunCompletedAt": {
           "description": "When setup was finished, ISO 8601, or null while it has not been.",
           "type": [
@@ -4896,6 +5101,12 @@
           ]
         },
         "browserMcpLocalOnly": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "desktopMcp": {
           "type": [
             "boolean",
             "null"
@@ -9197,8 +9408,15 @@
     },
     "SessionFocusRequest": {
       "properties": {
+        "active": {
+          "description": "Whether the client's window is in front: sent when its OS window\ngains or loses focus, with the sessions on screen either way. Absent\nfrom a client before protocol 4.3, whose `ids` are empty while its\nwindow is not in front.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "ids": {
-          "description": "The sessions on screen: the front tab of each pane showing one.",
+          "description": "The sessions on screen: the front tab of each pane showing one.\nA client that sends no `active` sends none while its window is not\nin front.",
           "items": {
             "format": "uint64",
             "minimum": 0,
@@ -11449,6 +11667,26 @@
       "snapshot": null
     },
     {
+      "capability": "desktop",
+      "kind": "request",
+      "name": "agentDesktop:answer",
+      "request": {
+        "$ref": "#/$defs/AgentDesktopToolAnswer"
+      },
+      "response": {
+        "type": "null"
+      }
+    },
+    {
+      "capability": "desktop",
+      "event": {
+        "$ref": "#/$defs/AgentDesktopToolCall"
+      },
+      "kind": "event",
+      "name": "agentDesktop:call",
+      "snapshot": null
+    },
+    {
       "capability": null,
       "kind": "request",
       "name": "agentPlugin:answer",
@@ -13301,5 +13539,5 @@
   ],
   "x-defaultInitialCredit": 262144,
   "x-maxFrameLen": 16777216,
-  "x-protocolVersion": "4.2"
+  "x-protocolVersion": "4.3"
 }

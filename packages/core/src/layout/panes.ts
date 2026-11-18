@@ -839,6 +839,50 @@ export function placeIn(layout: PaneLayout, ref: PaneRef, group: number): PaneLa
   return moveTab(opened, id, group, groupById(opened, group)!.tabs.length)
 }
 
+/**
+ * Opens a tab beside tab `anchor` and leaves the focus where it was: what a
+ * session's agent asked to show the user, while the user goes on typing to
+ * that session.
+ *
+ * It goes to the pane beside the one holding `anchor` (`besideOf`), in front
+ * there, or into a new pane on that one's right when it has no neighbour.
+ * With `anchor` null or in no pane, the focused pane stands in for it. A tab
+ * already open comes to the front where it is, unless that is the anchor's own
+ * pane, where it would hide the anchor: then it moves beside, and the anchor
+ * is the one in front of its pane. Either way the focused pane stays focused,
+ * and no other pane's front tab changes.
+ */
+export function openBeside(layout: PaneLayout, ref: PaneRef, anchor: string | null): PaneLayout {
+  const id = paneId(ref)
+  if (id === anchor) return layout
+  const home = (anchor === null ? undefined : findTab(layout, anchor)?.group) ?? layout.focused
+  const at = findTab(layout, id)
+  if (at !== null && at.group !== home) {
+    const group = groupById(layout, at.group)!
+    if (group.activeId === id) return layout
+    return normalize(layout.root, replaced(layout, { ...group, activeId: id }), layout.focused, layout)
+  }
+  let base = layout
+  if (at !== null) {
+    const group = groupById(layout, home)!
+    const left = without(group, at.index)
+    const front = group.activeId === id && anchor !== null && findTab(layout, anchor) !== null ? anchor : left.activeId
+    base = normalize(layout.root, replaced(layout, { ...left, activeId: front }), layout.focused, layout)
+  }
+  const beside = besideOf(base, home)
+  if (beside === null) {
+    const created = base.nextId
+    return normalize(
+      insertBeside(base.root, home, { group: created }, 'right'),
+      [...base.groups, { id: created, tabs: [ref], activeId: id }],
+      base.focused,
+      { nextId: created + 1, families: base.families }
+    )
+  }
+  const target = groupById(base, beside)!
+  return normalize(base.root, replaced(base, { id: target.id, tabs: [...target.tabs, ref], activeId: id }), base.focused, base)
+}
+
 /** A file tab, as `openFile` takes it. */
 export type FileRef = Extract<PaneRef, { kind: 'file' }>
 

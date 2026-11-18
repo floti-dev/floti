@@ -205,13 +205,17 @@ describe('a Floti page’s own connection to the local host', () => {
         type: 'hello',
         protocol: { major: PROTOCOL_VERSION.major, minor: PROTOCOL_VERSION.minor },
         client: { name: 'Floti 2.9.0', kind: 'desktop' },
-        capabilities: ['terminal', 'files', 'pluginPages']
+        capabilities: ['terminal', 'files', 'pluginPages', 'desktop']
       }
     ])
   })
 
   it('never declares the browser: the window’s connection answers no browser tool', () => {
     expect(WINDOW_CAPABILITIES).not.toContain('browser')
+  })
+
+  it('declares desktop: the window’s own connection to each host answers the desktop tools', () => {
+    expect(WINDOW_CAPABILITIES).toContain('desktop')
   })
 
   it('has every caller join one connect, so a read asked before it settled waits for the host’s answer', async () => {

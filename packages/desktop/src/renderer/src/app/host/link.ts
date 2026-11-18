@@ -48,8 +48,14 @@ import type { DesktopBridge, HostLinkOpened, RefusedVersions } from '../../../..
  * `HostRefusedError` carrying the versions.
  */
 
-/** What the app window says it can do: draw terminals, show files and draw plugins' pages. */
-export const WINDOW_CAPABILITIES: readonly Capability[] = ['terminal', 'files', 'pluginPages']
+/**
+ * What the app window says it can do: draw terminals, show files, draw
+ * plugins' pages and open its views when a session's agent asks (the
+ * floti-desktop tools, answered on this connection to each host, so a remote
+ * host's session reaches the window attached to it). Never the browser: main's
+ * link answers the browser tools.
+ */
+export const WINDOW_CAPABILITIES: readonly Capability[] = ['terminal', 'files', 'pluginPages', 'desktop']
 
 /** How the host's side of a connection ended. */
 export interface HostEnd {

@@ -47,8 +47,11 @@ export interface FilesState {
   expanded: ReadonlySet<string>
   loadingDirs: ReadonlySet<string>
   toggleDir: (relPath: string) => void
-  /** Points the tree at a file: its project, with every folder down to it open. */
-  reveal: (root: string, path: string) => void
+  /**
+   * Points the tree at a file: its project, with every folder down to it
+   * open. With `itself`, `path` is a folder, and it is open too.
+   */
+  reveal: (root: string, path: string, itself?: boolean) => void
   status: FilesStatus | null
   /** Each file tab's file, keyed by `fileKey`. */
   tabs: ReadonlyMap<string, FileTabState>
@@ -308,10 +311,13 @@ export function useFiles({ host = LOCAL_HOST_KEY, active, follow, shown, revisio
   )
 
   const reveal = useCallback(
-    (at: string, path: string) => {
+    (at: string, path: string, itself = false) => {
       const sameRoot = rootRef.current !== null && keyOf(rootRef.current) === keyOf(at)
       setRoot(at)
-      const folders = relativeTo(at, path).split('/').slice(0, -1)
+      const parts = relativeTo(at, path)
+        .split('/')
+        .filter((part) => part !== '')
+      const folders = itself ? parts : parts.slice(0, -1)
       const ancestors = folders.map((_, index) => folders.slice(0, index + 1).join('/'))
       const held = expandedByRoot.get(keyOf(at)) ?? new Set<string>()
       const opening = ancestors.filter((relPath) => !held.has(relPath))

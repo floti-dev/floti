@@ -104,6 +104,11 @@ pub struct HostSettings {
     pub browser_mcp_local_only: bool,
     /// Whether the host tells a session what other sessions are doing.
     pub session_mcp: bool,
+    /// Whether the host serves floti-desktop, which opens Floti's views in an
+    /// attached window, to the sessions it hosts. A host before protocol 4.3
+    /// sends none, which reads as on.
+    #[serde(default = "default_desktop_mcp")]
+    pub desktop_mcp: bool,
     /// Reopen the sessions a crash took without asking first.
     pub restore_without_asking: bool,
     /// Whether the sessions the host starts can start, list and stop
@@ -144,6 +149,8 @@ pub const DEFAULT_AGENT_STARTS_PER_PARENT: u32 = 16;
 pub const DEFAULT_AGENT_COMMANDS_PER_PARENT: u32 = 4;
 /// Whether the host looks for updates by itself when nobody has said.
 pub const DEFAULT_UPDATE_CHECK: bool = true;
+/// Whether the host serves floti-desktop when nobody has said.
+pub const DEFAULT_DESKTOP_MCP: bool = true;
 
 fn default_session_agents() -> bool {
     DEFAULT_SESSION_AGENTS
@@ -171,6 +178,10 @@ fn default_agent_commands_per_parent() -> u32 {
 
 fn default_update_check() -> bool {
     DEFAULT_UPDATE_CHECK
+}
+
+fn default_desktop_mcp() -> bool {
+    DEFAULT_DESKTOP_MCP
 }
 
 /// A change to some settings. A field left out is unchanged; a nullable
@@ -216,6 +227,9 @@ pub struct HostSettingsPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub session_mcp: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub desktop_mcp: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub restore_without_asking: Option<bool>,

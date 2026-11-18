@@ -102,7 +102,7 @@ use floti_host::keep_awake::run_keep_awake;
 use floti_host::version;
 use floti_host::{ALREADY_RUNNING_EXIT, DesktopCommand, Error, HostOptions, log_line};
 
-const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...] [--after <pid>]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger] [--desktop | --no-desktop]\n       floti install-self [--force]\n       floti add [desktop]\n       floti update [--channel <name>] [--from-desktop | --floti-only]\n       floti uninstall [--purge]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti wait-host-exit\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>";
+const USAGE: &str = "usage: floti host [--desktop <program> [--desktop-arg <arg>]...] [--after <pid>]\n       floti bridge <client folder>\n       floti bridge <client folder> [--floti <path>] [--as-written] -- <program> [<arg>...]\n       floti connect [--host-key]\n       floti keep-awake\n       floti doctor [--record]\n       floti version\n       floti setup [--linger | --no-linger] [--desktop | --no-desktop]\n       floti install-self [--force]\n       floti add [desktop]\n       floti update [--channel <name>] [--from-desktop | --floti-only]\n       floti uninstall [--purge]\n       floti update-stop [<client folder>] --ask | --stop\n       floti end-old-host <client folder>\n       floti wait-host-exit\n       floti agent start --task <text> [--agent <name>] [--backend <id>] [--folder <path>] [--profile <name>] [--name <name>] [--outlive] [--can-start] [--json]\n       floti agent stop [--keep] [--json] <name>\n       floti session title <text>\n       floti desktop open <file|folder|project|history|settings> ... [--json]";
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -172,6 +172,7 @@ fn main() -> ExitCode {
         },
         ["agent", ..] => agent(&args[1..]),
         ["session", ..] => session(&args[1..]),
+        ["desktop", ..] => desktop(&args[1..]),
         ["version"] => {
             println!("{}", version::version_line());
             ExitCode::SUCCESS
@@ -218,6 +219,19 @@ fn session(args: &[String]) -> ExitCode {
         Ok(title) => ExitCode::from(floti_host::agent_cli::run_session(&title)),
         Err(reason) => {
             eprintln!("{reason}\n{}", floti_host::agent_cli::SESSION_USAGE);
+            ExitCode::from(BridgeExit::Usage.code())
+        }
+    }
+}
+
+/// `floti desktop open`, run from a session's own shell. A relative path is
+/// read from the shell's own folder.
+fn desktop(args: &[String]) -> ExitCode {
+    let here = std::env::current_dir().unwrap_or_default();
+    match floti_host::desktop_cli::parse(args, &here) {
+        Ok(command) => ExitCode::from(floti_host::desktop_cli::run(&command)),
+        Err(reason) => {
+            eprintln!("{reason}\n{}", floti_host::desktop_cli::USAGE);
             ExitCode::from(BridgeExit::Usage.code())
         }
     }

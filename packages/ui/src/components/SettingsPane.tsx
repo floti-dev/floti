@@ -255,6 +255,12 @@ export interface SettingsPaneProps {
    */
   sessionAgents: boolean
   onSessionAgentsChange: (next: boolean) => void
+  /**
+   * Whether the sessions a host starts can open Floti's views in this window
+   * (the floti-desktop tools). Told to the host like the other families.
+   */
+  desktopMcp: boolean
+  onDesktopMcpChange: (next: boolean) => void
   /** The host's agents in a sentence, with Open Agents: the Agents group's first row. */
   agentsOverview?: AgentsOverview | undefined
   agentLimits: AgentLimitSettings
@@ -414,6 +420,8 @@ export function SettingsPane({
   onSessionMcpChange,
   sessionAgents,
   onSessionAgentsChange,
+  desktopMcp,
+  onDesktopMcpChange,
   agentsOverview,
   agentLimits,
   onAgentLimitsChange,
@@ -713,6 +721,8 @@ export function SettingsPane({
                 overview={agentsOverview}
                 enabled={sessionAgents}
                 onEnabledChange={onSessionAgentsChange}
+                desktop={desktopMcp}
+                onDesktopChange={onDesktopMcpChange}
                 inParentTab={showChildrenInParentTab}
                 onInParentTabChange={onShowChildrenInParentTabChange}
               />
@@ -1707,8 +1717,8 @@ function SessionsGroup({
 }
 
 /**
- * Whether a session can start sessions of its own, and whether a parent's tab
- * shows them.
+ * Whether a session can start sessions of its own, whether it can open Floti's
+ * views, and whether a parent's tab shows its children.
  *
  * A group of its own beside Sessions: that one is about what a session may
  * learn of the others, this one about what it may start, which is a different
@@ -1721,12 +1731,16 @@ function AgentsGroup({
   overview,
   enabled,
   onEnabledChange,
+  desktop,
+  onDesktopChange,
   inParentTab,
   onInParentTabChange
 }: {
   overview: AgentsOverview | undefined
   enabled: boolean
   onEnabledChange: (next: boolean) => void
+  desktop: boolean
+  onDesktopChange: (next: boolean) => void
   inParentTab: boolean
   onInParentTabChange: (next: boolean) => void
 }): JSX.Element {
@@ -1757,6 +1771,19 @@ function AgentsGroup({
             checked={enabled}
             onChange={() => onEnabledChange(!enabled)}
             label="Sessions can start agents"
+          />
+        </span>
+      </CheckRow>
+
+      <CheckRow
+        label="Sessions can use Floti's window"
+        hint="Every session you start gets the floti-desktop tools and floti desktop open: asked to show you something, it opens a file, Files, a project's page, History or Settings beside its tab, and the keyboard stays in its terminal."
+      >
+        <span data-settings-desktop-mcp={String(desktop)}>
+          <Checkbox
+            checked={desktop}
+            onChange={() => onDesktopChange(!desktop)}
+            label="Sessions can use Floti's window"
           />
         </span>
       </CheckRow>

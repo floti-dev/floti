@@ -286,6 +286,7 @@ describe('settings', () => {
       restoreWithoutAsking: true,
       browserProjectUrls: { [join(dir, 'alpha').toLowerCase()]: 'http://localhost:5173/' },
       sessionMcp: false,
+      desktopMcp: false,
       sessionAgents: false,
       agentChildrenPerParent: 6,
       agentSessionsPerHost: 12,
@@ -1029,6 +1030,12 @@ describe('settings validation', () => {
       bad: ['false', 'true', 0, 1, null, [], {}]
     },
     {
+      // The desktop tools: whether the host serves the family at all.
+      key: 'desktopMcp',
+      good: [true, false],
+      bad: ['false', 'true', 0, 1, null, [], {}]
+    },
+    {
       // `'false'` would switch the family on while the pane read it as off.
       key: 'sessionAgents',
       good: [true, false],
@@ -1275,6 +1282,7 @@ describe('settings validation', () => {
       restoreWithoutAsking: true,
       browserProjectUrls: { [join(dir, 'alpha').toLowerCase()]: 'http://localhost:5173/' },
       sessionMcp: false,
+      desktopMcp: false,
       sessionAgents: false,
       agentChildrenPerParent: 6,
       agentSessionsPerHost: 12,
@@ -1330,6 +1338,7 @@ const DEFAULT_SETTINGS_SHAPE = (dir: string): typeof DEFAULT_SETTINGS => ({
   restoreWithoutAsking: true,
   browserProjectUrls: { [join(dir, 'alpha').toLowerCase()]: 'http://localhost:5173/' },
   sessionMcp: false,
+  desktopMcp: false,
   sessionAgents: false,
   agentChildrenPerParent: 6,
   agentSessionsPerHost: 12,

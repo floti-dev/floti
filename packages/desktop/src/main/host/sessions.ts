@@ -91,6 +91,7 @@ export function hostSettingsFor(settings: AppSettings, discovered: string | null
     browserMcp: settings.browserMcp,
     browserMcpLocalOnly: settings.browserMcpLocalOnly,
     sessionMcp: settings.sessionMcp,
+    desktopMcp: settings.desktopMcp,
     sessionAgents: settings.sessionAgents,
     agentChildrenPerParent: settings.agentChildrenPerParent,
     agentSessionsPerHost: settings.agentSessionsPerHost,

@@ -72,6 +72,10 @@ import { createTerminalsAdapter, type ShellShelf } from './terminals'
  * for that offer after each reconnect and each session lost at runtime.
  */
 
+/** Whether a host on `protocol` reads `session:focus`'s `active`: from 4.3. */
+export const saysWhetherInFront = (protocol: P.ProtocolVersion): boolean =>
+  protocol.major > 4 || (protocol.major === 4 && protocol.minor >= 3)
+
 /** Whether the window is in front, and word when that changes. */
 export interface WindowFront {
   focused(): boolean
@@ -289,9 +293,15 @@ export function createSessionsAdapters(deps: SessionsAdapterDeps): SessionsAdapt
   const sendFocus = (): void => {
     const connection = current
     if (connection === null) return
-    // A window that is not in front shows nothing anybody is watching.
-    const ids = deps.front.focused() ? [...focused] : []
-    connection.request('session:focus', { ids }).catch((error: unknown) => {
+    const active = deps.front.focused()
+    // A host from protocol 4.3 is told what is on screen and whether the
+    // window is in front, and judges by both: whom an exit is worth a
+    // notification for, and which window a session's desktop tools open in.
+    // One before it is told a window that is not in front shows nothing,
+    // because nobody is watching it.
+    const saysFront = saysWhetherInFront(connection.welcome.protocol)
+    const ids = saysFront || active ? [...focused] : []
+    connection.request('session:focus', saysFront ? { ids, active } : { ids }).catch((error: unknown) => {
       log(`host: session:focus was not taken (${(error as Error).message})`)
     })
   }

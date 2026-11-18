@@ -17,6 +17,7 @@ import {
   moveTab,
   neighbourAt,
   notOpenHere,
+  openBeside,
   openFile,
   openTabWithPreview,
   openTab,
@@ -424,6 +425,56 @@ describe('placeIn', () => {
 
   it('falls back to the focused pane when the one asked for has gone', () => {
     expect(shape(placeIn(layout, session(1), 9))).toEqual(['>agent:history *session:1', ' *settings'])
+  })
+})
+
+describe('openBeside', () => {
+  const file = (path: string): PaneRef => ({ kind: 'file', root: ALPHA_DIR, path: `${ALPHA_DIR}/${path}` })
+
+  it('opens a new pane on the right of a lone pane and leaves the focus in the session', () => {
+    const layout = layoutOf(g(session(1)))
+    const opened = openBeside(layout, file('main.rs'), 'session:1')
+    expect(shape(opened)).toEqual(['>*session:1', ` *file:${ALPHA_DIR}/main.rs`])
+    expect(tree(opened.root)).toBe('row(1, 2)')
+  })
+
+  it('lands in front of the pane beside the anchor, not beside the focused one', () => {
+    // The session is in the right pane; the user is in the left one.
+    const layout = layoutOf(row([g(SETTINGS), g(session(1), PLANS)]), 0)
+    const anchored = activateTab(layout, 'session:1')
+    const back = focusGroup(anchored, 1)
+    expect(shape(openBeside(back, SESSIONS, 'session:1'))).toEqual(['>settings *sessions', ' *session:1 project:plans'])
+  })
+
+  it('leaves every other pane as it was, the focused one included', () => {
+    const layout = layoutOf(row([g(session(1)), g(SETTINGS, PLANS), g(BROWSER)]), 0)
+    const opened = openBeside(layout, file('a.ts'), 'session:1')
+    expect(shape(opened)).toEqual(['>*session:1', ` settings project:plans *file:${ALPHA_DIR}/a.ts`, ' *browser'])
+    expect(opened.root).toEqual(layout.root)
+  })
+
+  it('brings a tab already open elsewhere to the front where it is', () => {
+    const layout = layoutOf(row([g(session(1)), g(SETTINGS, PLANS)]), 0)
+    const opened = openBeside(layout, SETTINGS, 'session:1')
+    expect(shape(opened)).toEqual(['>*session:1', ' *settings project:plans'])
+    // Already in front: the very same layout.
+    expect(openBeside(opened, SETTINGS, 'session:1')).toBe(opened)
+  })
+
+  it('moves a tab out of the anchor’s own pane, keeping the anchor in front of it', () => {
+    const layout = activateTab(layoutOf(g(session(1), SETTINGS)), 'settings')
+    const opened = openBeside(layout, SETTINGS, 'session:1')
+    expect(shape(opened)).toEqual(['>*session:1', ' *settings'])
+  })
+
+  it('stands in the focused pane for an anchor in no pane, and still keeps the focus', () => {
+    const layout = layoutOf(row([g(session(1)), g(SETTINGS)]), 1)
+    expect(shape(openBeside(layout, PLANS, 'session:99'))).toEqual([' session:1 *project:plans', '>*settings'])
+    expect(shape(openBeside(layoutOf(g(SETTINGS)), PLANS, null))).toEqual(['>*settings', ' *project:plans'])
+  })
+
+  it('opens into the only pane of an empty window', () => {
+    expect(shape(openBeside(EMPTY_LAYOUT, PLANS, null))).toEqual(['>*project:plans'])
   })
 })
 

@@ -16,6 +16,8 @@
 //!
 //! Today that is floti-browser ([`BrowserTools`]), on the `browserMcp`
 //! setting and given to a launch only while a client with a browser pane is
+//! attached; floti-desktop ([`DesktopTools`]), on the `desktopMcp` setting
+//! and given to a launch only while a window that opens Floti's views is
 //! attached; floti-sessions ([`SessionTools`]), on the `sessionMcp` setting;
 //! floti-agents ([`FlotiAgents`]), on the `sessionAgents` setting, given to
 //! every launch whoever is attached unless its profile turns it off; and
@@ -32,7 +34,8 @@ use floti_protocol::channels::workspace::HostSettings;
 use tokio::sync::broadcast::{self, error::RecvError};
 
 use super::browser_tools::BrowserTools;
-use super::features::BrowserRelay;
+use super::desktop_tools::{DesktopTools, DesktopWorld};
+use super::features::{BrowserRelay, DesktopRelay};
 use super::floti_agents::FlotiAgents;
 use super::hosted::Hosted;
 use super::plugin_tools::{HostPluginFamilies, HostPluginTools};
@@ -47,6 +50,7 @@ use crate::session::SessionId;
 pub(crate) struct HostAgentTools {
     listener: AgentToolsListener,
     browser: Arc<BrowserTools>,
+    desktop: Arc<DesktopTools>,
     sessions: Arc<SessionTools>,
     agents: Arc<FlotiAgents>,
     held: Mutex<Held>,
@@ -68,15 +72,21 @@ struct Held {
 
 impl HostAgentTools {
     /// The listener with every family, each off until [`Self::follow`] reads
-    /// the settings, the browser tools carried through `relay`, and the
-    /// plugins' answered by the host through `hosted`. Call it inside the
-    /// host's runtime.
-    pub fn new(relay: Arc<BrowserRelay>, hosted: Arc<HostPluginTools>) -> Self {
+    /// the settings, the browser tools carried through `relay`, the desktop
+    /// tools through `desktop`, and the plugins' answered by the host
+    /// through `hosted`. Call it inside the host's runtime.
+    pub fn new(
+        relay: Arc<BrowserRelay>,
+        desktop: Arc<DesktopRelay>,
+        hosted: Arc<HostPluginTools>,
+    ) -> Self {
         let browser = Arc::new(BrowserTools::new(relay));
+        let desktop = Arc::new(DesktopTools::new(desktop));
         let sessions = Arc::new(SessionTools::new());
         let agents = Arc::new(FlotiAgents::new());
         let families: Vec<Arc<dyn ToolFamily>> = vec![
             Arc::clone(&browser) as Arc<dyn ToolFamily>,
+            Arc::clone(&desktop) as Arc<dyn ToolFamily>,
             Arc::clone(&sessions) as Arc<dyn ToolFamily>,
             Arc::clone(&agents) as Arc<dyn ToolFamily>,
         ];
@@ -86,6 +96,7 @@ impl HostAgentTools {
                 Some(Arc::new(HostPluginFamilies::new(hosted)) as Arc<dyn FamilySource>),
             ),
             browser,
+            desktop,
             sessions,
             agents,
             held: Mutex::new(Held::default()),
@@ -98,6 +109,12 @@ impl HostAgentTools {
         self.sessions.answer_from(world);
     }
 
+    /// What floti-desktop reads: the host's sessions and the folders it
+    /// knows.
+    pub fn open_through(&self, world: Arc<dyn DesktopWorld>) {
+        self.desktop.answer_from(world);
+    }
+
     /// What floti-agents acts through: the host's sessions.
     pub fn act_through(&self, hosted: Weak<Hosted>) {
         self.agents.act_through(hosted);
@@ -106,6 +123,7 @@ impl HostAgentTools {
     /// Switches each family as `settings` say, then [`Self::settle`]s.
     pub fn follow(&self, settings: &HostSettings) {
         self.browser.switch(settings.browser_mcp);
+        self.desktop.switch(settings.desktop_mcp);
         self.sessions.switch(settings.session_mcp);
         self.agents.switch(settings.session_agents);
         self.settle();
@@ -270,6 +288,7 @@ mod tests {
     fn settings(on: bool) -> HostSettings {
         HostSettings {
             browser_mcp: on,
+            desktop_mcp: on,
             session_mcp: on,
             session_agents: on,
             ..crate::workspace::settings::defaults()
@@ -280,6 +299,11 @@ mod tests {
         let events = Arc::new(super::super::events::Events::new());
         HostAgentTools::new(
             Arc::new(BrowserRelay::new(&events)),
+            Arc::new(DesktopRelay::new(
+                &events,
+                Arc::new(Mutex::new(Default::default())),
+                |_| None,
+            )),
             Arc::new(HostPluginTools::new(|_| None)),
         )
     }

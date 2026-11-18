@@ -794,6 +794,7 @@ describe('sessions through the local host', () => {
             browserMcp: false,
             browserMcpLocalOnly: true,
             sessionMcp: false,
+            desktopMcp: false,
             sessionAgents: false,
             agentChildrenPerParent: 6,
             agentSessionsPerHost: 12,
@@ -810,6 +811,7 @@ describe('sessions through the local host', () => {
         browserMcp: false,
         browserMcpLocalOnly: true,
         sessionMcp: false,
+        desktopMcp: false,
         sessionAgents: false,
         agentChildrenPerParent: 6,
         agentSessionsPerHost: 12,
@@ -831,6 +833,11 @@ describe('sessions through the local host', () => {
         agentStartsPerParent: 16,
         agentCommandsPerParent: 4
       })
+    })
+
+    it('tells the host whether sessions can use Floti’s window: on until the user turns it off', () => {
+      expect(hostSettingsFor(DEFAULT_SETTINGS, null)).toMatchObject({ desktopMcp: true })
+      expect(hostSettingsFor({ ...DEFAULT_SETTINGS, desktopMcp: false }, null)).toMatchObject({ desktopMcp: false })
     })
 
     it('tells the host no limit on heavy agents, whatever an earlier version kept', () => {

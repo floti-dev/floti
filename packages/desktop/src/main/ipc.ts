@@ -259,6 +259,7 @@ export function registerIpc(ctx: IpcContext): void {
       patch.browserMcp !== undefined ||
       patch.browserMcpLocalOnly !== undefined ||
       patch.sessionMcp !== undefined ||
+      patch.desktopMcp !== undefined ||
       patch.sessionAgents !== undefined ||
       patch.agentChildrenPerParent !== undefined ||
       patch.agentSessionsPerHost !== undefined ||

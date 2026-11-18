@@ -38,6 +38,7 @@ import {
   liveSessionsIn,
   moveTab,
   notOpenHere,
+  openBeside,
   openFile,
   openTab,
   openTabWithPreview,
@@ -287,6 +288,7 @@ import {
   devices,
   eachHostBridge,
   desktop,
+  desktopTools,
   hostSessionPeek,
   hostSessionTabs,
   hostState,
@@ -328,6 +330,8 @@ import {
   type DocumentMode,
 } from "./DocumentTab";
 import { fileKey, joinRoot, relativeTo, useFiles } from "./useFiles";
+import { openForAgent, type DesktopOpenWindow } from "./desktopOpen";
+import { focusByHost, stillTold } from "./focusByHost";
 import { useHistoryPalette } from "./useHistoryPalette";
 import { useStoppedGroup } from "./useStoppedGroup";
 import { useConversationResume } from "./useConversationResume";
@@ -707,9 +711,13 @@ export function App(): JSX.Element {
   /** The one change to an agent made without asking, with its Undo, until it is closed or the next replaces it. */
   const agentToasts = useAgentToast();
   const agentToast = agentToasts.toast;
-  /** Where a file opened from a text search lands, by file key: the line and the words. */
+  /**
+   * Where a file opened from a text search lands, by file key: the line and
+   * the words; or the line a session's agent opened it at, which leaves the
+   * keyboard where it is.
+   */
   const [fileReveals, setFileReveals] = useState<
-    ReadonlyMap<string, QuickOpenAt>
+    ReadonlyMap<string, QuickOpenAt | { line: number; term: null; focus: false }>
   >(new Map());
   /** The section of Settings in the pane; the sidebar lists the rest. */
   const [settingsSection, setSettingsSection] =
@@ -744,6 +752,8 @@ export function App(): JSX.Element {
   const [paletteOpen, setPaletteOpen] = useState(false);
   /** Ctrl+H: History, over whatever is on screen. */
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** What History opens with typed in: a session's agent's search, or nothing. */
+  const [historySeed, setHistorySeed] = useState("");
   /** What had the keyboard when History opened, given back when it closes without acting. */
   const historyReturn = useRef<HTMLElement | null>(null);
   /** The sentence History's last resume or rename was refused with. */
@@ -894,10 +904,14 @@ export function App(): JSX.Element {
    */
   const [surfaceHosts, setSurfaceHosts] =
     useState<Readonly<Record<HostSurface, string>>>(LOCAL_SURFACES);
-  /** A project's Files asked for while Files showed another host, pointed once it shows that one. */
+  /**
+   * A project's Files asked for while Files showed another host, pointed once
+   * it shows that one: at the project, or with `reveal`, at that folder in it.
+   */
   const [pendingScope, setPendingScope] = useState<{
     path: string;
     host: string;
+    reveal?: string;
   } | null>(null);
   const shownHostOf = (surface: HostSurface): string => {
     const chosen = surfaceHosts[surface];
@@ -935,7 +949,7 @@ export function App(): JSX.Element {
       ? undefined
       : { hosts, host, onHostChange: (next) => showHostOn(surface, next) };
   };
-  const history = useHistoryPalette(historyHost, historyOpen);
+  const history = useHistoryPalette(historyHost, historyOpen, historySeed);
   const archiveStats = useArchiveStats(historyHost);
   const check = useUpdate(UPDATE_DEPS, info?.version ?? null);
   const ownData = useOwnDataCopy();
@@ -1652,17 +1666,25 @@ export function App(): JSX.Element {
       );
   }, [browserViews, browserShown, frontPage, setBrowserShowing]);
 
-  // Main decides whether an exiting session is worth a notification, and that
-  // turns on which sessions are actually on screen - which only this side knows.
-  const { reportFocus } = sessionState;
-  const visibleSessionKey = visible
-    .flatMap((ref) => (isSessionOn(ref, LOCAL_HOST_KEY) ? [ref.id] : []))
-    .join(",");
+  // Each host decides whether one of its sessions ending is worth a
+  // notification, and which window a session's desktop tools open in, and
+  // both turn on which of its sessions are actually on screen - which only
+  // this side knows (`focusByHost.ts`).
+  const visibleSessionKey = JSON.stringify(
+    visible.flatMap((ref) =>
+      ref.kind === "session" ? [[hostOf(ref), ref.id] as const] : [],
+    ),
+  );
+  const focusTold = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
-    reportFocus(
-      visibleSessionKey === "" ? [] : visibleSessionKey.split(",").map(Number),
-    );
-  }, [visibleSessionKey, reportFocus]);
+    const shown = (
+      JSON.parse(visibleSessionKey) as [string, number][]
+    ).map(([host, id]) => sessionRef(id, host));
+    const byHost = focusByHost(shown, focusTold.current);
+    for (const [host, ids] of byHost)
+      bridgeFor(host).send("session:focus", { ids });
+    focusTold.current = stillTold(byHost);
+  }, [visibleSessionKey]);
 
   /**
    * The project the focused pane is about, for a browser tab opened beside it.
@@ -1698,6 +1720,7 @@ export function App(): JSX.Element {
     [openPane],
   );
   const openHistory = useCallback(() => {
+    setHistorySeed("");
     historyReturn.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -3087,14 +3110,20 @@ export function App(): JSX.Element {
     shown: shownFiles,
     revision: discovery,
   });
-  const { noteOpened, loadListing, setRoot: setFilesRoot } = files;
+  const {
+    noteOpened,
+    loadListing,
+    setRoot: setFilesRoot,
+    reveal: revealInFiles,
+  } = files;
   // A project's Files asked for while Files showed another host: pointed in
   // the render that switches it to the project's host, after the switch has
   // cleared what the other host's showed (adjusted while rendering, so the
   // root is never painted against the wrong host).
   if (pendingScope !== null && filesHost === pendingScope.host) {
     setPendingScope(null);
-    setFilesRoot(pendingScope.path);
+    if (pendingScope.reveal === undefined) setFilesRoot(pendingScope.path);
+    else revealInFiles(pendingScope.path, pendingScope.reveal, true);
   }
 
   /** Whether long lines wrap in a file - a setting, so it holds for the next file and the next start. */
@@ -3253,6 +3282,88 @@ export function App(): JSX.Element {
     },
     [filesShownHost, open, preview, commit, noteOpened],
   );
+
+  /**
+   * What a session's agent opens here with `desktop_open` (`desktopOpen.ts`):
+   * beside the tab showing the session that asked, the focus left where it
+   * is, so the person goes on typing to that session. Registered again on
+   * every change to what it reads, so a call reads the window as it is.
+   */
+  const { setQuery: setHistoryQuery } = history;
+  useEffect(() => {
+    const sessionOn = (host: string, id: number): SessionRecord | undefined =>
+      host === LOCAL_HOST_KEY ? sessionsById.get(id) : remoteSessionOf(host, id);
+    const opener: DesktopOpenWindow = {
+      anchorOf: (host, session) => {
+        const seen = new Set<number>();
+        let id: number | null = session;
+        while (id !== null && !seen.has(id)) {
+          seen.add(id);
+          const tab = paneId(sessionRef(id, host));
+          if (findTab(open, tab) !== null) return tab;
+          id = sessionOn(host, id)?.parentId ?? null;
+        }
+        return null;
+      },
+      openBeside: (ref, anchor) => {
+        const landed = findTab(openBeside(open, ref, anchor), paneId(ref));
+        commit((current) => openBeside(current, ref, anchor));
+        // Opened in a pane a maximized one is hiding: the window is given back.
+        setMaximized((current) =>
+          current === null || current === landed?.group ? current : null,
+        );
+      },
+      revealLine: (host, path, line) =>
+        setFileReveals((current) =>
+          new Map(current).set(fileKey(path, host), {
+            line,
+            term: null,
+            focus: false,
+          }),
+        ),
+      showFolder: (host, root, path) => {
+        if (filesHost !== host) {
+          showHostOn("files", host);
+          setPendingScope({ path: root, host, reveal: path });
+        } else revealInFiles(root, path, true);
+        setSidebarView("files");
+        setSidebarHidden(false);
+      },
+      showHistory: (host, search) => {
+        showHostOn("history", host);
+        setHistorySeed(search);
+        if (historyOpen) {
+          setHistoryQuery(search);
+          return;
+        }
+        historyReturn.current =
+          document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+        setHistoryError(null);
+        setHistoryOpen(true);
+      },
+      showSettingsSection: (section) => {
+        setSettingsSection(section);
+        setSidebarView("settings");
+        setSidebarHidden(false);
+      },
+    };
+    return desktopTools.answerWith({
+      desktop_open: (call) => openForAgent(call, opener),
+    });
+  }, [
+    open,
+    commit,
+    sessionsById,
+    remoteSessionOf,
+    filesHost,
+    showHostOn,
+    revealInFiles,
+    historyOpen,
+    setHistoryQuery,
+    setHistoryError,
+  ]);
 
   /** A preview tab double-clicked: it stays. */
   const keepTab = useCallback((id: string) => {
@@ -5065,6 +5176,8 @@ export function App(): JSX.Element {
       onSessionAgentsChange={(sessionAgents) =>
         writeSettings({ sessionAgents })
       }
+      desktopMcp={settings?.desktopMcp ?? DEFAULT_SETTINGS.desktopMcp}
+      onDesktopMcpChange={(desktopMcp) => writeSettings({ desktopMcp })}
       agentLimits={{
         agentChildrenPerParent:
           settings?.agentChildrenPerParent ??

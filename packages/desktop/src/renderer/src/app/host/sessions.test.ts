@@ -454,6 +454,24 @@ describe('sessions over the window’s own connection', () => {
     await expect(ask(adapters, 'session:list')).resolves.toHaveLength(1)
   })
 
+  it('tells a host from 4.3 what is on screen whether or not the window is in front, and whether it is', async () => {
+    const { adapters, connection, setFront } = world({
+      connection: new FakeConnection(['terminal', 'desktop'], { major: 4, minor: 3 }),
+      listed: [row()]
+    })
+    await ask(adapters, 'session:list')
+    adapters.show([7])
+    send(adapters, 'session:focus', { ids: [7] })
+    setFront(false)
+    setFront(true)
+    expect(connection.payloads('session:focus')).toEqual([
+      { ids: [], active: true },
+      { ids: [7], active: true },
+      { ids: [7], active: false },
+      { ids: [7], active: true }
+    ])
+  })
+
   it('tells the host what is on screen only while the window is in front, and hands main the host’s word on an exit nobody saw', async () => {
     const { adapters, connection, setFront, bridge } = world({ listed: [row()] })
     const exits = hear(adapters, 'session:exit')
