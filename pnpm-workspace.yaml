@@ -1,48 +1,16 @@
 packages:
   - packages/*
-  # Plugins built against Floti's plugin surface: the shape a plugin takes, and
-  # what the tests drive. Floti ships none of them.
   - examples/*
 
-# Native modules that must run their install scripts. pnpm 10 blocks postinstall
-# by default; better-sqlite3 and node-pty ship N-API prebuilds that the install
-# script unpacks, and electron downloads its binary this way.
+ignoredBuiltDependencies:
+  - koffi
+
 onlyBuiltDependencies:
   - better-sqlite3
   - electron
   - esbuild
   - node-pty
 
-# koffi loads its prebuilt binary from its platform package
-# (@koromix/koffi-win32-x64) without its own install script having run -
-# measured 2026-10-03 - so that script, which can fall back to compiling from
-# source, stays off, and pnpm stops asking about it.
-ignoredBuiltDependencies:
-  - koffi
-
-# Two vites, each named where it is used. electron-vite 5 peers vite ^5|^6|^7
-# and its bundler API breaks on 8, so the desktop and the sample plugin ask
-# for 7 themselves; the root's test runner asks for 8, which
-# @sveltejs/vite-plugin-svelte requires. No override pins vite: one would
-# put the Svelte plugin on 7, and a peer left to auto-install stays on
-# whatever the lockfile last held.
-#
-# The overrides are security floors for packages that only arrive through
-# another package: each lifts one major line to its first patched release and never
-# moves a dependency to another major. A floor can go once every package that
-# asks for that line asks for the patched release itself.
-#
-# esbuild is one version, 0.28. With the hoisted layout a second version puts
-# one release's JS beside another's platform binary, and electron-vite fails
-# loading its config ("Host version does not match binary version"). Vite 7
-# and the desktop ask for 0.28 themselves; electron-vite 5 asks for ^0.25,
-# drizzle-kit 0.31 for ^0.25 and, through @esbuild-kit, 0.18. The dev-server
-# advisory is fixed from 0.25, and these call only `build` and `transform`,
-# which 0.28 keeps.
-#
-# minimatch has none: its fix exists only in 11, a rewrite that drops `makeRe`
-# and `AST`, and eslint, typescript-eslint and electron-builder ask for 3, 5, 9
-# and 10. Every pattern they match is this repository's own.
 overrides:
   '@xmldom/xmldom@0.8': ^0.8.15
   brace-expansion@1: ^1.1.22
@@ -56,3 +24,6 @@ overrides:
   undici@7: ^7.30.2
   undici@8: ^8.12.4
   zod@4: ^4.6.7
+
+patchedDependencies:
+  '@xterm/addon-webgl@0.19.0': patches/@xterm__addon-webgl@0.19.0.patch
