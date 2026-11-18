@@ -108,6 +108,7 @@ import {
   type RestoreOffer,
   type SavedPaneLayout,
   type SessionRecord,
+  type AppSettings,
 } from "@floti/core/types";
 import {
   AppShell,
@@ -234,6 +235,8 @@ import {
   type TreeHost,
   type LauncherHost,
   type HostChoice,
+  type HostChoiceHost,
+  type SettingsHostView,
   AddHostDialog,
 } from "@floti/ui";
 import { sidebarFor, type SidebarView } from "./sidebarFor";
@@ -350,6 +353,8 @@ import { useHistoryPalette } from "./useHistoryPalette";
 import { useStoppedGroup } from "./useStoppedGroup";
 import { useConversationResume } from "./useConversationResume";
 import { useArchiveStats } from "./useArchiveStats";
+import { clockTime, useAwaySince } from "./useAwaySince";
+import { useClaudeStatusOn } from "./useClaudeStatusOn";
 import { ConversationPane } from "./ConversationPane";
 import { useLauncher } from "./useLauncher";
 import { useProfiles } from "./useProfiles";
@@ -530,11 +535,12 @@ type OnHost<T> = T & { host: string };
 /** The command palette's entry for History: Floti's own, so no slash, which every plugin command has. */
 const HISTORY_COMMAND = "history";
 
-type HostSurface = "history" | "files" | "plugins" | "agents";
+/** `settings` is Settings' Floti host group: Programs through Updates, Plugins and Secrets among them. */
+type HostSurface = "history" | "files" | "settings" | "agents";
 const LOCAL_SURFACES: Readonly<Record<HostSurface, string>> = {
   history: LOCAL_HOST_KEY,
   files: LOCAL_HOST_KEY,
-  plugins: LOCAL_HOST_KEY,
+  settings: LOCAL_HOST_KEY,
   agents: LOCAL_HOST_KEY,
 };
 
@@ -910,7 +916,7 @@ export function App(): JSX.Element {
     hostWaiting: localHostWaiting,
   });
   /**
-   * The host History, Files, Agents and Settings > Plugins each show:
+   * The host History, Files, Agents and Settings' Floti host group each show:
    * kept in this window only and sent to no host, This PC until switched. A
    * host removed from this device's list falls back to This PC; one that is
    * listed but not connected stays chosen, and its surface says why it cannot
@@ -941,7 +947,8 @@ export function App(): JSX.Element {
     setHistoryError(null);
   }
   const filesHost = shownHostOf("files");
-  const pluginsHost = shownHostOf("plugins");
+  /** The host Settings' Floti host group shows: every section in it, Plugins and Secrets included. */
+  const settingsHost = shownHostOf("settings");
   const showHostOn = useCallback(
     (surface: HostSurface, host: string) =>
       setSurfaceHosts((current) =>
@@ -949,19 +956,49 @@ export function App(): JSX.Element {
       ),
     [],
   );
+  /** Whether the window can reach this PC's host now: it has it, and it can be used. */
+  const localReached = hostLink.lost === null && !localHostWaiting;
   /**
-   * A surface's host switch: This PC and each connected host, and the one it
-   * shows when that has dropped. Absent while there is only one to choose,
-   * which leaves the surface as it always was.
+   * Every host a surface can show: This PC, then each host on another
+   * computer this device lists, in Settings > Hosts' order, each saying
+   * whether the window can reach it now. One out of reach can still be
+   * shown: its surface says why it cannot be read.
+   */
+  const choiceHosts: readonly HostChoiceHost[] = useMemo(
+    () => [
+      {
+        id: LOCAL_HOST_KEY,
+        name: LOCAL_HOST_LABEL,
+        remote: false,
+        away: !localReached,
+      },
+      ...listedHosts.map((host) => ({
+        id: host.id,
+        name: host.name,
+        remote: true,
+        away: !connectedHostIds.includes(host.id),
+      })),
+    ],
+    [listedHosts, connectedHostIds, localReached],
+  );
+  /** When each host out of reach went out of reach, as the window saw it. */
+  const awaySince = useAwaySince(
+    choiceHosts.filter((each) => each.away).map((each) => each.id),
+  );
+  /**
+   * A surface's host switch (`HostSwitch`: segmented, or a menu for many
+   * hosts or long names). Absent while only one host is connected and it is
+   * the one shown, which leaves the surface as it always was.
    */
   const hostChoiceFor = (surface: HostSurface): HostChoice | undefined => {
     const host = shownHostOf(surface);
-    const hosts = launcherHosts.some((each) => each.id === host)
-      ? launcherHosts
-      : [...launcherHosts, { id: host, name: hostName(host), remote: true }];
-    return hosts.length < 2
+    return launcherHosts.length < 2 && host === LOCAL_HOST_KEY
       ? undefined
-      : { hosts, host, onHostChange: (next) => showHostOn(surface, next) };
+      : {
+          hosts: choiceHosts,
+          host,
+          onHostChange: (next) => showHostOn(surface, next),
+        };
   };
   const history = useHistoryPalette(historyHost, historyOpen, historySeed);
   const archiveStats = useArchiveStats(historyHost);
@@ -1396,11 +1433,11 @@ export function App(): JSX.Element {
    * page says so rather than listing another host's.
    */
   const shownPluginState =
-    pluginsHost === LOCAL_HOST_KEY
+    settingsHost === LOCAL_HOST_KEY
       ? pluginState
-      : (remotePlugins.get(pluginsHost) ?? {
+      : (remotePlugins.get(settingsHost) ?? {
           list: null,
-          error: `${hostName(pluginsHost)} is not connected, so its plugins cannot be read.`,
+          error: `${hostName(settingsHost)} is not connected, so its plugins cannot be read.`,
           live: NO_PLUGINS,
         });
   /** Why a host's plugins cannot be read, or null while they can (or have not answered yet). */
@@ -1410,9 +1447,9 @@ export function App(): JSX.Element {
       : connectedHostIds.includes(host)
         ? (remotePlugins.get(host)?.error ?? null)
         : `${hostName(host)} is not connected, so its plugins cannot be read.`;
-  /** A plugin's Settings page, with Settings > Plugins showing the plugin's host. */
+  /** A plugin's Settings page, with Settings' Floti host group showing the plugin's host. */
   const openPluginSettings = (host: string, path: string): void => {
-    showHostOn("plugins", host);
+    showHostOn("settings", host);
     openSettings(pluginSection(path));
   };
   /** The plugin whose Settings page is chosen, and whether that page is on screen to be kept current. */
@@ -1424,7 +1461,7 @@ export function App(): JSX.Element {
   const settingsOnScreen = visible.some((ref) => ref.kind === "settings");
   const pluginSettings = usePluginSettings(
     settingsOnScreen && settingsPlugin !== null ? settingsPlugin.path : null,
-    pluginsHost,
+    settingsHost,
   );
   /** The secrets of the host whose plugin asks for one, whichever host Settings shows. */
   const secretAsk = secretAsks[0] ?? null;
@@ -4256,17 +4293,98 @@ export function App(): JSX.Element {
       : `${count} · ${String(outside)} outside Floti`;
   })();
 
-  /*
+  /**
    * The Agents view and its pages (the design's A1-A16 and A25): one host's
-   * agents at a time, switched as Files is, read only while the view or
-   * Settings > Agents is on screen. Each page reads its own host's.
+   * agents at a time, switched as Files is, read only while the view is on
+   * screen. Each page reads its own host's.
    */
   const agentsHost = shownHostOf("agents");
   const agentList = useAgentList(
     agentsHost,
-    (sidebarShown && sidebarView === "agents") ||
-      (front?.kind === "settings" && settingsSection === "agents"),
+    sidebarShown && sidebarView === "agents",
   );
+  /** Settings > Agents: the agents of the host Settings shows, read while it is on screen. */
+  const settingsAgents = useAgentList(
+    settingsHost,
+    front?.kind === "settings" && settingsSection === "agents",
+  );
+  /**
+   * Settings' Floti host group (the design's S1-S8): whether the window can
+   * reach the host it shows, that host's settings as it keeps them (null is
+   * Unknown: out of reach, or not answered yet), and the writer that sends a
+   * change to that host alone. Every window attached to it hears the change
+   * on `settings:changed`.
+   */
+  const settingsHostLocal = settingsHost === LOCAL_HOST_KEY;
+  const settingsHostReached = settingsHostLocal
+    ? localReached
+    : connectedHostIds.includes(settingsHost);
+  const settingsHostValues: AppSettings | null = !settingsHostReached
+    ? null
+    : settingsHostLocal
+      ? settings
+      : (hostWork.byHost.get(settingsHost)?.settings ?? null);
+  const { writeSettings: writeSettingsOn } = hostWork;
+  const writeHostSettings = useCallback(
+    (patch: Partial<AppSettings>): void => {
+      if (settingsHost === LOCAL_HOST_KEY) writeSettings(patch);
+      else void writeSettingsOn(settingsHost, patch);
+    },
+    [settingsHost, writeSettings, writeSettingsOn],
+  );
+  const settingsHostAway = awaySince.get(settingsHost);
+  const settingsHostView: SettingsHostView = {
+    name: hostName(settingsHost),
+    remote: !settingsHostLocal,
+    unknown: !settingsHostReached
+      ? {
+          kind: "away",
+          failedAt:
+            settingsHostAway === undefined ? null : clockTime(settingsHostAway),
+        }
+      : settingsHostValues === null
+        ? { kind: "reading" }
+        : null,
+  };
+  /** Settings > Programs on a host on another computer: its own Claude CLI and shells. */
+  const settingsClaude = useClaudeStatusOn(
+    settingsOnScreen && !settingsHostLocal && settingsHostReached
+      ? settingsHost
+      : null,
+  );
+  const settingsShells = useShells(
+    settingsHostLocal || settingsHostReached ? settingsHost : null,
+  );
+  /** Settings > Archive: what the archive on the host Settings shows holds. */
+  const settingsArchiveStats = useArchiveStats(settingsHost);
+  /**
+   * A shell's path typed in Settings > Programs: the host Settings shows
+   * checks it as it checks the shells it finds, and only a path it kept
+   * becomes its setting. Answers the sentence the row shows when refused.
+   */
+  const chooseShellPathOn = async (typed: string): Promise<string | null> => {
+    if (settingsHostLocal) return chooseShellPath(typed);
+    try {
+      const { shell, problem } = await bridgeFor(settingsHost).invoke(
+        "pterm:checkShell",
+        { path: typed },
+      );
+      if (shell === null) return problem ?? `${typed} is not a shell.`;
+      return await writeSettingsOn(settingsHost, { terminalShell: shell.path });
+    } catch (error) {
+      return `The shell could not be checked: ${readable(error)}`;
+    }
+  };
+  /** A folder typed for a host on another computer to scan, which its picker cannot browse. */
+  const addRootOn = async (path: string): Promise<string | null> => {
+    try {
+      await bridgeFor(settingsHost).invoke("roots:accept", { path });
+      rescanOn(settingsHost);
+      return null;
+    } catch (error) {
+      return readable(error);
+    }
+  };
   const agentDraftSeq = useRef(0);
   const newAgent = (copyOf: string | null, host: string = agentsHost): void => {
     agentDraftSeq.current += 1;
@@ -5140,6 +5258,7 @@ export function App(): JSX.Element {
           plugins={secretChoices}
           onSave={pluginSettings.saveSecret}
           onRemove={pluginSettings.removeSecret}
+          hostName={hostName(settingsHost)}
         />
       );
     }
@@ -5168,6 +5287,7 @@ export function App(): JSX.Element {
           }
           onSaveSecret={pluginSettings.saveSecret}
           onRemoveSecret={pluginSettings.removeSecret}
+          hostName={hostName(settingsHost)}
         />
       );
     }
@@ -5182,46 +5302,87 @@ export function App(): JSX.Element {
           addError={pluginSettings.addError}
           onAdd={pluginSettings.add}
           onOpen={(path) => setSettingsSection(pluginSection(path))}
-          hostChoice={hostChoiceFor("plugins")}
-          {...(pluginsHost === LOCAL_HOST_KEY
+          hostName={hostName(settingsHost)}
+          {...(settingsHost === LOCAL_HOST_KEY
             ? {}
-            : { remoteHost: hostName(pluginsHost) })}
+            : { remoteHost: hostName(settingsHost) })}
         />
       );
     }
     return renderFlotiSettings();
   };
 
-  const renderFlotiSettings = (): JSX.Element => (
+  /**
+   * Every other section. The Floti host group's values are the host Settings
+   * shows (`settingsHostValues`, written with `writeHostSettings`); this
+   * desktop's own are `settings`. While the host's are Unknown, the pane draws
+   * Unknown in their place, so the defaults laid under here are never shown.
+   */
+  const renderFlotiSettings = (): JSX.Element => {
+    const kept = settingsHostValues ?? DEFAULT_SETTINGS;
+    const remoteWork = settingsHostLocal
+      ? undefined
+      : hostWork.byHost.get(settingsHost);
+    return (
     <SettingsPane
       section={settingsSection}
+      host={settingsHostView}
+      onShowSection={(section) => setSettingsSection(section)}
       agentsOverview={{
-        count: agentList.listing?.agents.length ?? null,
-        hostName: hostName(agentsHost),
-        folder: agentList.listing?.folder ?? null,
+        count: settingsAgents.listing?.agents.length ?? null,
+        hostName: hostName(settingsHost),
+        folder: settingsAgents.listing?.folder ?? null,
         onOpen: () => {
+          showHostOn("agents", settingsHost);
           setSidebarView("agents");
           setSidebarHidden(false);
         },
       }}
-      status={setup.status}
-      statusError={setup.statusError}
-      checking={setup.checking}
-      onRecheck={setup.recheck}
-      onLocateClaude={setup.locateClaude}
-      onClearClaudeOverride={launcher.clearClaudePath}
-      onShowWalkthrough={() => void desktop.invoke("walkthrough:open", { step: 1 })}
-      roots={settings?.scanRoots ?? []}
-      projectCount={discovery?.projects.length ?? 0}
-      scanning={launcher.scanning}
-      onAddRoot={launcher.addRoot}
-      onRemoveRoot={launcher.removeRoot}
-      pinnedProjects={
-        settings?.pinnedProjects ?? DEFAULT_SETTINGS.pinnedProjects
+      status={settingsHostLocal ? setup.status : settingsClaude.status}
+      statusError={
+        settingsHostLocal ? setup.statusError : settingsClaude.statusError
       }
+      checking={settingsHostLocal ? setup.checking : settingsClaude.checking}
+      onRecheck={settingsHostLocal ? setup.recheck : settingsClaude.recheck}
+      // This PC's picker browses this PC: a host on another computer finds its own.
+      onLocateClaude={settingsHostLocal ? setup.locateClaude : undefined}
+      onClearClaudeOverride={
+        settingsHostLocal
+          ? launcher.clearClaudePath
+          : () => {
+              void writeSettingsOn(settingsHost, { claudePath: null }).then(
+                settingsClaude.recheck,
+              );
+            }
+      }
+      onShowWalkthrough={() => void desktop.invoke("walkthrough:open", { step: 1 })}
+      roots={kept.scanRoots}
+      projectCount={
+        settingsHostLocal
+          ? (discovery?.projects.length ?? 0)
+          : (remoteWork?.discovery?.projects.length ?? 0)
+      }
+      scanning={
+        settingsHostLocal ? launcher.scanning : (remoteWork?.scanning ?? false)
+      }
+      onAddRoot={launcher.addRoot}
+      onAddRootPath={settingsHostLocal ? undefined : addRootOn}
+      onRemoveRoot={
+        settingsHostLocal
+          ? launcher.removeRoot
+          : (path) => {
+              void bridgeFor(settingsHost)
+                .invoke("roots:remove", { path })
+                .then(
+                  () => rescanOn(settingsHost),
+                  () => undefined,
+                );
+            }
+      }
+      pinnedProjects={kept.pinnedProjects}
       // The same writer the tree's star goes through, so the two surfaces
       // cannot hold different ideas of what is pinned.
-      onUnpinProject={togglePin}
+      onUnpinProject={(path) => treeHostActions.onTogglePin(settingsHost, path)}
       appearance={{
         theme: settings?.theme ?? DEFAULT_SETTINGS.theme,
         themeDark: settings?.themeDark ?? DEFAULT_SETTINGS.themeDark,
@@ -5236,8 +5397,8 @@ export function App(): JSX.Element {
       themeState={themes.state}
       onOpenThemesFolder={themes.openFolder}
       onDuplicateTheme={themes.duplicate}
-      updateCheck={settings?.updateCheck ?? DEFAULT_SETTINGS.updateCheck}
-      onUpdateCheckChange={(updateCheck) => writeSettings({ updateCheck })}
+      updateCheck={kept.updateCheck}
+      onUpdateCheckChange={(updateCheck) => writeHostSettings({ updateCheck })}
       appVersion={info?.version ?? null}
       // From `app:info` rather than from a check's result: the states that
       // produce no result are exactly the ones where somebody wants this link.
@@ -5256,16 +5417,17 @@ export function App(): JSX.Element {
       // The stack the terminals are actually running, so the preview well
       // cannot show a font the panes are not using.
       terminalFontStack={terminalFontStack(terminalSettings.terminalFontFamily)}
-      shells={shells}
-      onLocateShell={locateShell}
-      onShellPath={chooseShellPath}
-      // The archive's own figures, from the one subscription the history pane
-      // reads them from, so the two cannot disagree about how much is stored.
-      archiveStats={archiveStats}
-      transcriptArchiveMaxBytes={
-        settings?.transcriptArchiveMaxBytes ??
-        DEFAULT_SETTINGS.transcriptArchiveMaxBytes
+      terminalShell={kept.terminalShell}
+      onTerminalShellChange={(terminalShell) =>
+        writeHostSettings({ terminalShell })
       }
+      shells={settingsShells}
+      onLocateShell={settingsHostLocal ? locateShell : undefined}
+      onShellPath={chooseShellPathOn}
+      // What the archive on the host Settings shows holds, kept current by
+      // that host's `archive:changed`.
+      archiveStats={settingsArchiveStats}
+      transcriptArchiveMaxBytes={kept.transcriptArchiveMaxBytes}
       // The authored templates, so the built-in Starter row does not make an
       // empty templates folder read as one that has something in it.
       templateCount={
@@ -5280,38 +5442,30 @@ export function App(): JSX.Element {
       onBrowserSearchChange={(browserSearch) =>
         writeSettings({ browserSearch })
       }
-      browserMcp={settings?.browserMcp ?? DEFAULT_SETTINGS.browserMcp}
-      onBrowserMcpChange={(browserMcp) => writeSettings({ browserMcp })}
+      browserMcp={kept.browserMcp}
+      onBrowserMcpChange={(browserMcp) => writeHostSettings({ browserMcp })}
       browserMcpLocalOnly={
         settings?.browserMcpLocalOnly ?? DEFAULT_SETTINGS.browserMcpLocalOnly
       }
       onBrowserMcpLocalOnlyChange={(browserMcpLocalOnly) =>
         writeSettings({ browserMcpLocalOnly })
       }
-      sessionMcp={settings?.sessionMcp ?? DEFAULT_SETTINGS.sessionMcp}
-      onSessionMcpChange={(sessionMcp) => writeSettings({ sessionMcp })}
-      sessionAgents={settings?.sessionAgents ?? DEFAULT_SETTINGS.sessionAgents}
+      sessionMcp={kept.sessionMcp}
+      onSessionMcpChange={(sessionMcp) => writeHostSettings({ sessionMcp })}
+      sessionAgents={kept.sessionAgents}
       onSessionAgentsChange={(sessionAgents) =>
-        writeSettings({ sessionAgents })
+        writeHostSettings({ sessionAgents })
       }
-      desktopMcp={settings?.desktopMcp ?? DEFAULT_SETTINGS.desktopMcp}
-      onDesktopMcpChange={(desktopMcp) => writeSettings({ desktopMcp })}
+      desktopMcp={kept.desktopMcp}
+      onDesktopMcpChange={(desktopMcp) => writeHostSettings({ desktopMcp })}
       agentLimits={{
-        agentChildrenPerParent:
-          settings?.agentChildrenPerParent ??
-          DEFAULT_SETTINGS.agentChildrenPerParent,
-        agentCommandsPerParent:
-          settings?.agentCommandsPerParent ??
-          DEFAULT_SETTINGS.agentCommandsPerParent,
-        agentSessionsPerHost:
-          settings?.agentSessionsPerHost ??
-          DEFAULT_SETTINGS.agentSessionsPerHost,
-        agentDepth: settings?.agentDepth ?? DEFAULT_SETTINGS.agentDepth,
-        agentStartsPerParent:
-          settings?.agentStartsPerParent ??
-          DEFAULT_SETTINGS.agentStartsPerParent,
+        agentChildrenPerParent: kept.agentChildrenPerParent,
+        agentCommandsPerParent: kept.agentCommandsPerParent,
+        agentSessionsPerHost: kept.agentSessionsPerHost,
+        agentDepth: kept.agentDepth,
+        agentStartsPerParent: kept.agentStartsPerParent,
       }}
-      onAgentLimitsChange={(limits) => writeSettings(limits)}
+      onAgentLimitsChange={(limits) => writeHostSettings(limits)}
       showChildrenInParentTab={
         settings?.showChildrenInParentTab ??
         DEFAULT_SETTINGS.showChildrenInParentTab
@@ -5379,10 +5533,11 @@ export function App(): JSX.Element {
       filesWrap={filesWrap}
       onFilesWrapChange={setFilesWrap}
       onTranscriptArchiveMaxBytesChange={(transcriptArchiveMaxBytes) =>
-        writeSettings({ transcriptArchiveMaxBytes })
+        writeHostSettings({ transcriptArchiveMaxBytes })
       }
     />
-  );
+    );
+  };
 
   /**
    * A plugin's one tab: its strip of pages, and the page in front under it.
@@ -6514,7 +6669,11 @@ export function App(): JSX.Element {
         <Sidebar title="Settings">
           <SettingsSections
             current={settingsSection}
-            plugins={(pluginState.list ?? []).map((plugin) => ({
+            host={{
+              name: hostName(settingsHost),
+              choice: hostChoiceFor("settings"),
+            }}
+            plugins={(shownPluginState.list ?? []).map((plugin) => ({
               path: plugin.path,
               name: plugin.name,
               state: !plugin.enabled

@@ -47,8 +47,12 @@ export type MenuEntry =
       id: string
       label: string
       icon?: ReactNode
-      /** Quieter text on the right - a path, a shortcut. */
+      /** Quieter text on the right - a path, a shortcut, a state. */
       hint?: string | undefined
+      /** The hint in `danger`: a state that is a fault, such as a host out of reach. */
+      hintTone?: 'danger' | undefined
+      /** The label is machine data, set in mono: a remote host's name. */
+      mono?: boolean | undefined
       /** A tick menu's state, or a list's current choice. Undefined draws no tick column. */
       checked?: boolean | undefined
       disabled?: boolean | undefined
@@ -546,17 +550,26 @@ export function MenuList({
               </span>
             )}
             {entry.detail === undefined ? (
-              <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+              <span className={cn('min-w-0 flex-1 truncate', entry.mono === true && 'font-mono text-[11.5px]')}>
+                {entry.label}
+              </span>
             ) : (
               <span className="flex min-w-0 flex-1 flex-col gap-px">
-                <span className="truncate">{entry.label}</span>
+                <span className={cn('truncate', entry.mono === true && 'font-mono text-[11.5px]')}>{entry.label}</span>
                 <span data-menu-detail className="truncate text-[10.5px] leading-[1.35] text-fg-subtle">
                   {entry.detail}
                 </span>
               </span>
             )}
             {entry.hint !== undefined && (
-              <span className="ml-3 shrink-0 font-mono text-[11px] text-fg-subtle">{entry.hint}</span>
+              <span
+                className={cn(
+                  'ml-3 shrink-0 font-mono text-[11px]',
+                  entry.hintTone === 'danger' ? 'text-danger' : 'text-fg-subtle'
+                )}
+              >
+                {entry.hint}
+              </span>
             )}
           </div>
         )

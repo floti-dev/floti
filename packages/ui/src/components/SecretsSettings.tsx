@@ -17,7 +17,7 @@ import {
 import { EmptyState } from './EmptyState'
 import { KeyIcon, PlusIcon } from './icons'
 import { Overlay } from './Overlay'
-import { Action, Group, SettingsPage, Verdict } from './SettingsKit'
+import { Action, Group, HostLine, SettingsPage, Verdict } from './SettingsKit'
 
 /**
  * Settings > Secrets, and the dialog every secret is typed into.
@@ -323,10 +323,12 @@ export interface SecretsPageProps {
   plugins: readonly SecretPluginChoice[]
   onSave: (input: SecretInput) => Promise<string | null>
   onRemove: (key: string) => Promise<string | null>
+  /** The host whose secret store this is, named under the title as every Floti host section names it. */
+  hostName?: string | undefined
 }
 
 /** Settings > Secrets: every stored secret, where it may go and who may send it. */
-export function SecretsPage({ state, plugins, onSave, onRemove }: SecretsPageProps): JSX.Element {
+export function SecretsPage({ state, plugins, onSave, onRemove, hostName }: SecretsPageProps): JSX.Element {
   const [editing, setEditing] = useState<SecretInfo | 'new' | null>(null)
   const available = state?.available ?? true
   const names = new Map(plugins.map((plugin) => [plugin.id, plugin.name]))
@@ -336,6 +338,7 @@ export function SecretsPage({ state, plugins, onSave, onRemove }: SecretsPagePro
     <SettingsPage
       data-settings-section="secrets"
       title="Secrets"
+      onHost={hostName === undefined ? undefined : <HostLine name={hostName} />}
       sole
       aside={
         <Action primary disabled={!available} onClick={() => setEditing('new')} data-secret-add>

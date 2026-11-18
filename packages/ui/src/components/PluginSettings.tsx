@@ -12,12 +12,11 @@ import { formatBytes } from '../lib/time'
 import { Checkbox } from './Checkbox'
 import { DialogFooter, DialogHeader, secondaryButton } from './DialogParts'
 import { EmptyState } from './EmptyState'
-import { HostSwitch, type HostChoice } from './HostSwitch'
 import { PlugIcon, PlusIcon, RefreshIcon, TrashIcon } from './icons'
 import { Overlay } from './Overlay'
 import { PluginIcon } from './PluginIcon'
 import { SecretDialog, type SecretPluginChoice } from './SecretsSettings'
-import { Action, Divider, Fact, Group, Row, Select, SettingsPage, Verdict, useDraft } from './SettingsKit'
+import { Action, Divider, Fact, Group, HostLine, Row, Select, SettingsPage, Verdict, useDraft } from './SettingsKit'
 
 /**
  * Settings > Plugins, and a page for each plugin.
@@ -43,11 +42,10 @@ export interface PluginsPageProps {
   onAdd: (path?: string) => void
   onOpen: (path: string) => void
   /**
-   * Which host's plugins these are, and the others to switch to, while more
-   * than one host is connected. Absent, it names no host: there is only this
-   * PC.
+   * The host whose plugins these are, named under the title as every Floti
+   * host section names it; the group's switch in the sidebar picks it.
    */
-  hostChoice?: HostChoice | undefined
+  hostName?: string | undefined
   /**
    * The name of the host on another computer whose plugins these are, or
    * absent for this PC's. Its folder is typed, as the picker browses this PC
@@ -62,7 +60,7 @@ export function PluginsPage({
   addError,
   onAdd,
   onOpen,
-  hostChoice,
+  hostName,
   remoteHost
 }: PluginsPageProps): JSX.Element {
   /** The folder typed for a host on another computer; null while the field is not open. */
@@ -88,21 +86,15 @@ export function PluginsPage({
     <SettingsPage
       data-settings-section="plugins"
       title="Plugins"
+      onHost={hostName === undefined ? undefined : <HostLine name={hostName} />}
       sole
       aside={
-        <>
-          <HostSwitch surface="Plugins" {...hostChoice} />
-          <Action
-            primary
-            onClick={startAdding}
-            data-plugin-add
-          >
-            <span className="flex items-center gap-1.5">
-              <PlusIcon width={11} height={11} />
-              Add folder
-            </span>
-          </Action>
-        </>
+        <Action primary onClick={startAdding} data-plugin-add>
+          <span className="flex items-center gap-1.5">
+            <PlusIcon width={11} height={11} />
+            Add folder
+          </span>
+        </Action>
       }
     >
       <Group
@@ -242,6 +234,8 @@ export interface PluginPageProps {
   onSetSetting: (key: string, value: SettingValue) => Promise<string | null>
   onSaveSecret: (input: SecretInput) => Promise<string | null>
   onRemoveSecret: (key: string) => Promise<string | null>
+  /** The host the plugin is on, named under the title as every Floti host section names it. */
+  hostName?: string | undefined
 }
 
 export function PluginPage({
@@ -257,7 +251,8 @@ export function PluginPage({
   onRemove,
   onSetSetting,
   onSaveSecret,
-  onRemoveSecret
+  onRemoveSecret,
+  hostName
 }: PluginPageProps): JSX.Element {
   const [secretFor, setSecretFor] = useState<string | null>(null)
   const [removing, setRemoving] = useState<string[] | null>(null)
@@ -288,6 +283,7 @@ export function PluginPage({
       data-settings-section={`plugin:${plugin.path}`}
       data-plugin-page={plugin.id ?? plugin.path}
       title={plugin.name}
+      onHost={hostName === undefined ? undefined : <HostLine name={hostName} />}
       hint={plugin.description ?? undefined}
       sole={false}
       aside={
