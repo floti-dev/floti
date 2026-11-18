@@ -14,6 +14,11 @@ A version with no section here does not release: the workflow fails rather than
 publishing an empty body, because the step a person can skip is the step that
 gets skipped.
 
+## 3.1.1
+
+- Terminal text is drawn in the terminal's font again. In 3.1.0 every
+  terminal drew its text small and spread out, one letter to a wide cell.
+
 ## 3.1.0
 
 **Sessions and Floti's window**
