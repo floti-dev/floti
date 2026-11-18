@@ -167,6 +167,18 @@ describe('useFiles: the sidebar', () => {
     ])
   })
 
+  it('reveals a folder itself open, and the project’s top with nothing more to open', async () => {
+    const { result } = renderHook((options: FilesOptions) => useFiles(options), {
+      initialProps: { active: true, follow: A, shown: NONE }
+    })
+    await waitFor(() => expect(result.current.dirs.has('')).toBe(true))
+    act(() => result.current.reveal(A, `${A}\\src\\deep`, true))
+    expect([...result.current.expanded]).toEqual(['src', 'src/deep'])
+    act(() => result.current.reveal(A, A, true))
+    expect(result.current.root).toBe(A)
+    expect([...result.current.expanded]).toEqual(['src', 'src/deep'])
+  })
+
   it('reads nothing for a reveal while the sidebar is away, and all of it when it comes back', async () => {
     const { result, rerender } = renderHook((options: FilesOptions) => useFiles(options), {
       initialProps: { active: false, follow: A, shown: NONE }

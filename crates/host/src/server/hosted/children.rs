@@ -84,6 +84,8 @@ use crate::agent_definitions::{
     AgentDefinition, BadDefinition, DEFAULT_AGENT_NAME, DefinitionLookup, DefinitionSource,
     NoDefinitions, default_definition, is_default_name,
 };
+use crate::desktop_cli::DESKTOP_URL_VAR;
+use crate::server::desktop_tools::DESKTOP_FAMILY;
 use crate::server::floti_agents::FAMILY;
 use crate::server::records::{self, ExitNotice};
 use crate::server::session_tools::SESSIONS_FAMILY;
@@ -371,10 +373,10 @@ impl Hosted {
         }
     }
 
-    /// Adds to a session's environment what its shell needs for `floti agent`
-    /// and `floti session title`: its token, the address of each of the two
-    /// families it was given, and the PATH with the `floti` executable's
-    /// folder first. Nothing for a launch given neither family.
+    /// Adds to a session's environment what its shell needs for `floti agent`,
+    /// `floti session title` and `floti desktop`: its token, the address of
+    /// each of those families it was given, and the PATH with the `floti`
+    /// executable's folder first. Nothing for a launch given none of them.
     pub(super) fn give_agent_env(
         &self,
         env: &mut Vec<(OsString, OsString)>,
@@ -382,8 +384,9 @@ impl Hosted {
     ) {
         let agents = servers.iter().find(|server| server.name == FAMILY);
         let sessions = servers.iter().find(|server| server.name == SESSIONS_FAMILY);
+        let desktop = servers.iter().find(|server| server.name == DESKTOP_FAMILY);
         // One token per launch, whichever family it is read from.
-        let Some(token) = agents.or(sessions).map(|server| &server.token) else {
+        let Some(token) = agents.or(sessions).or(desktop).map(|server| &server.token) else {
             return;
         };
         let path = env
@@ -398,6 +401,9 @@ impl Hosted {
         }
         if let Some(sessions) = sessions {
             set_env(env, SESSIONS_URL_VAR, OsString::from(&sessions.url));
+        }
+        if let Some(desktop) = desktop {
+            set_env(env, DESKTOP_URL_VAR, OsString::from(&desktop.url));
         }
         if let Some(path) = self.children.path_with_floti(path.as_ref()) {
             set_env(env, "PATH", path);

@@ -88,6 +88,7 @@ pub mod bridge;
 pub mod carry;
 pub mod client;
 pub mod connect;
+pub mod desktop_cli;
 pub mod doctor;
 pub mod error;
 pub mod history;

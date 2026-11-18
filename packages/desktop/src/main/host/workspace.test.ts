@@ -23,6 +23,7 @@ const hostSettings = (patch: Partial<P.HostSettings> = {}): P.HostSettings => ({
   browserMcp: true,
   browserMcpLocalOnly: true,
   sessionMcp: true,
+  desktopMcp: true,
   sessionAgents: true,
   agentChildrenPerParent: 4,
   agentSessionsPerHost: 8,

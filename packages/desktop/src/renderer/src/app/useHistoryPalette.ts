@@ -93,7 +93,12 @@ function patched(answer: HistoryAnswer, updated: HistorySession): HistoryAnswer 
   }
 }
 
-export function useHistoryPalette(host: string, open: boolean): HistoryPaletteState {
+/**
+ * `openedWith` is what the palette opens with typed in: a session's agent
+ * asked for History with a search (`desktop_open`). It is read as the palette
+ * opens; a person opening it opens it empty.
+ */
+export function useHistoryPalette(host: string, open: boolean, openedWith = ''): HistoryPaletteState {
   const desktop = bridgeFor(host)
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -109,13 +114,15 @@ export function useHistoryPalette(host: string, open: boolean): HistoryPaletteSt
   /** Moved by a retry, an index change and a rename, so every list is read again. */
   const [version, setVersion] = useState(0)
 
-  // Another host, or the palette closed: nothing read stays, and it opens empty.
+  // Another host, or the palette closed: nothing read stays, and it opens
+  // with nothing typed but what it was opened with.
   const shown = `${host}:${String(open)}`
   const [was, setWas] = useState(shown)
   if (was !== shown) {
     setWas(shown)
-    setQuery('')
-    setDebounced('')
+    const typed = open ? openedWith : ''
+    setQuery(typed)
+    setDebounced(typed)
     setSummary(null)
     setSummaryError(null)
     setFoldersError(null)

@@ -184,9 +184,9 @@ pub struct Title {
 /// Which family a command reaches: the variable that holds its address and
 /// what it means when the host has no route for it.
 #[derive(Debug, Clone, Copy)]
-struct Family {
-    url_var: &'static str,
-    off: &'static str,
+pub(crate) struct Family {
+    pub url_var: &'static str,
+    pub off: &'static str,
 }
 
 const AGENTS: Family = Family {
@@ -211,7 +211,7 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    fn done(out: String) -> Self {
+    pub(crate) fn done(out: String) -> Self {
         Self {
             out: Some(out),
             err: None,
@@ -219,7 +219,7 @@ impl Outcome {
         }
     }
 
-    fn refused(err: impl Into<String>) -> Self {
+    pub(crate) fn refused(err: impl Into<String>) -> Self {
         Self {
             out: None,
             err: Some(err.into()),
@@ -500,7 +500,7 @@ pub fn execute_title(title: &Title, url: &str, token: &str) -> Outcome {
 }
 
 /// The address in `url_var` and the token, when both are set.
-fn address_and_token(url_var: &str) -> Option<(String, String)> {
+pub(crate) fn address_and_token(url_var: &str) -> Option<(String, String)> {
     let url = std::env::var(url_var).ok().filter(|url| !url.is_empty())?;
     let token = std::env::var(TOKEN_VAR)
         .ok()
@@ -509,7 +509,7 @@ fn address_and_token(url_var: &str) -> Option<(String, String)> {
 }
 
 /// Prints `outcome` and answers its exit status.
-fn print_outcome(outcome: &Outcome) -> u8 {
+pub(crate) fn print_outcome(outcome: &Outcome) -> u8 {
     if let Some(out) = &outcome.out {
         println!("{out}");
     }
@@ -637,9 +637,9 @@ fn wait_arguments(wait: &Wait) -> Value {
 
 /// A tool's answer: whether it failed, and its content blocks' text.
 #[derive(Debug)]
-struct Answer {
-    failed: bool,
-    blocks: Vec<String>,
+pub(crate) struct Answer {
+    pub failed: bool,
+    pub blocks: Vec<String>,
 }
 
 /// What to print for `answer`.
@@ -740,7 +740,7 @@ fn endpoint_of(url_var: &str, url: &str) -> Result<Endpoint, String> {
 
 /// Initialises a connection to the family, then calls `tool` with
 /// `arguments`.
-fn call(
+pub(crate) fn call(
     family: Family,
     url: &str,
     token: &str,
@@ -913,7 +913,7 @@ fn unchunk(mut rest: &[u8]) -> Option<Vec<u8>> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::net::TcpListener;
     use std::sync::{Arc, Mutex};
 
@@ -1324,12 +1324,12 @@ mod tests {
 
     /// A host that answers `answers` in turn over loopback and records what it
     /// was sent.
-    struct Host {
-        url: String,
-        seen: Arc<Mutex<Vec<String>>>,
+    pub(crate) struct Host {
+        pub url: String,
+        pub seen: Arc<Mutex<Vec<String>>>,
     }
 
-    fn host(answers: Vec<(u16, String)>) -> Host {
+    pub(crate) fn host(answers: Vec<(u16, String)>) -> Host {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let url = format!("http://{}/mcp/agents", listener.local_addr().unwrap());
         let seen = Arc::new(Mutex::new(Vec::new()));
@@ -1374,14 +1374,14 @@ mod tests {
         Host { url, seen }
     }
 
-    fn rpc_result(result: Value) -> (u16, String) {
+    pub(crate) fn rpc_result(result: Value) -> (u16, String) {
         (
             200,
             json!({ "jsonrpc": "2.0", "id": 1, "result": result }).to_string(),
         )
     }
 
-    fn tool_answer(failed: bool, texts: &[&str]) -> (u16, String) {
+    pub(crate) fn tool_answer(failed: bool, texts: &[&str]) -> (u16, String) {
         rpc_result(json!({
             "isError": failed,
             "content": texts.iter().map(|text| json!({ "type": "text", "text": text })).collect::<Vec<_>>(),

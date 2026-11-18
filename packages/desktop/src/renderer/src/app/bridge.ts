@@ -1,5 +1,6 @@
 import { LOCAL_HOST_KEY, LOCAL_HOST_LABEL, type AppSettings } from '@floti/core/types'
 import type { DesktopBridge } from '../../../shared/ipc'
+import { createDesktopTools, type DesktopTools } from './host/desktopTools'
 import { createDevices, type Devices } from './host/devices'
 import { createUpdates, type Updates } from './host/updates'
 import {
@@ -114,6 +115,14 @@ export const connectedHosts: ConnectedHosts = createConnectedHosts(remoteHosts)
  * the window's own connection to it.
  */
 export const bridgeFor = (host: string): DesktopBridge => hostBridges.bridgeFor(host)
+
+/**
+ * The floti-desktop tools: heard on the window's own connection to every
+ * host, this PC's and each remote one as its bridge is made, and answered by
+ * what the app registers once it has drawn (`host/desktopTools.ts`).
+ */
+export const desktopTools: DesktopTools = createDesktopTools(log)
+hostBridges.each((bridge: HostBridge) => desktopTools.listen(bridge.host, bridge.link))
 
 /** Calls `listener` with every host's bridge, this PC's first, and each made from now on. Returns the stop. */
 export const eachHostBridge = (listener: (host: string, bridge: DesktopBridge) => void): (() => void) =>

@@ -128,6 +128,8 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
     onSessionMcpChange: vi.fn(),
     sessionAgents: true,
     onSessionAgentsChange: vi.fn(),
+    desktopMcp: true,
+    onDesktopMcpChange: vi.fn(),
     agentLimits: {
       agentChildrenPerParent: 4,
       agentCommandsPerParent: 4,

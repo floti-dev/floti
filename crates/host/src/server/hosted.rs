@@ -312,6 +312,12 @@ impl Hosted {
         });
     }
 
+    /// The fingerprint of the device that started running session `id`, or
+    /// none for a session an agent started, which no device did.
+    pub fn starter_of(&self, id: SessionId) -> Option<String> {
+        lock(&self.devices).sessions.get(&id).cloned()
+    }
+
     /// The running sessions `device` started, oldest first.
     pub fn started_by(&self, device: &PublicKey) -> Vec<DeviceSession> {
         let mine = opened_by(&lock(&self.devices).sessions, &device.fingerprint());

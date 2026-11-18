@@ -513,7 +513,7 @@ function attachKeyBindings(term: Terminal, container: HTMLElement, hooks: Termin
    * already did. Every branch below is a keystroke the desktop answers itself, so
    * every one of them has to cancel that.
    *
-   * Both halves of ClickUp 868m0egkt are that second write, measured on
+   * Both halves of the clipboard bug below are that second write, measured on
    * Electron 43.3.0 / xterm 6.0.0:
    *
    *  - **Paste doubled.** One Ctrl+V with a 17-character clipboard produced a

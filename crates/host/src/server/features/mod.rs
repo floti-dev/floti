@@ -37,6 +37,7 @@
 //!   `update:install`).
 
 mod agent_browser;
+mod agent_desktop;
 mod agent_plugin;
 mod agents;
 mod carry;
@@ -75,11 +76,13 @@ use super::plugin_tools::HostPluginTools;
 use crate::platform::folders::Folders;
 use crate::session::{ClientId, Session, SessionOutput};
 pub(crate) use agent_browser::BrowserRelay;
+pub(crate) use agent_desktop::{DesktopCaller, DesktopRelay};
 pub use resources::ResourcesHandle;
 pub(crate) use sessions::ActivityHandle;
 pub(crate) use update::Updates;
 pub(crate) use workspace::WorkspaceContext;
 
+use crate::workspace::roots::KnownRoots;
 use crate::workspace::settings::SettingsService;
 
 /// What every feature is built with.
@@ -239,6 +242,8 @@ pub(crate) struct Features {
     activity: ActivityHandle,
     settings: Arc<SettingsService>,
     browser: Arc<BrowserRelay>,
+    desktop: Arc<DesktopRelay>,
+    roots: Arc<KnownRoots>,
     host_plugin_tools: Arc<HostPluginTools>,
     updates: Updates,
     /// The plugin registry the plugins feature keeps: the host waits on its
@@ -273,6 +278,18 @@ impl Features {
         let sessions = sessions::Sessions::new(&context)?;
         let activity = sessions.activity();
         let browser = Arc::new(BrowserRelay::new(&context.events));
+        // Weakly: the host's sessions hold the agent tools, which hold this.
+        let devices = Arc::downgrade(&context.hosted);
+        let desktop = Arc::new(DesktopRelay::new(
+            &context.events,
+            sessions.focus(),
+            move |client| {
+                devices
+                    .upgrade()?
+                    .device_of(client)
+                    .map(|device| device.fingerprint())
+            },
+        ));
         let plugin_sessions = Arc::new(plugins::PluginSessions::new(&context.hosted));
         let agent_plugin = agent_plugin::AgentPluginChannels::new(&context.events);
         let host_plugin_tools = Arc::new(HostPluginTools::new(plugins::tool_caller(
@@ -308,6 +325,7 @@ impl Features {
         let plugin_registry = plugins.registry().clone();
         features.push(Box::new(plugins));
         features.push(Box::new(Arc::clone(&browser)));
+        features.push(Box::new(Arc::clone(&desktop)));
         features.push(Box::new(agent_plugin));
         features.push(Box::new(wsl::Wsl::new(&context, wsl_program)));
         features.push(Box::new(updates.clone()));
@@ -319,6 +337,8 @@ impl Features {
             activity,
             settings: Arc::clone(&context.workspace.settings),
             browser,
+            desktop,
+            roots: Arc::clone(&context.workspace.roots),
             host_plugin_tools,
             updates,
             plugins: plugin_registry,
@@ -353,6 +373,17 @@ impl Features {
     /// it.
     pub fn browser(&self) -> &Arc<BrowserRelay> {
         &self.browser
+    }
+
+    /// The floti-desktop tools' relay, for the family that carries calls on
+    /// it.
+    pub fn desktop(&self) -> &Arc<DesktopRelay> {
+        &self.desktop
+    }
+
+    /// The folders the host knows, for what checks a path is under one.
+    pub fn roots(&self) -> &Arc<KnownRoots> {
+        &self.roots
     }
 
     /// The plugins' tool servers, for the families the host answers

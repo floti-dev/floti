@@ -18,6 +18,7 @@ use rusqlite::Connection;
 use crate::agent_config::normalize;
 use crate::store::Store;
 use crate::store::projects::read_cached_projects;
+use crate::workspace::files::paths::is_inside_root;
 use crate::{Error, Result};
 
 /// Why a folder is known.
@@ -126,11 +127,57 @@ impl KnownRoots {
             .find(|candidate| key(&candidate.path) == wanted)
             .ok_or_else(|| refusal(root))
     }
+
+    /// The deepest known folder holding `path`, the folder itself included,
+    /// judged as the files service judges a path inside a root: before and
+    /// after links are resolved, so a link out of a known folder is outside
+    /// it. Or the sentence naming the rule.
+    pub fn holding(&self, path: &Path) -> std::result::Result<KnownRoot, String> {
+        self.deepest(path, |_| true)?
+            .ok_or_else(|| outside_refusal(path))
+    }
+
+    /// The deepest workspace or project discovery found that holds `path`,
+    /// or the sentence saying there is none.
+    pub fn project_holding(&self, path: &Path) -> std::result::Result<KnownRoot, String> {
+        self.deepest(path, |kind| {
+            matches!(kind, RootKind::Workspace | RootKind::Project)
+        })?
+        .ok_or_else(|| {
+            format!(
+                "{} is not in a project or workspace Floti found, so there is no project page to open for it.",
+                path.display()
+            )
+        })
+    }
+
+    /// The known folder of a kind `wanted` takes holding `path` with the most
+    /// folders to its name.
+    fn deepest(
+        &self,
+        path: &Path,
+        wanted: impl Fn(RootKind) -> bool,
+    ) -> std::result::Result<Option<KnownRoot>, String> {
+        let path = normalize(path);
+        let all = self.all().map_err(|err| err.to_string())?;
+        Ok(all
+            .into_iter()
+            .filter(|root| wanted(root.kind) && is_inside_root(&root.path, &path))
+            .max_by_key(|root| root.path.components().count()))
+    }
 }
 
 /// The sentence for a folder the host does not know.
 pub fn refusal(root: &str) -> String {
     format!("{root} is not a folder Floti knows, so it will not list or read it.")
+}
+
+/// The sentence for a path under no folder the host knows.
+pub fn outside_refusal(path: &Path) -> String {
+    format!(
+        "{} is not inside a folder Floti knows (a workspace or project it found, a profile's folder, or a running session's folder), so it will not open it.",
+        path.display()
+    )
 }
 
 /// How two spellings of one folder compare equal: folded, then lower-cased.
@@ -387,5 +434,62 @@ mod tests {
         let all = world.roots.all().unwrap();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].kind, RootKind::Project);
+    }
+
+    #[test]
+    fn a_path_is_held_by_the_deepest_known_folder_it_is_inside_and_refused_outside_every_one() {
+        let world = World::new();
+        let workspace = world.dirs.folder("my work");
+        let project = world.dirs.folder("my work/api server");
+        let session = world.dirs.folder("my work/api server/sub dir");
+        let elsewhere = world.dirs.folder("not known");
+        world.scan(&workspace, ProjectKind::Workspace);
+        world.scan(&project, ProjectKind::Repo);
+        world
+            .sessions
+            .write()
+            .unwrap()
+            .push(session.display().to_string());
+
+        let file = project.join("src").join("main.rs");
+        let held = world.roots.holding(&file).unwrap();
+        assert_eq!(key(&held.path), key(&normalize(&project)));
+        assert_eq!(held.kind, RootKind::Project);
+        // A folder is held by itself.
+        assert_eq!(
+            world.roots.holding(&project).unwrap().kind,
+            RootKind::Project
+        );
+        // The deepest wins: a session's folder inside the project.
+        let deep = world.roots.holding(&session.join("notes.md")).unwrap();
+        assert_eq!(deep.kind, RootKind::Session);
+        // But only a workspace or project has a project page.
+        let page = world
+            .roots
+            .project_holding(&session.join("notes.md"))
+            .unwrap();
+        assert_eq!(key(&page.path), key(&normalize(&project)));
+        // `..` folds away before the check, so it cannot climb out unseen.
+        let climbing = project
+            .join("..")
+            .join("..")
+            .join("not known")
+            .join("x.txt");
+        let refused = world.roots.holding(&climbing).unwrap_err();
+        assert!(
+            refused.contains("not inside a folder Floti knows"),
+            "{refused}"
+        );
+        assert_eq!(
+            world.roots.holding(&elsewhere.join("x.txt")),
+            Err(outside_refusal(&elsewhere.join("x.txt")))
+        );
+        assert!(
+            world
+                .roots
+                .project_holding(&elsewhere)
+                .unwrap_err()
+                .contains("no project page")
+        );
     }
 }

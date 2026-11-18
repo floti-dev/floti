@@ -629,6 +629,9 @@ export const SETTING_VALIDATORS: SettingValidators = {
    */
   sessionMcp: (value) => (typeof value === 'boolean' ? null : 'must be a boolean'),
 
+  /** Whether sessions can open Floti's views: it decides whether the host serves the family. */
+  desktopMcp: (value) => (typeof value === 'boolean' ? null : 'must be a boolean'),
+
   /**
    * Whether sessions can start agents of their own, checked as strictly: it
    * decides whether the host serves the family at all, and `'false'` is truthy.

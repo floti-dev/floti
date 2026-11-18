@@ -23,6 +23,7 @@ mod minor_2_2;
 mod minor_2_3;
 mod minor_4_1;
 mod minor_4_2;
+mod minor_4_3;
 mod noise;
 mod previous_minor;
 mod session_endings;

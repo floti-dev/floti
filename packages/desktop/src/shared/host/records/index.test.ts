@@ -334,6 +334,7 @@ describe('a window settings patch, split between the host and Floti', () => {
       browserMcp: true,
       browserMcpLocalOnly: false,
       sessionMcp: true,
+      desktopMcp: true,
       restoreWithoutAsking: false,
       sessionAgents: true,
       agentChildrenPerParent: 4,

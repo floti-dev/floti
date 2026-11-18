@@ -9,6 +9,10 @@ use floti_protocol::channels::agent_browser::{
     AgentBrowserAnswer, AgentBrowserCalls, AgentBrowserOutcome, AgentBrowserToolAnswer,
     AgentBrowserToolCall, browser_client,
 };
+use floti_protocol::channels::agent_desktop::{
+    AgentDesktopAnswer, AgentDesktopCalls, AgentDesktopOutcome, AgentDesktopToolAnswer,
+    listens_for_desktop_calls,
+};
 use floti_protocol::message::{
     ErrorCode, Request, StreamClose, StreamOpen, Subscribe, SubscriptionError,
 };
@@ -230,6 +234,52 @@ fn the_agent_browser_relay_needs_the_browser_capability_both_ways() {
     assert_eq!(answer.kind(), ChannelKind::Request);
     assert_eq!(call.capability(), Some(Capability::Browser));
     assert_eq!(answer.capability(), Some(Capability::Browser));
+}
+
+#[test]
+fn the_desktop_relay_needs_the_desktop_capability_both_ways_and_only_a_listening_client_takes_calls()
+ {
+    let catalogue = Catalogue::protocol();
+    let call = catalogue.get(AgentDesktopCalls::NAME).unwrap();
+    let answer = catalogue.get(AgentDesktopAnswer::NAME).unwrap();
+    assert_eq!(call.kind(), ChannelKind::Event { snapshot: false });
+    assert_eq!(answer.kind(), ChannelKind::Request);
+    assert_eq!(call.capability(), Some(Capability::Desktop));
+    assert_eq!(answer.capability(), Some(Capability::Desktop));
+
+    // A browser and everything else but desktop, as main's link declares.
+    let mut main = ClientChannels::new(
+        &catalogue,
+        [Capability::Terminal, Capability::Files, Capability::Browser]
+            .into_iter()
+            .collect(),
+    );
+    assert!(
+        main.subscribe(&subscribe(1, AgentDesktopCalls::NAME))
+            .is_err()
+    );
+    assert!(!listens_for_desktop_calls(&main));
+    let wire = request(
+        2,
+        AgentDesktopAnswer::NAME,
+        to_payload(&AgentDesktopToolAnswer {
+            call_id: 1,
+            outcome: AgentDesktopOutcome::no_window(),
+        })
+        .unwrap(),
+    );
+    let refused = main.check_request(&wire).unwrap_err();
+    assert_eq!(refused.code, ErrorCode::MissingCapability);
+    assert!(names_the_capability(&refused.message, Capability::Desktop));
+
+    // The window declares it, but takes calls only once it listens.
+    let mut window = ClientChannels::new(&catalogue, everything());
+    assert!(!listens_for_desktop_calls(&window));
+    window
+        .subscribe(&subscribe(3, AgentDesktopCalls::NAME))
+        .unwrap();
+    assert!(listens_for_desktop_calls(&window));
+    assert!(window.check_request(&wire).is_ok());
 }
 
 #[test]

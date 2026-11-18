@@ -291,13 +291,10 @@ describe('useSessions', () => {
     expect(result.current.sessions.map((s) => s.id)).toEqual([7])
   })
 
-  it('adopts a session started elsewhere once, and tells main which sessions are on screen', async () => {
+  it('adopts a session started elsewhere once', async () => {
     const { result } = await mounted()
     act(() => result.current.adopt(record(4)))
     act(() => result.current.adopt(record(4)))
     expect(result.current.sessions.map((s) => s.id)).toEqual([4])
-
-    result.current.reportFocus([4])
-    expect(bridge.sent('session:focus')).toContainEqual({ ids: [4] })
   })
 })

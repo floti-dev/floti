@@ -5,7 +5,7 @@ import type {
   StreamHandlers,
   SubscriptionHandlers
 } from '../src/shared/host/client'
-import type { EventChannels, RequestChannels, StreamChannels } from '../src/shared/host/protocol'
+import type { Capability, EventChannels, RequestChannels, StreamChannels } from '../src/shared/host/protocol'
 
 /**
  * A protocol client with no host behind it, for the adapters that sit on one:
@@ -79,12 +79,18 @@ export class FakeStream implements HostStream {
 }
 
 export class FakeConnection {
-  readonly welcome = {
-    protocol: { major: 0, minor: 0 },
-    hostVersion: 'test',
-    capabilities: ['terminal' as const],
-    backends: []
+  readonly welcome: {
+    protocol: { major: number; minor: number }
+    hostVersion: string
+    capabilities: Capability[]
+    backends: never[]
   }
+
+  /** A connection whose host accepted `capabilities`, on protocol `protocol`. */
+  constructor(capabilities: Capability[] = ['terminal'], protocol = { major: 0, minor: 0 }) {
+    this.welcome = { protocol, hostVersion: 'test', capabilities, backends: [] }
+  }
+
   readonly sent: SentRequest[] = []
   readonly streams: FakeStream[] = []
   readonly subscriptions = new Map<string, SubscriptionHandlers<keyof EventChannels>>()

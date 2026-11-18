@@ -611,7 +611,13 @@ fn session_requests_and_answers_round_trip_over_cbor() {
         },
         (),
     );
-    exchange::<SessionFocus>(SessionFocusRequest { ids: vec![1, 2] }, ());
+    exchange::<SessionFocus>(
+        SessionFocusRequest {
+            ids: vec![1, 2],
+            active: Some(false),
+        },
+        (),
+    );
     exchange::<SessionsWatch>(SessionsWatchRequest { watching: true }, ());
     exchange::<SessionConfirmed>(
         SessionConfirmAnswer {

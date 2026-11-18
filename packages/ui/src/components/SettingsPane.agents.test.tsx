@@ -86,6 +86,8 @@ function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProp
     onSessionMcpChange: vi.fn(),
     sessionAgents: s.sessionAgents,
     onSessionAgentsChange: vi.fn(),
+    desktopMcp: true,
+    onDesktopMcpChange: vi.fn(),
     agentLimits: {
       agentChildrenPerParent: s.agentChildrenPerParent,
       agentCommandsPerParent: s.agentCommandsPerParent,
@@ -163,13 +165,14 @@ const limit = (name: string): HTMLInputElement =>
   within(limits()).getByRole('textbox', { name }) as HTMLInputElement
 
 describe('SettingsPane - Agents', () => {
-  it('shows the two choices the design draws, each a tick with its sentence beside it, and nothing else in the group', () => {
+  it('shows its three choices, each a tick with its sentence beside it, and nothing else in the group', () => {
     renderPane()
 
     const rows = [...group().querySelectorAll('label')]
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(3)
     expect(rows.map((row) => row.querySelector('input[type="checkbox"]')?.getAttribute('aria-label'))).toEqual([
       'Sessions can start agents',
+      "Sessions can use Floti's window",
       "Show children in their parent's tab"
     ])
     // The tick leads the row and the text follows it, so it sits to the left of its words.
@@ -181,6 +184,7 @@ describe('SettingsPane - Agents', () => {
     }
     expect(rows.map((row) => row.textContent)).toEqual([
       'Sessions can start agentsEvery session you start gets the floti-agents tools and floti agent. A profile can turn it off for its own sessions.',
+      "Sessions can use Floti's windowEvery session you start gets the floti-desktop tools and floti desktop open: asked to show you something, it opens a file, Files, a project's page, History or Settings beside its tab, and the keyboard stays in its terminal.",
       "Show children in their parent's tabOn this device. A parent's tab shows its running children beside its terminal while its pane has room, and never takes the focus from it. Off, the parent shows alone, with its children as chips in its crumb and rows in the tree."
     ])
     // No limit field and no hint of the group's own in it.
@@ -211,6 +215,21 @@ describe('SettingsPane - Agents', () => {
     expect(offTick.checked).toBe(false)
     await userEvent.click(offTick)
     expect(off.onShowChildrenInParentTabChange).toHaveBeenCalledWith(true)
+  })
+
+  it('keeps the choice to let sessions use Floti’s window, on by default and told to the host', async () => {
+    const props = renderPane()
+    const tick = within(group()).getByRole('checkbox', { name: "Sessions can use Floti's window" }) as HTMLInputElement
+    expect(tick.checked).toBe(true)
+    await userEvent.click(tick)
+    expect(props.onDesktopMcpChange).toHaveBeenCalledWith(false)
+    cleanup()
+
+    const off = renderPane({ desktopMcp: false })
+    const offTick = within(group()).getByRole('checkbox', { name: "Sessions can use Floti's window" }) as HTMLInputElement
+    expect(offTick.checked).toBe(false)
+    await userEvent.click(offTick)
+    expect(off.onDesktopMcpChange).toHaveBeenCalledWith(true)
   })
 
   it('a tick is also switched by pressing its words', async () => {

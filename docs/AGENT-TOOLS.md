@@ -1,9 +1,9 @@
 # Agent tools
 
 The host serves its sessions' agent tools as MCP over HTTP
-(`crates/host/src/agent_tools`): `floti-browser` at `/mcp`, `floti-sessions` at
-`/mcp/sessions`, `floti-agents` at `/mcp/agents` and each plugin's tools at
-`/mcp/plugin/<id>`, on one port. It is the one inbound listener the host has
+(`crates/host/src/agent_tools`): `floti-browser` at `/mcp`, `floti-desktop` at
+`/mcp/desktop`, `floti-sessions` at `/mcp/sessions`, `floti-agents` at
+`/mcp/agents` and each plugin's tools at `/mcp/plugin/<id>`, on one port. It is the one inbound listener the host has
 besides its local socket and the relay socket beside it. Main binds no
 listener for them, mints no token and writes no `--mcp-config`, and never
 serves `floti-agents`: only the host does.
@@ -23,12 +23,14 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
 - A tool family switched off has no route (404), no entry in `--mcp-config` and
   no tool. With no session holding a token and nothing a launch could be
   given, the host holds no port.
-- `floti-browser`, `floti-sessions` and `floti-agents` take name, route,
-  instructions and tools from `crates/host/src/server/browser_tools.json`,
+- `floti-browser`, `floti-desktop`, `floti-sessions` and `floti-agents` take
+  name, route, instructions and tools from
+  `crates/host/src/server/browser_tools.json`, `desktop_tools.json`,
   `session_tools.json` and `floti_agents.json`. Main reads the browser table
   too, for the tools it answers.
-- Main tells the host `browserMcp`, `browserMcpLocalOnly`, `sessionMcp`,
-  `sessionAgents` ("Sessions can start agents") and the four agent limits
+- Main tells the host `browserMcp`, `browserMcpLocalOnly`, `desktopMcp`
+  ("Sessions can use Floti's window"), `sessionMcp`, `sessionAgents`
+  ("Sessions can start agents") and the four agent limits
   (`agentChildrenPerParent`, `agentSessionsPerHost`, `agentDepth`,
   `agentStartsPerParent`) and the command-children limit
   (`agentCommandsPerParent`, counted apart from the agent limits) on each
@@ -66,6 +68,67 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   token), never inherited by a page the shared one opens, and revoked when
   the session ends. `browser_tabs` lists all; `browser_close` closes only the
   session's own.
+
+## floti-desktop
+
+- `desktop_open` (`crates/host/src/server/desktop_tools.rs`) opens one of
+  Floti's views for the user: `file` (a path and an optional line: a file tab
+  beside the caller's tab, scrolled to the line), `folder` (the Files view on
+  the known folder holding it, that folder opened, its changed files marked),
+  `project` (the page of the workspace or project holding it, beside the
+  caller's tab), `history` (the History palette with a search typed in) or
+  `settings` (a Settings tab on a section, beside the caller's tab). The
+  family's instructions say in a sentence what each view is for.
+- Paths are the host's to judge. A relative path is resolved against the
+  caller's folder, folded, and must sit under a folder the host knows
+  (`KnownRoots::holding` in `workspace/roots.rs`, judged before and after
+  links as the files service judges a path), as a file where a file is asked
+  for, as a folder where a folder is, and as either for a project. Anything else is refused with the
+  sentence saying why, and no window is asked: nothing opens. The window is
+  told the known folder holding the path and the path (`DesktopOpen`).
+- The host has no window, so each call goes over `agentDesktop:call` to one
+  attached client that declared `desktop` and listens there, naming the
+  caller's session, and that client's answer is the tool's
+  (`server/features/agent_desktop.rs`). The window declares `desktop` on its
+  own connection to each host (`renderer/src/app/host/link.ts`), so a session
+  on a remote host opens that host's views in the window attached to it;
+  main's link does not declare it. The window answers by tool name
+  (`renderer/src/app/host/desktopTools.ts`, `app/desktopOpen.ts`).
+- Which window: the one showing the caller's tab, where a child shown inside
+  its parent's tab counts as shown there; else one on the device that started
+  the caller (for a child, the nearest session above it that a device
+  started); else the one most recently in front. Ties go to the one most
+  recently in front, then to the one attached longest. What each window shows
+  comes from `session:focus`, which every host is told by the window, and the
+  window says on it whether its OS window is in front (`active`, protocol
+  4.3), when it gains or loses focus. A window that says it is behind keeps
+  its sessions on screen for this choice and watches none of them for an
+  exit's notification.
+- What opens is shown beside the caller's tab without moving the focus
+  (`openBeside` in `packages/core/src/layout/panes.ts`): the pane beside the
+  one holding it, or a new pane on its right when it has none or its
+  neighbour is the focused pane, so the focused pane keeps its front tab and
+  the keyboard, and the user keeps typing to the session. A tab already open
+  in the focused pane behind its front moves beside rather than coming to
+  the front there. A tab opens as the preview (`openBesideAsPreview`): the
+  next one the agent opens takes its place, until the user keeps it as any
+  preview is kept. A line is scrolled to without taking the keyboard. When
+  the caller's tab is not in that window, it opens beside the focused pane.
+  History is the window's palette, so it opens over the window and takes the
+  keyboard until it is closed, which gives it back to where it was.
+- A launch is given the family only while a window that takes its calls is
+  attached, and only while `desktopMcp` is on (Settings > Agents, on by
+  default). A call with none attached, or waiting on a window that leaves,
+  fails at once saying no window is attached. Nothing waits on a timer.
+- From a session's shell it is `floti desktop open <view> ...`
+  (`crates/host/src/desktop_cli.rs`: `file <path> [--line <n>]`,
+  `folder <path>`, `project <path>`, `history [<search>...]`,
+  `settings [<section>]`, each with `--json`), which reaches the family at
+  `FLOTI_AGENT_DESKTOP_URL` with the session's token, makes a relative path
+  absolute against the shell's own folder, prints the window's sentence and
+  exits 1 on a refusal. `desktop_open` and `floti desktop open` are allowed at
+  launch, each named on its own (`mcp__floti-desktop__desktop_open`,
+  `Bash(floti desktop open:*)`); a user's deny rule still wins.
 
 ## floti-sessions
 

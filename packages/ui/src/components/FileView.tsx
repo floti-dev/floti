@@ -39,10 +39,11 @@ export interface FileViewProps {
   onOpenInEditor: (() => void) | null
   /**
    * A place to open on - a line Ctrl+P's text search matched, with the words
-   * it matched selected. Applied once per object, when the file is there to
-   * apply it to; a new object is a new jump.
+   * it matched selected, or a line a session's agent opened it at. Applied
+   * once per object, when the file is there to apply it to; a new object is a
+   * new jump. It takes the keyboard unless `focus` is false.
    */
-  reveal?: { line: number; term: string | null } | null | undefined
+  reveal?: { line: number; term: string | null; focus?: boolean } | null | undefined
 }
 
 /** Where `reveal` lands in `content`: the term on its line, or the line's start. */
@@ -92,7 +93,7 @@ export function FileView({
     if (reveal === null || !readable || revealed.current === reveal) return
     revealed.current = reveal
     const { start, end } = revealRange(view.content, reveal.line, reveal.term)
-    editorRef.current?.select(start, end)
+    editorRef.current?.select(start, end, reveal.focus !== false)
   }, [reveal, readable, view])
 
   if (error !== null) {

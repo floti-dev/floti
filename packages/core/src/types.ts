@@ -1881,6 +1881,18 @@ export interface AppSettings {
   sessionMcp: boolean
 
   /**
+   * Whether the sessions a host starts can open Floti's views in this window:
+   * the host's floti-desktop tools and `floti desktop open`, which open a file
+   * beside the session's tab, Files on a folder, a project's page, History or
+   * a Settings section. Told to the host like the other families' switches;
+   * off, a session started from then on has no route, entry or tool, and a
+   * running one is answered 404. On by default, because all it can do is show
+   * the user something beside the session that asked, under a folder Floti
+   * already knows, without taking the keyboard.
+   */
+  desktopMcp: boolean
+
+  /**
    * Whether the sessions a host starts can start, list and stop children of
    * their own: the host's agent tools and `floti agent`. A profile can turn it
    * off for its own sessions (`Profile.sessionAgents`); this is the setting
@@ -2094,6 +2106,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // and because what it serves is a strictly smaller grant than the tick above
   // it. See the field for what is not in it, which is what makes that true.
   sessionMcp: true,
+  // On: it only shows the user something, beside the session that asked.
+  desktopMcp: true,
   // On, with the limits that bound it: a family is a parent, up to four children
   // at once, at most eight agent-started sessions on the host, two levels deep,
   // and sixteen starts in a parent's life. Sessions a person starts count

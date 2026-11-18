@@ -59,7 +59,10 @@ fn capability_wire_names_are_the_ones_clients_write() {
         .iter()
         .map(|capability| capability.name())
         .collect();
-    assert_eq!(names, ["terminal", "files", "pluginPages", "browser"]);
+    assert_eq!(
+        names,
+        ["terminal", "files", "pluginPages", "browser", "desktop"]
+    );
     for capability in Capability::ALL {
         let encoded = ciborium::Value::serialized(&capability).unwrap();
         assert_eq!(encoded.as_text(), Some(capability.name()));

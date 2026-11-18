@@ -49,6 +49,22 @@ describe('History’s reads', () => {
     expect(bridge.invoked('history:sessions')).toEqual([{ topLevel: true, limit: 10 }])
   })
 
+  it('opens with the search it was opened with typed in, and empty the next time it opens without one', async () => {
+    bridge.answer('history:sessions', (query: HistoryQuery) =>
+      query.scope === 'messages' ? page(session('said')) : page(session('a'))
+    )
+    const { result, rerender } = renderHook(({ open, typed }) => useHistoryPalette('local', open, typed), {
+      initialProps: { open: false, typed: 'login bug' }
+    })
+    rerender({ open: true, typed: 'login bug' })
+    expect(result.current.query).toBe('login bug')
+    await waitFor(() => expect(result.current.conversations).toEqual({ sessions: [session('said')], total: 1 }))
+
+    rerender({ open: false, typed: '' })
+    rerender({ open: true, typed: '' })
+    expect(result.current.query).toBe('')
+  })
+
   it('asks both lists of a query at once, narrowed to a folder its words name', async () => {
     bridge.answer('history:projects', () => [project('atlas-api', '/code/atlas-api', 1)])
     bridge.answer('history:sessions', (query: HistoryQuery) =>

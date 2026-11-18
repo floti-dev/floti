@@ -23,8 +23,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use floti_protocol::BackendId;
 use floti_protocol::channels::workspace::{
     DEFAULT_AGENT_CHILDREN_PER_PARENT, DEFAULT_AGENT_COMMANDS_PER_PARENT, DEFAULT_AGENT_DEPTH,
-    DEFAULT_AGENT_SESSIONS_PER_HOST, DEFAULT_AGENT_STARTS_PER_PARENT, DEFAULT_SESSION_AGENTS,
-    DEFAULT_UPDATE_CHECK, HostSettings, HostSettingsPatch,
+    DEFAULT_AGENT_SESSIONS_PER_HOST, DEFAULT_AGENT_STARTS_PER_PARENT, DEFAULT_DESKTOP_MCP,
+    DEFAULT_SESSION_AGENTS, DEFAULT_UPDATE_CHECK, HostSettings, HostSettingsPatch,
 };
 use rusqlite::{Connection, params};
 use serde::Serialize;
@@ -49,6 +49,7 @@ const TERMINAL_SHELL: &str = "terminalShell";
 const BROWSER_MCP: &str = "browserMcp";
 const BROWSER_MCP_LOCAL_ONLY: &str = "browserMcpLocalOnly";
 const SESSION_MCP: &str = "sessionMcp";
+const DESKTOP_MCP: &str = "desktopMcp";
 const RESTORE_WITHOUT_ASKING: &str = "restoreWithoutAsking";
 const SESSION_AGENTS: &str = "sessionAgents";
 const AGENT_CHILDREN_PER_PARENT: &str = "agentChildrenPerParent";
@@ -81,6 +82,7 @@ pub fn defaults() -> HostSettings {
         // to loopback beside a pane that is not would be a surprise.
         browser_mcp_local_only: false,
         session_mcp: true,
+        desktop_mcp: DEFAULT_DESKTOP_MCP,
         restore_without_asking: false,
         session_agents: DEFAULT_SESSION_AGENTS,
         agent_children_per_parent: DEFAULT_AGENT_CHILDREN_PER_PARENT,
@@ -124,6 +126,9 @@ pub fn read(conn: &Connection) -> Result<HostSettings> {
     });
     take(SESSION_MCP, &mut |text| {
         set(text, &mut settings.session_mcp)
+    });
+    take(DESKTOP_MCP, &mut |text| {
+        set(text, &mut settings.desktop_mcp)
     });
     take(RESTORE_WITHOUT_ASKING, &mut |text| {
         set(text, &mut settings.restore_without_asking)
@@ -438,6 +443,9 @@ pub fn write(
     }
     if let Some(value) = &patch.session_mcp {
         put(SESSION_MCP, value);
+    }
+    if let Some(value) = &patch.desktop_mcp {
+        put(DESKTOP_MCP, value);
     }
     if let Some(value) = &patch.restore_without_asking {
         put(RESTORE_WITHOUT_ASKING, value);
