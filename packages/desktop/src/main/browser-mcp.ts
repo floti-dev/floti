@@ -783,7 +783,7 @@ export function createBrowserMcp(options: BrowserMcpOptions): BrowserMcpHost {
     runBrowserTool(opener, tool, args) {
       if (!options.settings().browserMcp) {
         return Promise.resolve(
-          fail("Floti's browser tools are switched off in Settings > Browser, so this session has none to call.")
+          fail("Floti's browser tools are switched off for this host in Settings > Tools, so this session has none to call.")
         )
       }
       let session = relayed.get(opener.key)

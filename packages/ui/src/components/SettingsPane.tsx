@@ -47,11 +47,15 @@ import {
   Divider,
   Fact,
   Group,
+  HostLine,
   NumberField,
+  ReachNotice,
   Row,
   Select,
   SettingsPage,
   Stepper,
+  UnknownCheckRow,
+  UnknownValue,
   Verdict,
   useDraft
 } from './SettingsKit'
@@ -98,9 +102,32 @@ export interface AgentsOverview {
   onOpen: () => void
 }
 
+/**
+ * The host the Floti host group's sections show: its name, and whether its
+ * settings are known. Every value a host section draws is that host's.
+ */
+export interface SettingsHostView {
+  name: string
+  /** A host on another computer: the file pickers browse this PC, so they are not offered for it. */
+  remote: boolean
+  /**
+   * Why its settings are not known, and the host sections show Unknown in
+   * their place, never defaults: it cannot be reached (`failedAt` is when its
+   * link failed, as the window shows a time, or null when not seen), or it has
+   * not answered yet. Null once they are known.
+   */
+  unknown: { kind: 'away'; failedAt: string | null } | { kind: 'reading' } | null
+}
+
+const THIS_PC: SettingsHostView = { name: 'This PC', remote: false, unknown: null }
+
 export interface SettingsPaneProps {
   /** The one section on screen; the sidebar lists the rest (`SettingsSections`). */
   section: SettingsSectionId
+  /** The host the Floti host group's sections show; This PC, known, when not given. */
+  host?: SettingsHostView | undefined
+  /** Opens another section: Settings › Hosts from a host out of reach, Floti host › Tools from Browser. */
+  onShowSection?: ((id: SettingsSectionId) => void) | undefined
   /** What Floti found out about the CLI. Null until the first read lands. */
   status: SetupClaudeStatus | null
   /** Why the status could not be read, when it could not: shown as Unknown, never as not found. */
@@ -108,7 +135,8 @@ export interface SettingsPaneProps {
   /** A status read the user asked for, so it gets a spinner. */
   checking: boolean
   onRecheck: () => void
-  onLocateClaude: () => void
+  /** This PC's file picker, for a `claude` Floti did not find. Absent for a host on another computer. */
+  onLocateClaude?: (() => void) | undefined
   /** Writes `claudePath: null` - back to whatever discovery finds. */
   onClearClaudeOverride: () => void
   /** Starts the guided first run again at step 1, in its own window. */
@@ -119,6 +147,11 @@ export interface SettingsPaneProps {
   projectCount: number
   scanning: boolean
   onAddRoot: () => void
+  /**
+   * A folder on a host on another computer, typed, where this PC's picker
+   * cannot browse: resolves with why it was refused, or null once it is scanned.
+   */
+  onAddRootPath?: ((path: string) => Promise<string | null>) | undefined
   onRemoveRoot: (path: string) => void
 
   /**
@@ -176,10 +209,13 @@ export interface SettingsPaneProps {
    * real thing rather than this pane's re-derivation of the prepend rule.
    */
   terminalFontStack: string
-  /** Shells found on this machine. Empty until the probe lands. */
+  /** The shell a project pane opens on the picked host; null to have that host detect one. */
+  terminalShell: string | null
+  onTerminalShellChange: (path: string | null) => void
+  /** Shells found on the picked host. Empty until the probe lands. */
   shells: DetectedShell[]
-  /** Native file picker, for a shell installed somewhere detection misses. */
-  onLocateShell: () => void
+  /** This PC's file picker, for a shell installed somewhere detection misses. Absent for a host on another computer. */
+  onLocateShell?: (() => void) | undefined
   /**
    * A shell's full path, typed or pasted, for one the file picker refuses (an
    * app execution alias). Resolves with a sentence saying why the path was
@@ -232,36 +268,30 @@ export interface SettingsPaneProps {
   browserSearch: BrowserSearch
   onBrowserSearchChange: (search: BrowserSearch) => void
   /**
-   * The two browser-tool keys: whether Floti serves its browser tools to the
-   * sessions it hosts, and whether those tools are held to this machine when
-   * the pane is not. Both are preferences rather than state, so both are here.
+   * The two browser-tool keys: whether the picked host's sessions get the
+   * browser tools (that host's, in Tools), and whether those tools are held to
+   * localhost when the pane is not (this desktop's, in Browser).
    */
   browserMcp: boolean
   onBrowserMcpChange: (next: boolean) => void
   browserMcpLocalOnly: boolean
   onBrowserMcpLocalOnlyChange: (next: boolean) => void
 
-  /**
-   * Whether a session may ask Floti what the other sessions are doing.
-   *
-   * Its own row in its own group rather than a third tick under Browser: it is
-   * served by the same endpoint but it is not the same capability, and a person
-   * deciding about it is deciding about their other work rather than about a
-   * browser.
-   */
+  /** Whether the picked host's sessions may ask Floti what the other sessions there are doing. That host's, in Tools. */
   sessionMcp: boolean
   onSessionMcpChange: (next: boolean) => void
   /**
    * Whether the sessions a host starts can start sessions of their own, and
    * the limits that bound them. A profile can turn it off for its own sessions;
-   * this is what every other session follows. The host enforces all of it.
+   * this is what every other session follows. The host enforces all of it;
+   * Tools and Agents show the picked host's.
    */
   sessionAgents: boolean
   onSessionAgentsChange: (next: boolean) => void
   /**
    * Whether the sessions a host starts can use this window: open Floti's
-   * views and read and change its settings (the floti-desktop tools). Told to
-   * the host like the other families.
+   * views and read and change its settings (the floti-desktop tools). Each
+   * host keeps its own; Tools shows the picked host's.
    */
   desktopMcp: boolean
   onDesktopMcpChange: (next: boolean) => void
@@ -331,8 +361,8 @@ export interface UpdateView {
 }
 
 /**
- * The seven the Terminal group owns, named once so nothing has to list them
- * twice.
+ * The six the Terminal group owns, named once so nothing has to list them
+ * twice. The shell for project panes is a host's, in Programs.
  *
  * `projectShellHeightPct` is the odd one: it is not a terminal preference and
  * never reaches `applyPrefs`, it is how tall a project page's shell is. It is
@@ -348,7 +378,6 @@ export type TerminalSettings = Pick<
   | 'terminalCursorStyle'
   | 'terminalCursorBlink'
   | 'terminalScrollback'
-  | 'terminalShell'
   | 'projectShellHeightPct'
 >
 
@@ -373,8 +402,13 @@ const NOTHING = '-'
 const labelOf = (key: SettingKey): string => settingEntry(key).label
 const hintOf = settingHint
 
+/** A `data-` attribute a driver reaches a control by, named at run time. */
+const dataHook = (name: string, value = ''): Record<`data-${string}`, string> => ({ [name]: value })
+
 export function SettingsPane({
   section,
+  host = THIS_PC,
+  onShowSection,
   status,
   statusError = null,
   checking,
@@ -386,6 +420,7 @@ export function SettingsPane({
   projectCount,
   scanning,
   onAddRoot,
+  onAddRootPath,
   onRemoveRoot,
   pinnedProjects,
   onUnpinProject,
@@ -408,6 +443,8 @@ export function SettingsPane({
   terminal,
   onTerminalChange,
   terminalFontStack,
+  terminalShell,
+  onTerminalShellChange,
   shells,
   onLocateShell,
   onShellPath,
@@ -456,19 +493,21 @@ export function SettingsPane({
   localHost = null,
   devices
 }: SettingsPaneProps): JSX.Element {
-  const found = status !== null && status.path !== null && status.version !== null
-  const overridden = status?.source === 'setting'
-
   const meta = SETTINGS_SECTIONS.find((entry) => entry.id === section) ?? SETTINGS_SECTIONS[0]!
-  // Workspace and Agents hold two groups each and keep their headings; every
-  // other section is one group, whose title is the page's and whose hint is the
-  // line under it.
-  const sole = section !== 'workspace' && section !== 'agents' && section !== 'general'
+  const onHost = meta.group === 'host'
+  // A host section's values are that host's, and Unknown while they are not known.
+  const unknown = onHost && host.unknown !== null
+  // These hold more than one group each and keep their headings; every other
+  // section is one group, whose title is the page's and whose hint is the line
+  // under it.
+  const sole = !['workspace', 'agents', 'programs', 'tools', 'browser'].includes(section)
 
   return (
     <SettingsPage
       data-settings-section={section}
+      data-settings-host={onHost ? host.name : undefined}
       title={meta.label}
+      onHost={onHost ? <HostLine name={host.name} /> : undefined}
       hint={meta.hint}
       sole={sole}
       aside={
@@ -483,317 +522,617 @@ export function SettingsPane({
         ) : undefined
       }
     >
-          {section === 'general' && (
-            <>
-                <Group name="claude" title={labelOf('claudePath')} hint={hintOf('claudePath')}>
-                  <div className="pb-1">
-                    <Verdict
-                      tone={status === null ? 'todo' : found ? (status.tested ? 'ok' : 'warn') : 'warn'}
-                      text={
-                        status === null
-                          ? statusError === null
-                            ? 'Looking…'
-                            : `Unknown: ${statusError}`
-                          : found
-                            ? overridden
-                              ? 'Set by you'
-                              : 'Found on this machine'
-                            : status.path !== null
-                              ? (status.error ?? 'Found, but it did not report its version.')
-                              : (status.error ?? 'Not found.')
-                      }
-                    />
-                    {status !== null && statusError !== null && (
-                      <p data-settings-status-error className="mt-2 text-[11.5px] text-warn">
-                        Could not check again: {statusError}
-                      </p>
-                    )}
-                    <dl className="mt-2.5 space-y-1.5">
-                      <Fact label="Path">
-                        <span data-settings-claude-path title={status?.path ?? ''}>
-                          {status?.path ?? NOTHING}
-                        </span>
-                      </Fact>
-                      <Fact label="Version">
-                        <span data-settings-claude-version>{status?.version ?? NOTHING}</span>
-                      </Fact>
-                      <Fact label="Config">
-                        <span data-settings-claude-config title={status?.configDir ?? ''}>
-                          {status?.configDir ?? NOTHING}
-                        </span>
-                      </Fact>
-                    </dl>
+      {onHost && host.unknown?.kind === 'away' && (
+        <ReachNotice
+          name={host.name}
+          failedAt={host.unknown.failedAt}
+          onShowHosts={onShowSection === undefined ? undefined : () => onShowSection('hosts')}
+        />
+      )}
 
-                    {found && status !== null && !status.tested && (
-                      <p
-                        data-settings-version-warning
-                        className="mt-3 rounded-well border border-warn/30 bg-warn/10 px-3 py-2 text-[11.5px] leading-[1.55] text-warn"
-                      >
-                        Floti was tested against {status.testedRange.min} up to (not including){' '}
-                        {status.testedRange.max}. {status.semver ?? status.version} is outside that, so a
-                        flag may have moved. Nothing is blocked.
-                      </p>
-                    )}
-                  </div>
+      {section === 'general' && (
+        <Group name="walkthrough" title="Walkthrough" hint="The steps Floti opened with the first time.">
+          <Actions>
+            <Action data-settings-show-walkthrough onClick={onShowWalkthrough}>
+              Show the walkthrough
+            </Action>
+          </Actions>
+        </Group>
+      )}
 
-                  <Actions>
-                    <Action data-settings-recheck onClick={onRecheck} disabled={checking}>
-                      <RefreshIcon className={cn('mr-1.5 inline', checking && 'animate-spin')} />
-                      Check again
-                    </Action>
-                    <Action data-settings-locate onClick={onLocateClaude}>
-                      Locate manually…
-                    </Action>
-                    <Action
-                      data-settings-clear-claude
-                      onClick={onClearClaudeOverride}
-                      disabled={!overridden}
-                      title={
-                        overridden
-                          ? 'Forget the executable you picked and use whatever Floti finds'
-                          : 'Nothing to clear - Floti found this one itself'
-                      }
-                    >
-                      Clear override
-                    </Action>
-                  </Actions>
-                </Group>
-                <Group name="walkthrough" title="Walkthrough" hint="The steps Floti opened with the first time.">
-                  <Actions>
-                    <Action data-settings-show-walkthrough onClick={onShowWalkthrough}>
-                      Show the walkthrough
-                    </Action>
-                  </Actions>
-                </Group>
-            </>
-          )}
+      {section === 'programs' && (
+        <>
+          <ClaudeGroup
+            host={host}
+            unknown={unknown}
+            status={status}
+            statusError={statusError}
+            checking={checking}
+            onRecheck={onRecheck}
+            onLocate={onLocateClaude}
+            onClearOverride={onClearClaudeOverride}
+          />
+          <ShellGroup
+            host={host}
+            unknown={unknown}
+            shell={terminalShell}
+            onChange={onTerminalShellChange}
+            shells={shells}
+            onLocate={onLocateShell}
+            onShellPath={onShellPath}
+          />
+        </>
+      )}
 
-          {section === 'workspace' && (
-            <>
-                <Group
-                  name="workspace"
-                  title="Workspace"
-                  hint={
-                    scanning
-                      ? `${count(roots.length, 'folder')} · scanning…`
-                      : `${count(roots.length, 'folder')} · ${count(projectCount, 'project')}`
-                  }
-                >
-                  {roots.length === 0 ? (
-                    <p className="pb-1 text-[12px] text-fg-subtle">
-                      Floti scans nothing until you say what to scan.
-                    </p>
-                  ) : (
-                    <ul className="overflow-hidden rounded-well border border-border bg-surface-sunken">
-                      {roots.map((root) => (
-                        <li
-                          key={root}
-                          data-settings-root={root}
-                          className="flex items-center gap-2 border-b border-border px-3 py-1.5 last:border-b-0"
-                        >
-                          <span
-                            className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-muted"
-                            title={root}
-                          >
-                            {root}
-                          </span>
-                          <button
-                            type="button"
-                            data-settings-remove-root={root}
-                            onClick={() => onRemoveRoot(root)}
-                            aria-label={`Stop scanning ${root}`}
-                            title={`Stop scanning ${root}`}
-                            className={cn(
-                              'grid size-5 shrink-0 place-items-center rounded text-fg-subtle',
-                              'transition-colors hover:bg-hover hover:text-danger'
-                            )}
-                          >
-                            <CloseIcon width={11} height={11} />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+      {section === 'tools' && (
+        <ToolsGroup
+          hostName={host.name}
+          unknown={unknown}
+          sessionMcp={sessionMcp}
+          onSessionMcpChange={onSessionMcpChange}
+          desktopMcp={desktopMcp}
+          onDesktopMcpChange={onDesktopMcpChange}
+          browserMcp={browserMcp}
+          onBrowserMcpChange={onBrowserMcpChange}
+          sessionAgents={sessionAgents}
+          onSessionAgentsChange={onSessionAgentsChange}
+        />
+      )}
 
-                  <p className="mt-2.5 text-[11px] leading-[1.55] text-fg-subtle">
-                    A <em>workspace</em> is a folder with a <code className="font-mono">workspace.yaml</code>,
-                    and lets one session compose several repos&rsquo; skills. Removing a folder only stops
-                    Floti scanning it.
-                  </p>
-
-                  <Actions>
-                    <Action data-settings-add-root onClick={onAddRoot} primary={roots.length === 0}>
-                      Add a folder
-                    </Action>
-                  </Actions>
-
-                  <Divider />
-
-                  {/* Pins are made on the sidebar, on the row of the project being
-                      pinned - the star is there because that is where the decision is.
-                      This is where the set is legible all at once, which is what the
-                      sidebar cannot be: its Pinned section shows a vanished folder as
-                      one row saying so, and a list of the paths is what says *which*
-                      path, in a form that can be compared with what is on disk. */}
-                  <p className="text-[12.5px] text-fg">{labelOf('pinnedProjects')}</p>
-                  <p className="mt-0.5 mb-2 text-[11px] leading-[1.55] text-fg-subtle">
-                    {hintOf('pinnedProjects')}
-                  </p>
-
-                  {pinnedProjects.length === 0 ? (
-                    <p className="text-[12px] text-fg-subtle">Nothing is pinned.</p>
-                  ) : (
-                    <ul className="overflow-hidden rounded-well border border-border bg-surface-sunken">
-                      {pinnedProjects.map((path) => (
-                        <li
-                          key={path}
-                          data-settings-pinned={path}
-                          className="flex items-center gap-2 border-b border-border px-3 py-1.5 last:border-b-0"
-                        >
-                          <span
-                            className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-muted"
-                            title={path}
-                          >
-                            {path}
-                          </span>
-                          {/* The roots list above wears the same shape with a danger
-                              hover on its ×, and this one deliberately does not:
-                              un-scanning a folder takes projects out of the tree, and
-                              un-pinning one moves a row back into its workspace. */}
-                          <button
-                            type="button"
-                            data-settings-unpin={path}
-                            onClick={() => onUnpinProject(path)}
-                            aria-label={`Unpin ${path}`}
-                            title={`Unpin ${path}`}
-                            className={cn(
-                              'grid size-5 shrink-0 place-items-center rounded text-fg-subtle',
-                              'transition-colors hover:bg-hover hover:text-fg'
-                            )}
-                          >
-                            <CloseIcon width={11} height={11} />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Group>
-
-                <TemplatesGroup
-                  total={templateCount}
-                  dir={templatesDir}
-                  onManage={onManageTemplates}
-                  onReveal={onRevealTemplates}
-                />
-            </>
-          )}
-
-          {section === 'appearance' && (
-            <AppearanceGroup
-              settings={appearance}
-              onChange={onAppearanceChange}
-              themes={themes}
-              state={themeState}
-              onOpenFolder={onOpenThemesFolder}
-              onDuplicate={onDuplicateTheme}
+      {section === 'workspace' && (
+        <>
+          <WorkspaceGroup
+            host={host}
+            unknown={unknown}
+            roots={roots}
+            projectCount={projectCount}
+            scanning={scanning}
+            onAddRoot={onAddRoot}
+            onAddRootPath={onAddRootPath}
+            onRemoveRoot={onRemoveRoot}
+            pinnedProjects={pinnedProjects}
+            onUnpinProject={onUnpinProject}
+          />
+          {/* This PC's templates: a host on another computer's are chosen and
+              kept in its own New Workspace dialog. */}
+          {!host.remote && (
+            <TemplatesGroup
+              total={templateCount}
+              dir={templatesDir}
+              onManage={onManageTemplates}
+              onReveal={onRevealTemplates}
             />
           )}
+        </>
+      )}
 
-          {section === 'terminal' && (
-            <TerminalGroup
-              terminal={terminal}
-              onChange={onTerminalChange}
-              fontStack={terminalFontStack}
-              shells={shells}
-              onLocateShell={onLocateShell}
-              onShellPath={onShellPath}
-            />
-          )}
+      {section === 'appearance' && (
+        <AppearanceGroup
+          settings={appearance}
+          onChange={onAppearanceChange}
+          themes={themes}
+          state={themeState}
+          onOpenFolder={onOpenThemesFolder}
+          onDuplicate={onDuplicateTheme}
+        />
+      )}
 
-          {section === 'sessions' && (
-            <SessionsGroup
-              mcp={sessionMcp}
-              onMcpChange={onSessionMcpChange}
-              restore={restoreWithoutAsking}
-              onRestoreChange={onRestoreWithoutAskingChange}
-              quit={quitSessions}
-              onQuitChange={onQuitSessionsChange}
-              onStopHost={onStopHost}
-              hostLogFile={hostLogFile}
-            />
-          )}
+      {section === 'terminal' && (
+        <TerminalGroup terminal={terminal} onChange={onTerminalChange} fontStack={terminalFontStack} />
+      )}
 
-          {section === 'agents' && (
-            <>
-              <AgentsGroup
-                overview={agentsOverview}
-                enabled={sessionAgents}
-                onEnabledChange={onSessionAgentsChange}
-                desktop={desktopMcp}
-                onDesktopChange={onDesktopMcpChange}
-                inParentTab={showChildrenInParentTab}
-                onInParentTabChange={onShowChildrenInParentTabChange}
-              />
-              <AgentLimitsGroup limits={agentLimits} onLimitsChange={onAgentLimitsChange} />
-            </>
-          )}
+      {section === 'sessions' && (
+        <SessionsGroup
+          restore={restoreWithoutAsking}
+          onRestoreChange={onRestoreWithoutAskingChange}
+          inParentTab={showChildrenInParentTab}
+          onInParentTabChange={onShowChildrenInParentTabChange}
+          quit={quitSessions}
+          onQuitChange={onQuitSessionsChange}
+          onStopHost={onStopHost}
+          hostLogFile={hostLogFile}
+        />
+      )}
 
-          {section === 'hosts' && (
-            <HostsSettings
-              hosts={hosts}
-              onAdd={onAddHost}
-              onRemove={onRemoveHost}
-              onQuitChange={onHostQuitChange}
-              install={hostInstall}
-              onInstalled={onHostInstalled}
-              updateRequest={hostUpdateRequest}
-              onReconnect={onReconnectHost}
-              localHost={localHost}
-            />
-          )}
+      {section === 'agents' && (
+        <>
+          <AgentsGroup overview={agentsOverview} />
+          <AgentLimitsGroup
+            hostName={host.name}
+            unknown={unknown}
+            limits={agentLimits}
+            onLimitsChange={onAgentLimitsChange}
+          />
+        </>
+      )}
 
-          {section === 'devices' && <DevicesSettings {...devices} />}
+      {section === 'hosts' && (
+        <HostsSettings
+          hosts={hosts}
+          onAdd={onAddHost}
+          onRemove={onRemoveHost}
+          onQuitChange={onHostQuitChange}
+          install={hostInstall}
+          onInstalled={onHostInstalled}
+          updateRequest={hostUpdateRequest}
+          onReconnect={onReconnectHost}
+          localHost={localHost}
+        />
+      )}
 
-          {section === 'files' && (
-            <FilesGroup wrap={filesWrap} onWrapChange={onFilesWrapChange} />
-          )}
+      {section === 'devices' && <DevicesSettings {...devices} />}
 
-          {section === 'browser' && (
-            <BrowserGroup
-              reach={browserReach}
-              onReachChange={onBrowserReachChange}
-              search={browserSearch}
-              onSearchChange={onBrowserSearchChange}
-              mcp={browserMcp}
-              onMcpChange={onBrowserMcpChange}
-              mcpLocalOnly={browserMcpLocalOnly}
-              onMcpLocalOnlyChange={onBrowserMcpLocalOnlyChange}
-            />
-          )}
+      {section === 'files' && <FilesGroup wrap={filesWrap} onWrapChange={onFilesWrapChange} />}
 
-          {section === 'archive' && (
-            <ArchiveGroup
-              stats={archiveStats}
-              maxBytes={transcriptArchiveMaxBytes}
-              onMaxBytesChange={onTranscriptArchiveMaxBytesChange}
-            />
-          )}
+      {section === 'browser' && (
+        <BrowserGroup
+          reach={browserReach}
+          onReachChange={onBrowserReachChange}
+          search={browserSearch}
+          onSearchChange={onBrowserSearchChange}
+          mcpLocalOnly={browserMcpLocalOnly}
+          onMcpLocalOnlyChange={onBrowserMcpLocalOnlyChange}
+          onShowTools={onShowSection === undefined ? undefined : () => onShowSection('tools')}
+        />
+      )}
 
-          {section === 'updates' && (
-            <UpdatesGroup
-              appVersion={appVersion}
-              releasesUrl={releasesUrl}
-              update={update}
-              error={updateError}
-              checking={updateChecking}
-              onCheckNow={onCheckForUpdate}
-              onInstall={onInstallUpdate}
-              onOpenReleases={onOpenReleases}
-              updateCheck={updateCheck}
-              onUpdateCheckChange={onUpdateCheckChange}
-            />
-          )}
+      {section === 'archive' && (
+        <ArchiveGroup
+          unknown={unknown}
+          stats={archiveStats}
+          maxBytes={transcriptArchiveMaxBytes}
+          onMaxBytesChange={onTranscriptArchiveMaxBytesChange}
+        />
+      )}
+
+      {section === 'updates' && (
+        <UpdatesGroup
+          host={host}
+          unknown={unknown}
+          appVersion={appVersion}
+          releasesUrl={releasesUrl}
+          update={update}
+          error={updateError}
+          checking={updateChecking}
+          onCheckNow={onCheckForUpdate}
+          onInstall={onInstallUpdate}
+          onOpenReleases={onOpenReleases}
+          updateCheck={updateCheck}
+          onUpdateCheckChange={onUpdateCheckChange}
+          onShowHosts={onShowSection === undefined ? undefined : () => onShowSection('hosts')}
+        />
+      )}
     </SettingsPage>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Programs
+// ---------------------------------------------------------------------------
+
+/**
+ * The Claude CLI the picked host runs: where it found it, what version it is,
+ * the config it reads. "Could not look" is Unknown, never "not found".
+ */
+function ClaudeGroup({
+  host,
+  unknown,
+  status,
+  statusError,
+  checking,
+  onRecheck,
+  onLocate,
+  onClearOverride
+}: {
+  host: SettingsHostView
+  unknown: boolean
+  status: SetupClaudeStatus | null
+  statusError: string | null
+  checking: boolean
+  onRecheck: () => void
+  onLocate: (() => void) | undefined
+  onClearOverride: () => void
+}): JSX.Element {
+  // A host that cannot be read shows nothing it said before: Unknown.
+  const shown = unknown ? null : status
+  const found = shown !== null && shown.path !== null && shown.version !== null
+  const overridden = shown?.source === 'setting'
+  return (
+    <Group name="claude" title={labelOf('claudePath')} hint={hintOf('claudePath')}>
+      <div className="pb-1">
+        <Verdict
+          tone={shown === null ? 'todo' : found ? (shown.tested ? 'ok' : 'warn') : 'warn'}
+          text={
+            unknown
+              ? 'Unknown'
+              : shown === null
+                ? statusError === null
+                  ? 'Looking…'
+                  : `Unknown: ${statusError}`
+                : found
+                  ? overridden
+                    ? 'Set by you'
+                    : `Found on ${host.remote ? host.name : 'this machine'}`
+                  : shown.path !== null
+                    ? (shown.error ?? 'Found, but it did not report its version.')
+                    : (shown.error ?? 'Not found.')
+          }
+        />
+        {shown !== null && statusError !== null && (
+          <p data-settings-status-error className="mt-2 text-[11.5px] text-warn">
+            Could not check again: {statusError}
+          </p>
+        )}
+        <dl className="mt-2.5 space-y-1.5">
+          <Fact label="Path">
+            <span data-settings-claude-path title={shown?.path ?? ''}>
+              {shown?.path ?? NOTHING}
+            </span>
+          </Fact>
+          <Fact label="Version">
+            <span data-settings-claude-version>{shown?.version ?? NOTHING}</span>
+          </Fact>
+          <Fact label="Config">
+            <span data-settings-claude-config title={shown?.configDir ?? ''}>
+              {shown?.configDir ?? NOTHING}
+            </span>
+          </Fact>
+        </dl>
+
+        {found && shown !== null && !shown.tested && (
+          <p
+            data-settings-version-warning
+            className="mt-3 rounded-well border border-warn/30 bg-warn/10 px-3 py-2 text-[11.5px] leading-[1.55] text-warn"
+          >
+            Floti was tested against {shown.testedRange.min} up to (not including) {shown.testedRange.max}.{' '}
+            {shown.semver ?? shown.version} is outside that, so a flag may have moved. Nothing is blocked.
+          </p>
+        )}
+      </div>
+
+      <Actions>
+        <Action data-settings-recheck onClick={onRecheck} disabled={checking || unknown}>
+          <RefreshIcon className={cn('mr-1.5 inline', checking && 'animate-spin')} />
+          Check again
+        </Action>
+        <Action
+          data-settings-locate
+          onClick={() => onLocate?.()}
+          disabled={onLocate === undefined || unknown}
+          title={
+            onLocate === undefined
+              ? `The file picker browses this PC, so it cannot choose a claude on ${host.name}`
+              : 'Choose the claude program yourself'
+          }
+        >
+          Locate manually…
+        </Action>
+        <Action
+          data-settings-clear-claude
+          onClick={onClearOverride}
+          disabled={!overridden || unknown}
+          title={
+            overridden
+              ? 'Forget the executable you picked and use whatever Floti finds'
+              : 'Nothing to clear - Floti found this one itself'
+          }
+        >
+          Clear override
+        </Action>
+      </Actions>
+    </Group>
+  )
+}
+
+/** The shell a project pane opens on the picked host: one it found, one chosen by hand, or detect. */
+function ShellGroup({
+  host,
+  unknown,
+  shell,
+  onChange,
+  shells,
+  onLocate,
+  onShellPath
+}: {
+  host: SettingsHostView
+  unknown: boolean
+  shell: string | null
+  onChange: (path: string | null) => void
+  shells: DetectedShell[]
+  onLocate: (() => void) | undefined
+  onShellPath: (path: string) => Promise<string | null>
+}): JSX.Element {
+  // A shell picked by hand may not be one of the detected ones, and dropping it
+  // out of the list would make the picker show "Detect automatically" for a
+  // setting that is doing no such thing.
+  const shellOptions =
+    shell !== null && !shells.some((each) => sameFile(each.path, shell))
+      ? [...shells, { path: shell, name: fileName(shell), label: 'Chosen by you', args: [] }]
+      : shells
+  return (
+    <Group name="shell" title={labelOf('terminalShell')} hint={hintOf('terminalShell')}>
+      {unknown ? (
+        <Row label="Default shell">
+          <UnknownValue />
+        </Row>
+      ) : (
+        <div className="flex flex-col items-stretch gap-1.5">
+          <div className="flex items-center gap-2">
+            <Select
+              value={shell ?? ''}
+              label="Default shell"
+              data-settings-terminal-shell={shell ?? ''}
+              onChange={(value) => onChange(value === '' ? null : value)}
+            >
+              <option value="">Detect automatically</option>
+              {shellOptions.map((each) => (
+                <option key={each.path} value={each.path}>
+                  {each.name} - {each.label}
+                </option>
+              ))}
+            </Select>
+            {onLocate !== undefined && (
+              <Action data-settings-terminal-shell-locate onClick={onLocate}>
+                Choose…
+              </Action>
+            )}
+          </div>
+          <TypedPathField
+            label="Shell path"
+            placeholder={host.remote ? `Or type the full path to a shell on ${host.name}` : 'Or type the full path to a shell'}
+            action="Use"
+            mark="data-settings-terminal-shell"
+            onPath={onShellPath}
+          />
+        </div>
+      )}
+    </Group>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Tools
+// ---------------------------------------------------------------------------
+
+/**
+ * Which of Floti's tools the picked host's sessions get. Each is that host's,
+ * enforced there for every session it runs, whichever window started it; a
+ * session on it that turns one off with `desktop_set` changes this value.
+ */
+function ToolsGroup({
+  hostName,
+  unknown,
+  sessionMcp,
+  onSessionMcpChange,
+  desktopMcp,
+  onDesktopMcpChange,
+  browserMcp,
+  onBrowserMcpChange,
+  sessionAgents,
+  onSessionAgentsChange
+}: {
+  hostName: string
+  unknown: boolean
+  sessionMcp: boolean
+  onSessionMcpChange: (next: boolean) => void
+  desktopMcp: boolean
+  onDesktopMcpChange: (next: boolean) => void
+  browserMcp: boolean
+  onBrowserMcpChange: (next: boolean) => void
+  sessionAgents: boolean
+  onSessionAgentsChange: (next: boolean) => void
+}): JSX.Element {
+  const rows: readonly {
+    key: 'sessionMcp' | 'desktopMcp' | 'browserMcp' | 'sessionAgents'
+    mark: string
+    on: boolean
+    set: (next: boolean) => void
+    hint: string
+  }[] = [
+    {
+      key: 'sessionMcp',
+      mark: 'data-settings-session-mcp',
+      on: sessionMcp,
+      set: onSessionMcpChange,
+      hint: sessionMcp
+        ? `Sessions can list every Claude Code session running on ${hostName}: its name, its directory, whether it is busy or waiting on you. Not their conversations.`
+        : `Off on ${hostName}. Sessions started there get no floti-sessions tools and give themselves no titles.`
+    },
+    {
+      key: 'desktopMcp',
+      mark: 'data-settings-desktop-mcp',
+      on: desktopMcp,
+      set: onDesktopMcpChange,
+      hint: desktopMcp
+        ? `Sessions can open Floti’s views beside them, read and change its settings and diagnose it, in a window attached to ${hostName}.`
+        : `Off on ${hostName}. Sessions started there get no floti-desktop tools and no floti desktop.`
+    },
+    {
+      key: 'browserMcp',
+      mark: 'data-settings-browser-mcp',
+      on: browserMcp,
+      set: onBrowserMcpChange,
+      hint: browserMcp
+        ? `Sessions can open pages of their own in the browser of a window attached to ${hostName}, and drive a page of yours once you share it.`
+        : `Off on ${hostName}. Sessions started there get no browser tools.`
+    },
+    {
+      key: 'sessionAgents',
+      mark: 'data-settings-session-agents',
+      on: sessionAgents,
+      set: onSessionAgentsChange,
+      hint: sessionAgents
+        ? `Sessions started on ${hostName} get the floti-agents tools and floti agent, within the limits in Agents. A profile can turn it off for its own sessions.`
+        : `Off on ${hostName}. Sessions started there get no floti-agents tools and no floti agent, whichever window started them.`
+    }
+  ]
+  return (
+    <Group name="tools" title={`What sessions on ${hostName} get`}>
+      {rows.map((row) =>
+        unknown ? (
+          <UnknownCheckRow key={row.key} label={labelOf(row.key)} />
+        ) : (
+          <CheckRow key={row.key} label={labelOf(row.key)} hint={row.hint}>
+            <span {...dataHook(row.mark, String(row.on))}>
+              <Checkbox checked={row.on} onChange={() => row.set(!row.on)} label={labelOf(row.key)} />
+            </span>
+          </CheckRow>
+        )
+      )}
+    </Group>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Workspace
+// ---------------------------------------------------------------------------
+
+/** The folders the picked host scans, and the projects pinned out of their workspace there. */
+function WorkspaceGroup({
+  host,
+  unknown,
+  roots,
+  projectCount,
+  scanning,
+  onAddRoot,
+  onAddRootPath,
+  onRemoveRoot,
+  pinnedProjects,
+  onUnpinProject
+}: {
+  host: SettingsHostView
+  unknown: boolean
+  roots: string[]
+  projectCount: number
+  scanning: boolean
+  onAddRoot: () => void
+  onAddRootPath: ((path: string) => Promise<string | null>) | undefined
+  onRemoveRoot: (path: string) => void
+  pinnedProjects: string[]
+  onUnpinProject: (path: string) => void
+}): JSX.Element {
+  return (
+    <Group
+      name="workspace"
+      title="Workspace"
+      hint={
+        unknown
+          ? undefined
+          : scanning
+            ? `${count(roots.length, 'folder')} · scanning…`
+            : `${count(roots.length, 'folder')} · ${count(projectCount, 'project')}`
+      }
+    >
+      <p className="text-[12.5px] text-fg">{labelOf('scanRoots')}</p>
+      {unknown ? (
+        <p className="mt-1 pb-1">
+          <UnknownValue />
+        </p>
+      ) : roots.length === 0 ? (
+        <p className="mt-1 pb-1 text-[12px] text-fg-subtle">Floti scans nothing until you say what to scan.</p>
+      ) : (
+        <ul className="mt-2 overflow-hidden rounded-well border border-border bg-surface-sunken">
+          {roots.map((root) => (
+            <li
+              key={root}
+              data-settings-root={root}
+              className="flex items-center gap-2 border-b border-border px-3 py-1.5 last:border-b-0"
+            >
+              <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-muted" title={root}>
+                {root}
+              </span>
+              <button
+                type="button"
+                data-settings-remove-root={root}
+                onClick={() => onRemoveRoot(root)}
+                aria-label={`Stop scanning ${root}`}
+                title={`Stop scanning ${root}`}
+                className={cn(
+                  'grid size-5 shrink-0 place-items-center rounded text-fg-subtle',
+                  'transition-colors hover:bg-hover hover:text-danger'
+                )}
+              >
+                <CloseIcon width={11} height={11} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-2.5 text-[11px] leading-[1.55] text-fg-subtle">
+        A <em>workspace</em> is a folder with a <code className="font-mono">workspace.yaml</code>, and lets one session
+        compose several repos&rsquo; skills. Removing a folder only stops Floti scanning it.
+      </p>
+
+      {!unknown &&
+        (host.remote && onAddRootPath !== undefined ? (
+          <div className="mt-3">
+            <TypedPathField
+              label={`Folder on ${host.name}`}
+              placeholder={`The full path of a folder on ${host.name}`}
+              action="Add"
+              mark="data-settings-add-root"
+              onPath={onAddRootPath}
+            />
+          </div>
+        ) : (
+          !host.remote && (
+            <Actions>
+              <Action data-settings-add-root onClick={onAddRoot} primary={roots.length === 0}>
+                Add a folder
+              </Action>
+            </Actions>
+          )
+        ))}
+
+      <Divider />
+
+      {/* Pins are made on the sidebar, on the row of the project being
+          pinned - the star is there because that is where the decision is.
+          This is where the set is legible all at once, which is what the
+          sidebar cannot be: its Pinned section shows a vanished folder as
+          one row saying so, and a list of the paths is what says *which*
+          path, in a form that can be compared with what is on disk. */}
+      <p className="text-[12.5px] text-fg">{labelOf('pinnedProjects')}</p>
+      <p className="mt-0.5 mb-2 text-[11px] leading-[1.55] text-fg-subtle">{hintOf('pinnedProjects')}</p>
+
+      {unknown ? (
+        <UnknownValue />
+      ) : pinnedProjects.length === 0 ? (
+        <p className="text-[12px] text-fg-subtle">Nothing is pinned.</p>
+      ) : (
+        <ul className="overflow-hidden rounded-well border border-border bg-surface-sunken">
+          {pinnedProjects.map((path) => (
+            <li
+              key={path}
+              data-settings-pinned={path}
+              className="flex items-center gap-2 border-b border-border px-3 py-1.5 last:border-b-0"
+            >
+              <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-muted" title={path}>
+                {path}
+              </span>
+              {/* The roots list above wears the same shape with a danger
+                  hover on its ×, and this one deliberately does not:
+                  un-scanning a folder takes projects out of the tree, and
+                  un-pinning one moves a row back into its workspace. */}
+              <button
+                type="button"
+                data-settings-unpin={path}
+                onClick={() => onUnpinProject(path)}
+                aria-label={`Unpin ${path}`}
+                title={`Unpin ${path}`}
+                className={cn(
+                  'grid size-5 shrink-0 place-items-center rounded text-fg-subtle',
+                  'transition-colors hover:bg-hover hover:text-fg'
+                )}
+              >
+                <CloseIcon width={11} height={11} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Group>
   )
 }
 
@@ -1278,14 +1617,18 @@ const ARCHIVE_CEILINGS = [
  * `types.ts` has the argument. What can be turned down is the ceiling.
  */
 function ArchiveGroup({
-  stats,
+  unknown,
+  stats: read,
   maxBytes,
   onMaxBytesChange
 }: {
+  /** The picked host cannot be read: its archive and its ceiling are Unknown. */
+  unknown: boolean
   stats: ArchiveStats | null
   maxBytes: number
   onMaxBytesChange: (bytes: number) => void
 }): JSX.Element {
+  const stats = unknown ? null : read
   const used = stats?.storedBytes ?? 0
   const percent = maxBytes > 0 ? (used / maxBytes) * 100 : 0
   // Two significant figures below 1%, so a real archive on a default ceiling
@@ -1309,30 +1652,36 @@ function ArchiveGroup({
     >
       <div className="pb-1">
         <Verdict
-          data-settings-archive-state={stats === null ? 'reading' : stats.sessions === 0 ? 'empty' : 'holding'}
+          data-settings-archive-state={
+            unknown ? 'unknown' : stats === null ? 'reading' : stats.sessions === 0 ? 'empty' : 'holding'
+          }
           tone={stats === null ? 'todo' : 'ok'}
           text={
-            stats === null
-              ? 'Reading…'
-              : stats.sessions === 0
-                ? 'Nothing archived yet'
-                : `${count(stats.sessions, 'conversation')} kept`
+            unknown
+              ? 'Unknown'
+              : stats === null
+                ? 'Reading…'
+                : stats.sessions === 0
+                  ? 'Nothing archived yet'
+                  : `${count(stats.sessions, 'conversation')} kept`
           }
         />
         <dl className="mt-2.5 space-y-1.5">
           <Fact label="Kept">
             <span data-settings-archive-sessions={String(stats?.sessions ?? 0)}>
-              {count(stats?.sessions ?? 0, 'session')} · {count(stats?.messages ?? 0, 'message')}
+              {unknown
+                ? NOTHING
+                : `${count(stats?.sessions ?? 0, 'session')} · ${count(stats?.messages ?? 0, 'message')}`}
             </span>
           </Fact>
           <Fact label="Stored">
             <span data-settings-archive-stored={String(used)}>
-              {formatBytes(used)} of {formatBytes(maxBytes)} ({percentText})
+              {unknown ? NOTHING : `${formatBytes(used)} of ${formatBytes(maxBytes)} (${percentText})`}
             </span>
           </Fact>
           <Fact label="Dropped">
             <span data-settings-archive-evicted={String(stats?.evictedSessions ?? 0)}>
-              {count(stats?.evictedSessions ?? 0, 'session')}
+              {unknown ? NOTHING : count(stats?.evictedSessions ?? 0, 'session')}
             </span>
           </Fact>
         </dl>
@@ -1341,18 +1690,22 @@ function ArchiveGroup({
       <Divider />
 
       <Row label={labelOf('transcriptArchiveMaxBytes')} hint={hintOf('transcriptArchiveMaxBytes')}>
-        <Select
-          value={String(maxBytes)}
-          label="How much of the database the archive may use"
-          data-settings-archive-max={String(maxBytes)}
-          onChange={(value) => onMaxBytesChange(Number(value))}
-        >
-          {choices.map((choice) => (
-            <option key={choice.bytes} value={String(choice.bytes)}>
-              {choice.label}
-            </option>
-          ))}
-        </Select>
+        {unknown ? (
+          <UnknownValue />
+        ) : (
+          <Select
+            value={String(maxBytes)}
+            label="How much of the database the archive may use"
+            data-settings-archive-max={String(maxBytes)}
+            onChange={(value) => onMaxBytesChange(Number(value))}
+          >
+            {choices.map((choice) => (
+              <option key={choice.bytes} value={String(choice.bytes)}>
+                {choice.label}
+              </option>
+            ))}
+          </Select>
+        )}
       </Row>
     </Group>
   )
@@ -1480,150 +1833,149 @@ function FilesGroup({ wrap, onWrapChange }: { wrap: boolean; onWrapChange: (wrap
 }
 
 /**
- * The browser pane's posture, and what a Claude session may do with it.
+ * The browser pane's posture on this desktop, and how far Claude may take it.
  *
- * Four rows, because there are four decisions: where the pane may go at all,
- * what the address bar does with a phrase, whether the sessions Floti hosts can
- * drive it, and whether they are held to this machine when the pane is not.
- * Everything else about the pane - downloads denied, every permission but
- * clipboard writing and fullscreen denied, self-signed certificates accepted
- * for loopback and nowhere else - is not a setting and never will be. Those
- * are the app's postures, and a posture with a switch on it is a posture
- * somebody turns off on the afternoon it gets in their way.
+ * Three rows, because there are three decisions this desktop makes: where the
+ * pane may go at all, what the address bar does with a phrase, and whether
+ * Claude's browser tools are held to localhost when the pane is not. Whether a
+ * host's sessions get the browser tools at all is that host's (Floti host ›
+ * Tools), and the group says so. Everything else about the pane - downloads
+ * denied, every permission but clipboard writing and fullscreen denied,
+ * self-signed certificates accepted for loopback and nowhere else - is not a
+ * setting and never will be. Those are the app's postures, and a posture with
+ * a switch on it is a posture somebody turns off on the afternoon it gets in
+ * their way.
  *
- * The two reach rows are deliberately adjacent and worded as a pair, because
- * the rule between them is an intersection and the failure to avoid is somebody
- * setting the second and believing it widened the first.
+ * The two reach rows are worded as a pair, because the rule between them is
+ * an intersection and the failure to avoid is somebody setting the second and
+ * believing it widened the first.
  */
 function BrowserGroup({
   reach,
   onReachChange,
   search,
   onSearchChange,
-  mcp,
-  onMcpChange,
   mcpLocalOnly,
-  onMcpLocalOnlyChange
+  onMcpLocalOnlyChange,
+  onShowTools
 }: {
   reach: BrowserReach
   onReachChange: (reach: BrowserReach) => void
   search: BrowserSearch
   onSearchChange: (search: BrowserSearch) => void
-  mcp: boolean
-  onMcpChange: (next: boolean) => void
   mcpLocalOnly: boolean
   onMcpLocalOnlyChange: (next: boolean) => void
+  /** Opens Floti host › Tools, where a host decides whether its sessions get the browser tools. */
+  onShowTools: (() => void) | undefined
 }): JSX.Element {
   return (
-    <Group
-      name="browser"
-      title="Browser"
-      hint="Pages in the Browser tab. Sites may copy to your clipboard and go full screen; downloads go to your own browser, and nothing else a site asks for is allowed."
-    >
-      <Row label={labelOf('browserReach')} hint={hintOf('browserReach', reach)}>
-        <Select
-          value={reach}
-          label="Where the browser pane may go"
-          data-settings-browser-reach={reach}
-          onChange={(value) => onReachChange(value as BrowserReach)}
+    <>
+      <Group name="browser" title="Browser" untitled>
+        <Row label={labelOf('browserReach')} hint={hintOf('browserReach', reach)}>
+          <Select
+            value={reach}
+            label="Where the browser pane may go"
+            data-settings-browser-reach={reach}
+            onChange={(value) => onReachChange(value as BrowserReach)}
+          >
+            <option value="web">Anywhere I navigate to</option>
+            <option value="local">This machine only</option>
+          </Select>
+        </Row>
+
+        <Row label={labelOf('browserSearch')} hint={hintOf('browserSearch', search)}>
+          <Select
+            value={search}
+            label={labelOf('browserSearch')}
+            data-settings-browser-search={search}
+            onChange={(value) => onSearchChange(value as BrowserSearch)}
+          >
+            {BROWSER_SEARCH_ENGINES.map((choice) => (
+              <option key={choice} value={choice}>
+                {browserSearchName(choice) ?? 'Off'}
+              </option>
+            ))}
+          </Select>
+        </Row>
+      </Group>
+
+      <Group name="browser-claude" title="Claude in this browser">
+        {/* Not disabled when a host's browser tools are off, deliberately. The
+            value is a standing preference: somebody who has confined the tools
+            and then turns them off for an afternoon should find them still
+            confined when they turn them back on, and a control that greys out
+            is a control whose state people stop trusting. */}
+        <CheckRow
+          label={labelOf('browserMcpLocalOnly')}
+          hint={hintOf('browserMcpLocalOnly', mcpLocalOnly) ?? settingEntry('browserMcpLocalOnly').description}
         >
-          <option value="web">Anywhere I navigate to</option>
-          <option value="local">This machine only</option>
-        </Select>
-      </Row>
-
-      <Row label={labelOf('browserSearch')} hint={hintOf('browserSearch', search)}>
-        <Select
-          value={search}
-          label={labelOf('browserSearch')}
-          data-settings-browser-search={search}
-          onChange={(value) => onSearchChange(value as BrowserSearch)}
+          <span data-settings-browser-mcp-local={String(mcpLocalOnly)}>
+            <Checkbox
+              checked={mcpLocalOnly}
+              onChange={() => onMcpLocalOnlyChange(!mcpLocalOnly)}
+              label={labelOf('browserMcpLocalOnly')}
+            />
+          </span>
+        </CheckRow>
+        <p
+          data-settings-browser-tools-pointer
+          className="mt-2 border-t border-border pt-2 text-[11.5px] leading-[1.5] text-fg-muted"
         >
-          {BROWSER_SEARCH_ENGINES.map((choice) => (
-            <option key={choice} value={choice}>
-              {browserSearchName(choice) ?? 'Off'}
-            </option>
-          ))}
-        </Select>
-      </Row>
-
-      <Row label={labelOf('browserMcp')} hint={hintOf('browserMcp', mcp)}>
-        <span data-settings-browser-mcp={String(mcp)}>
-          <Checkbox
-            checked={mcp}
-            onChange={() => onMcpChange(!mcp)}
-            label={labelOf('browserMcp')}
-          />
-        </span>
-      </Row>
-
-      <Row label={labelOf('browserMcpLocalOnly')} hint={hintOf('browserMcpLocalOnly', mcpLocalOnly)}>
-        {/* Not disabled when the tools are off, deliberately. The value is a
-            standing preference: somebody who has confined the tools and then
-            turns them off for an afternoon should find them still confined when
-            they turn them back on, and a control that greys out is a control
-            whose state people stop trusting. */}
-        <span data-settings-browser-mcp-local={String(mcpLocalOnly)}>
-          <Checkbox
-            checked={mcpLocalOnly}
-            onChange={() => onMcpLocalOnlyChange(!mcpLocalOnly)}
-            label="Confine Claude’s browser tools to this machine"
-          />
-        </span>
-      </Row>
-    </Group>
+          Whether a host’s sessions get the browser tools at all is set on that host:{' '}
+          {onShowTools === undefined ? (
+            'Floti host › Tools'
+          ) : (
+            <button type="button" onClick={onShowTools} className="text-accent-text hover:underline">
+              Floti host › Tools
+            </button>
+          )}
+          .
+        </p>
+      </Group>
+    </>
   )
 }
 
 /**
- * What a session may learn about the other sessions.
- *
- * A group of its own beside Browser rather than a third tick inside it. The two
- * are served by one endpoint on one port, which is an implementation detail; a
- * person reading this pane is deciding two different things - whether an agent
- * may click things in a browser, and whether an agent may be told what their
- * other work is doing - and those have different answers for different people.
+ * What this desktop does with the sessions it starts: after a crash, in a
+ * parent's tab, and when it quits; and this PC's host, which they run in.
  */
 function SessionsGroup({
-  mcp,
-  onMcpChange,
   restore,
   onRestoreChange,
+  inParentTab,
+  onInParentTabChange,
   quit,
   onQuitChange,
   onStopHost,
   hostLogFile
 }: {
-  mcp: boolean
-  onMcpChange: (next: boolean) => void
   restore: boolean
   onRestoreChange: (next: boolean) => void
+  inParentTab: boolean
+  onInParentTabChange: (next: boolean) => void
   quit: QuitSessions
   onQuitChange: (next: QuitSessions) => void
   onStopHost: () => void
   hostLogFile: string | null
 }): JSX.Element {
   return (
-    <Group
-      name="sessions"
-      title="Sessions"
-      hint="What a session Floti hosts may know about the others on this machine, so it can stay out of a working tree somebody else is in. Read-only, and never another session’s conversation."
-    >
-      <Row label={labelOf('sessionMcp')} hint={hintOf('sessionMcp', mcp)}>
-        <span data-settings-session-mcp={String(mcp)}>
-          <Checkbox
-            checked={mcp}
-            onChange={() => onMcpChange(!mcp)}
-            label={labelOf('sessionMcp')}
-          />
-        </span>
-      </Row>
+    <Group name="sessions" title="Sessions" hint="What this desktop does with the sessions it starts.">
       <Row label={labelOf('restoreWithoutAsking')} hint={hintOf('restoreWithoutAsking', restore)}>
         <span data-settings-restore-without-asking={String(restore)}>
           <Checkbox
             checked={restore}
             onChange={() => onRestoreChange(!restore)}
             label={labelOf('restoreWithoutAsking')}
+          />
+        </span>
+      </Row>
+      <Row label={labelOf('showChildrenInParentTab')} hint={settingEntry('showChildrenInParentTab').description}>
+        <span data-settings-children-in-parent-tab={String(inParentTab)}>
+          <Checkbox
+            checked={inParentTab}
+            onChange={() => onInParentTabChange(!inParentTab)}
+            label={labelOf('showChildrenInParentTab')}
           />
         </span>
       </Row>
@@ -1665,99 +2017,58 @@ function SessionsGroup({
   )
 }
 
-/**
- * Whether a session can start sessions of its own, whether it can open Floti's
- * views, and whether a parent's tab shows its children.
- *
- * A group of its own beside Sessions: that one is about what a session may
- * learn of the others, this one about what it may start, which is a different
- * decision with different consequences (a session that starts others spends
- * the user's agent time without being asked). Both choices are drawn as the
- * design draws them, a tick with its sentence beside it; the first is told to
- * the host, the second is this device's alone.
- */
-function AgentsGroup({
-  overview,
-  enabled,
-  onEnabledChange,
-  desktop,
-  onDesktopChange,
-  inParentTab,
-  onInParentTabChange
-}: {
-  overview: AgentsOverview | undefined
-  enabled: boolean
-  onEnabledChange: (next: boolean) => void
-  desktop: boolean
-  onDesktopChange: (next: boolean) => void
-  inParentTab: boolean
-  onInParentTabChange: (next: boolean) => void
-}): JSX.Element {
+/** The picked host's agents in a sentence, with Open Agents: the section's first row. */
+function AgentsGroup({ overview }: { overview: AgentsOverview | undefined }): JSX.Element | null {
+  if (overview === undefined) return null
   return (
-    <Group name="agents" title="Agents">
-      {overview !== undefined && (
-        <Row
-          label={
-            overview.count === null
-              ? `Agents on ${overview.hostName}`
-              : `${overview.count} ${overview.count === 1 ? 'agent' : 'agents'} on ${overview.hostName}`
-          }
-          hint={`Lead, worker, reviewer and the rest: what a session started as one of them runs with.${
-            overview.folder === null ? '' : ` Kept as files in ${overview.folder}.`
-          }`}
-        >
-          <span data-settings-agents-open>
-            <Action onClick={overview.onOpen}>Open Agents</Action>
-          </span>
-        </Row>
-      )}
-      <CheckRow label={labelOf('sessionAgents')} hint={settingEntry('sessionAgents').description}>
-        <span data-settings-session-agents={String(enabled)}>
-          <Checkbox
-            checked={enabled}
-            onChange={() => onEnabledChange(!enabled)}
-            label={labelOf('sessionAgents')}
-          />
+    <Group name="agents" title="Agents" untitled>
+      <Row
+        label={
+          overview.count === null
+            ? `Agents on ${overview.hostName}`
+            : `${overview.count} ${overview.count === 1 ? 'agent' : 'agents'} on ${overview.hostName}`
+        }
+        hint={`Lead, worker, reviewer and the rest: what a session started as one of them runs with.${
+          overview.folder === null ? '' : ` Kept as files in ${overview.folder}.`
+        }`}
+      >
+        <span data-settings-agents-open>
+          <Action onClick={overview.onOpen}>Open Agents</Action>
         </span>
-      </CheckRow>
-
-      <CheckRow label={labelOf('desktopMcp')} hint={settingEntry('desktopMcp').description}>
-        <span data-settings-desktop-mcp={String(desktop)}>
-          <Checkbox
-            checked={desktop}
-            onChange={() => onDesktopChange(!desktop)}
-            label={labelOf('desktopMcp')}
-          />
-        </span>
-      </CheckRow>
-
-      <CheckRow label={labelOf('showChildrenInParentTab')} hint={settingEntry('showChildrenInParentTab').description}>
-        <span data-settings-children-in-parent-tab={String(inParentTab)}>
-          <Checkbox
-            checked={inParentTab}
-            onChange={() => onInParentTabChange(!inParentTab)}
-            label={labelOf('showChildrenInParentTab')}
-          />
-        </span>
-      </CheckRow>
+      </Row>
     </Group>
   )
 }
 
+/** The limits the Limits group draws, in its order, with the hook a driver reaches each by. */
+const LIMIT_ROWS: readonly {
+  key: keyof AgentLimitSettings
+  bounds: { min: number; max: number }
+  mark: string
+}[] = [
+  { key: 'agentChildrenPerParent', bounds: AGENT_CHILDREN_PER_PARENT, mark: 'data-settings-agent-children-per-parent' },
+  { key: 'agentCommandsPerParent', bounds: AGENT_COMMANDS_PER_PARENT, mark: 'data-settings-agent-commands-per-parent' },
+  { key: 'agentSessionsPerHost', bounds: AGENT_SESSIONS_PER_HOST, mark: 'data-settings-agent-sessions-per-host' },
+  { key: 'agentDepth', bounds: AGENT_DEPTH, mark: 'data-settings-agent-depth' },
+  { key: 'agentStartsPerParent', bounds: AGENT_STARTS_PER_PARENT, mark: 'data-settings-agent-starts-per-parent' }
+]
+
 /**
- * The limits on a family of agents.
+ * The limits on a family of agents, as the picked host keeps them.
  *
- * Its own group under the two choices, because the design puts every number in
- * Settings, Agents, and the choices above are drawn alone as a pair. The host
- * enforces every number, whether or not a window is open, and sessions the user
- * starts count toward none of them. A limit is a whole number inside the range
- * the host accepts, so a value outside it is brought to the nearest end rather
- * than refused by the host after the fact.
+ * The host enforces every number, whether or not a window is open, and
+ * sessions the user starts count toward none of them. A limit is a whole
+ * number inside the range the host accepts, so a value outside it is brought
+ * to the nearest end rather than refused by the host after the fact.
  */
 function AgentLimitsGroup({
+  hostName,
+  unknown,
   limits,
   onLimitsChange
 }: {
+  hostName: string
+  unknown: boolean
   limits: AgentLimitSettings
   onLimitsChange: (patch: Partial<AgentLimitSettings>) => void
 }): JSX.Element {
@@ -1765,70 +2076,27 @@ function AgentLimitsGroup({
     <Group
       name="agent-limits"
       title="Limits"
-      hint="The host enforces each of these whether or not a window is open. Sessions you start yourself count toward none of them."
+      hint={`${hostName} enforces each of these whether or not a window is open. Sessions you start yourself count toward none of them.`}
     >
-      <Row label={labelOf('agentChildrenPerParent')} hint={hintOf('agentChildrenPerParent')}>
-        <NumberField
-          value={limits.agentChildrenPerParent}
-          min={AGENT_CHILDREN_PER_PARENT.min}
-          max={AGENT_CHILDREN_PER_PARENT.max}
-          label={labelOf('agentChildrenPerParent')}
-          data-settings-agent-children-per-parent={String(limits.agentChildrenPerParent)}
-          onCommit={(agentChildrenPerParent) => onLimitsChange({ agentChildrenPerParent })}
-        />
-      </Row>
-
-      <Divider />
-
-      <Row label={labelOf('agentCommandsPerParent')} hint={hintOf('agentCommandsPerParent')}>
-        <NumberField
-          value={limits.agentCommandsPerParent}
-          min={AGENT_COMMANDS_PER_PARENT.min}
-          max={AGENT_COMMANDS_PER_PARENT.max}
-          label={labelOf('agentCommandsPerParent')}
-          data-settings-agent-commands-per-parent={String(limits.agentCommandsPerParent)}
-          onCommit={(agentCommandsPerParent) => onLimitsChange({ agentCommandsPerParent })}
-        />
-      </Row>
-
-      <Divider />
-
-      <Row label={labelOf('agentSessionsPerHost')} hint={hintOf('agentSessionsPerHost')}>
-        <NumberField
-          value={limits.agentSessionsPerHost}
-          min={AGENT_SESSIONS_PER_HOST.min}
-          max={AGENT_SESSIONS_PER_HOST.max}
-          label={labelOf('agentSessionsPerHost')}
-          data-settings-agent-sessions-per-host={String(limits.agentSessionsPerHost)}
-          onCommit={(agentSessionsPerHost) => onLimitsChange({ agentSessionsPerHost })}
-        />
-      </Row>
-
-      <Divider />
-
-      <Row label={labelOf('agentDepth')} hint={hintOf('agentDepth')}>
-        <NumberField
-          value={limits.agentDepth}
-          min={AGENT_DEPTH.min}
-          max={AGENT_DEPTH.max}
-          label={labelOf('agentDepth')}
-          data-settings-agent-depth={String(limits.agentDepth)}
-          onCommit={(agentDepth) => onLimitsChange({ agentDepth })}
-        />
-      </Row>
-
-      <Divider />
-
-      <Row label={labelOf('agentStartsPerParent')} hint={hintOf('agentStartsPerParent')}>
-        <NumberField
-          value={limits.agentStartsPerParent}
-          min={AGENT_STARTS_PER_PARENT.min}
-          max={AGENT_STARTS_PER_PARENT.max}
-          label={labelOf('agentStartsPerParent')}
-          data-settings-agent-starts-per-parent={String(limits.agentStartsPerParent)}
-          onCommit={(agentStartsPerParent) => onLimitsChange({ agentStartsPerParent })}
-        />
-      </Row>
+      {LIMIT_ROWS.map(({ key, bounds, mark }, at) => (
+        <div key={key}>
+          {at > 0 && <Divider />}
+          <Row label={labelOf(key)} hint={hintOf(key)}>
+            {unknown ? (
+              <UnknownValue />
+            ) : (
+              <NumberField
+                value={limits[key]}
+                min={bounds.min}
+                max={bounds.max}
+                label={labelOf(key)}
+                {...dataHook(mark, String(limits[key]))}
+                onCommit={(value) => onLimitsChange({ [key]: value } as Partial<AgentLimitSettings>)}
+              />
+            )}
+          </Row>
+        </div>
+      ))}
     </Group>
   )
 }
@@ -1845,8 +2113,13 @@ function AgentLimitsGroup({
  * host updates; the desktop closes when the update is ready for it and the update
  * opens it again, its sessions running throughout. On a host that does not
  * update, the sentence says why and both buttons that would ask it rest.
+ *
+ * A host on another computer shows only its own tick: its floti is checked
+ * and updated from Settings › Hosts, which says where its version stands.
  */
 function UpdatesGroup({
+  host,
+  unknown,
   appVersion,
   releasesUrl,
   update,
@@ -1856,8 +2129,11 @@ function UpdatesGroup({
   onInstall,
   onOpenReleases,
   updateCheck,
-  onUpdateCheckChange
+  onUpdateCheckChange,
+  onShowHosts
 }: {
+  host: SettingsHostView
+  unknown: boolean
   appVersion: string | null
   releasesUrl: string | null
   update: UpdateView | null
@@ -1868,10 +2144,49 @@ function UpdatesGroup({
   onOpenReleases: () => void
   updateCheck: boolean
   onUpdateCheckChange: (next: boolean) => void
+  onShowHosts: (() => void) | undefined
 }): JSX.Element {
   const outcome = updateOutcome(update, checking, appVersion, error)
   const updates = update !== null && update.unavailable === null
   const installing = update !== null && update.installing !== null
+  const tick = (
+    <Row label={labelOf('updateCheck')} hint={hintOf('updateCheck')}>
+      {unknown ? (
+        <UnknownValue />
+      ) : (
+        <span data-settings-update-check={String(updateCheck)}>
+          <Checkbox
+            checked={updateCheck}
+            onChange={() => onUpdateCheckChange(!updateCheck)}
+            label="Look for a newer floti once a day and install it"
+          />
+        </span>
+      )}
+    </Row>
+  )
+
+  if (host.remote) {
+    return (
+      <Group
+        name="updates"
+        title="Updates"
+        hint={`${host.name} makes the only request Floti makes there on its own: once a day it reads floti.dev's signed list of releases.`}
+      >
+        {tick}
+        <p data-settings-update-elsewhere className="mt-2 text-[11.5px] leading-[1.5] text-fg-muted">
+          Where {host.name}’s floti stands, and Update floti, are in{' '}
+          {onShowHosts === undefined ? (
+            'Settings › Hosts'
+          ) : (
+            <button type="button" onClick={onShowHosts} className="text-accent-text hover:underline">
+              Settings › Hosts
+            </button>
+          )}
+          .
+        </p>
+      </Group>
+    )
+  }
 
   return (
     // The posture belongs to the group rather than to the tick: it is true of
@@ -1882,11 +2197,7 @@ function UpdatesGroup({
       hint="This PC's host makes the only request Floti makes on its own: once a day it reads floti.dev's signed list of releases. Floti itself contacts nothing."
     >
       <div className="pb-1">
-        <Verdict
-          data-settings-update-outcome={outcome.state}
-          tone={outcome.tone}
-          text={outcome.text}
-        />
+        <Verdict data-settings-update-outcome={outcome.state} tone={outcome.tone} text={outcome.text} />
         <dl className="mt-2.5 space-y-1.5">
           <Fact label="Version">
             <span data-settings-app-version>{appVersion ?? NOTHING}</span>
@@ -1902,15 +2213,7 @@ function UpdatesGroup({
 
       <Divider />
 
-      <Row label={labelOf('updateCheck')} hint={hintOf('updateCheck')}>
-        <span data-settings-update-check={String(updateCheck)}>
-          <Checkbox
-            checked={updateCheck}
-            onChange={() => onUpdateCheckChange(!updateCheck)}
-            label="Look for a newer floti once a day and install it"
-          />
-        </span>
-      </Row>
+      {tick}
 
       <Actions>
         {update?.newer === true && updates && (
@@ -1973,7 +2276,7 @@ const PREVIEW_LINES = [
 ]
 
 /**
- * Terminal appearance and the shell a project pane opens.
+ * Terminal appearance, and how tall a project page's shell is.
  *
  * Colour is deliberately absent. The xterm palette is fixed in both themes
  * (DESIGN.md par. 6, "foreign-ground islands") and asserted pixel-for-pixel by
@@ -1982,27 +2285,12 @@ const PREVIEW_LINES = [
 function TerminalGroup({
   terminal,
   onChange,
-  fontStack,
-  shells,
-  onLocateShell,
-  onShellPath
+  fontStack
 }: {
   terminal: TerminalSettings
   onChange: (patch: Partial<TerminalSettings>) => void
   fontStack: string
-  shells: DetectedShell[]
-  onLocateShell: () => void
-  onShellPath: (path: string) => Promise<string | null>
 }): JSX.Element {
-  const chosenShell = terminal.terminalShell
-  // A shell picked by hand may not be one of the detected ones, and dropping it
-  // out of the list would make the picker show "Detect automatically" for a
-  // setting that is doing no such thing.
-  const shellOptions =
-    chosenShell !== null && !shells.some((s) => sameFile(s.path, chosenShell))
-      ? [...shells, { path: chosenShell, name: fileName(chosenShell), label: 'Chosen by you', args: [] }]
-      : shells
-
   return (
     <Group
       name="terminal"
@@ -2076,32 +2364,6 @@ function TerminalGroup({
           data-settings-terminal-scrollback={String(terminal.terminalScrollback)}
           onCommit={(terminalScrollback) => onChange({ terminalScrollback })}
         />
-      </Row>
-
-      <Divider />
-
-      <Row label={labelOf('terminalShell')} hint={hintOf('terminalShell')}>
-        <div className="flex flex-col items-stretch gap-1.5">
-          <div className="flex items-center gap-2">
-            <Select
-              value={chosenShell ?? ''}
-              label="Default shell"
-              data-settings-terminal-shell={chosenShell ?? ''}
-              onChange={(value) => onChange({ terminalShell: value === '' ? null : value })}
-            >
-              <option value="">Detect automatically</option>
-              {shellOptions.map((shell) => (
-                <option key={shell.path} value={shell.path}>
-                  {shell.name} - {shell.label}
-                </option>
-              ))}
-            </Select>
-            <Action data-settings-terminal-shell-locate onClick={onLocateShell}>
-              Choose…
-            </Action>
-          </div>
-          <ShellPathField onShellPath={onShellPath} />
-        </div>
       </Row>
 
       <Divider />
@@ -2270,16 +2532,29 @@ function fontInstalled(family: string): boolean {
 }
 
 /**
- * A shell's full path, typed or pasted. The system file dialog will not hand
- * over an app execution alias - PowerShell 7 from the Microsoft Store is one -
- * so this is how such a shell is chosen. The host checks the path the way it
- * checks the shells it finds; a refused one keeps the text and says why under
- * it, and a kept one clears the field, the picker above now showing it.
+ * A path, typed or pasted, where a file picker cannot help: a shell the
+ * system dialog will not hand over (an app execution alias - PowerShell 7
+ * from the Microsoft Store is one), or anything on a host on another
+ * computer, which this PC's picker cannot browse. The host checks it; a
+ * refused one keeps the text and says why under it, and a kept one clears the
+ * field, the list above now showing it.
  */
-function ShellPathField({
-  onShellPath
+function TypedPathField({
+  label,
+  placeholder,
+  action,
+  mark,
+  onPath
 }: {
-  onShellPath: (path: string) => Promise<string | null>
+  /** The field's accessible name. */
+  label: string
+  placeholder: string
+  /** The button's word: Use, Add. */
+  action: string
+  /** The hooks a driver reaches it by: `<mark>-path`, `<mark>-use` and `<mark>-problem`. */
+  mark: string
+  /** Resolves with why the path was refused, or null once it is kept. */
+  onPath: (path: string) => Promise<string | null>
 }): JSX.Element {
   const [draft, setDraft] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
@@ -2289,7 +2564,7 @@ function ShellPathField({
   const submit = (): void => {
     if (path === '' || checking) return
     setChecking(true)
-    void onShellPath(path)
+    void onPath(path)
       .then((refused) => {
         setProblem(refused)
         if (refused === null) setDraft('')
@@ -2302,10 +2577,10 @@ function ShellPathField({
       <div className="flex items-center gap-2">
         <input
           type="text"
-          data-settings-terminal-shell-path
-          aria-label="Shell path"
+          {...dataHook(`${mark}-path`)}
+          aria-label={label}
           aria-invalid={problem !== null}
-          placeholder="Or type the full path to a shell"
+          placeholder={placeholder}
           spellCheck={false}
           value={draft}
           onChange={(e) => {
@@ -2326,14 +2601,14 @@ function ShellPathField({
             problem === null ? 'border-border focus:border-accent' : 'border-danger/50'
           )}
         />
-        <Action data-settings-terminal-shell-use onClick={submit} disabled={path === '' || checking}>
-          Use
+        <Action {...dataHook(`${mark}-use`)} onClick={submit} disabled={path === '' || checking}>
+          {action}
         </Action>
       </div>
       {problem !== null && (
         <p
           role="alert"
-          data-settings-terminal-shell-problem
+          {...dataHook(`${mark}-problem`)}
           className="text-right text-[11px] leading-[1.5] break-words text-danger select-text"
         >
           {problem}

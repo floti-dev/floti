@@ -74,9 +74,10 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
       terminalCursorStyle: s.terminalCursorStyle,
       terminalCursorBlink: s.terminalCursorBlink,
       terminalScrollback: s.terminalScrollback,
-      terminalShell: s.terminalShell,
       projectShellHeightPct: s.projectShellHeightPct
     },
+    terminalShell: s.terminalShell,
+    onTerminalShellChange: vi.fn(),
     onTerminalChange: vi.fn(),
     terminalFontStack: 'monospace',
     shells: [],
@@ -205,5 +206,14 @@ describe('SettingsPane - transcript archive', () => {
       '4 GB',
       '8 GB'
     ])
+  })
+
+  it('S5: shows the archive of a host out of reach as Unknown, never what it last said, and writes nothing', () => {
+    renderPane({ host: { name: 'buildbox', remote: true, unknown: { kind: 'away', failedAt: '14:02' } } })
+    expect(within(archiveGroup()).getByText('Unknown', { selector: '[data-settings-verdict]' })).toBeTruthy()
+    expect(fact('Kept')).toBe('-')
+    expect(fact('Stored')).toBe('-')
+    expect(within(archiveGroup()).queryByRole('combobox')).toBeNull()
+    expect(screen.getByRole('status').textContent).toContain('Its link failed at 14:02.')
   })
 })

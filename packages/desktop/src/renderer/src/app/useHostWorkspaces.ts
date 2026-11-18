@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DiscoveryResult, SessionActivityState, SessionRecord } from '@floti/core'
+import type { AppSettings, DiscoveryResult, SessionActivityState, SessionRecord } from '@floti/core'
 import { isCommandChild, isProjectPinned, withListed, withProjectPinned } from '@floti/core/types'
 import type { DesktopBridge } from '../../../shared/ipc'
 import { bridgeFor } from './bridge'
@@ -15,6 +15,10 @@ import { readable } from './errors'
  *   sidebar to list dimmed: its sessions are still running there.
  * - A pin is that host's: it is written through its own bridge, whose router
  *   carries only that host's half of the settings.
+ * - Its settings, as its bridge answers them (this device's own with that
+ *   host's laid over), are kept while the window is connected to it and
+ *   forgotten when it is not: Settings shows a host it cannot read as Unknown,
+ *   never as what it last said or as defaults.
  * - Nothing here ends a session, on any host.
  */
 export interface HostWorkspace {
@@ -23,6 +27,8 @@ export interface HostWorkspace {
   /** Why its folders could not be read, until a read succeeds. */
   scanError: string | undefined
   pinnedProjects: readonly string[]
+  /** Its settings, with this device's own laid under; null while the window is not connected to it or has not read them. */
+  settings: AppSettings | null
   /** Its sessions, as it listed them last, with those this window started there since. */
   sessions: readonly SessionRecord[]
   /** What each of its running sessions is doing, by its row id there. */
@@ -40,6 +46,8 @@ export interface HostWorkspaces {
   /** Lists its sessions again: Try again, after a listing failed. */
   relist: (host: string) => void
   togglePin: (host: string, path: string) => void
+  /** Writes settings that host keeps, through its own bridge; resolves with why it refused, or null. */
+  writeSettings: (host: string, patch: Partial<AppSettings>) => Promise<string | null>
   /** A session this window started or renamed there, as the host answered; before it lists it. */
   adopt: (host: string, record: SessionRecord) => void
   /** A session whose tab closed after it ended there. */
@@ -51,6 +59,7 @@ const EMPTY: HostWorkspace = {
   scanning: false,
   scanError: undefined,
   pinnedProjects: [],
+  settings: null,
   sessions: [],
   activity: new Map(),
   listed: false,
@@ -158,7 +167,7 @@ export function useHostWorkspaces(
           }))
         ),
         bridge.on('settings:changed', (settings) =>
-          patch(host, (current) => ({ ...current, pinnedProjects: settings.pinnedProjects }))
+          patch(host, (current) => ({ ...current, pinnedProjects: settings.pinnedProjects, settings }))
         ),
         bridge.on('session:exit', (record) =>
           patch(host, (current) => ({
@@ -193,11 +202,15 @@ export function useHostWorkspaces(
   const read = useRef(new Set<string>())
   useEffect(() => {
     const now = new Set(connectedKey === '' ? [] : connectedKey.split('\n'))
+    // A host the window is no longer connected to: what it said is not what it holds now.
+    for (const host of read.current) {
+      if (!now.has(host)) patch(host, (current) => ({ ...current, settings: null }))
+    }
     for (const host of now) {
       if (read.current.has(host)) continue
       const bridge = bridgesRef.current(host)
       void bridge.invoke('settings:read').then(
-        (settings) => patch(host, (current) => ({ ...current, pinnedProjects: settings.pinnedProjects })),
+        (settings) => patch(host, (current) => ({ ...current, pinnedProjects: settings.pinnedProjects, settings })),
         () => undefined
       )
       void bridge.invoke('discovery:cached').then(
@@ -255,6 +268,20 @@ export function useHostWorkspaces(
     [byHost, patch]
   )
 
+  const writeSettings = useCallback(
+    (host: string, change: Partial<AppSettings>): Promise<string | null> =>
+      bridgesRef.current(host)
+        .invoke('settings:write', change)
+        .then(
+          (settings) => {
+            patch(host, (current) => ({ ...current, pinnedProjects: settings.pinnedProjects, settings }))
+            return null
+          },
+          (error: unknown) => readable(error)
+        ),
+    [patch]
+  )
+
   const adopt = useCallback(
     (host: string, record: SessionRecord) =>
       patch(host, (current) =>
@@ -271,5 +298,5 @@ export function useHostWorkspaces(
     [patch]
   )
 
-  return { byHost, rescan, relist: relistNow, togglePin, adopt, forget }
+  return { byHost, rescan, relist: relistNow, togglePin, writeSettings, adopt, forget }
 }

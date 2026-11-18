@@ -522,8 +522,8 @@ export function ProfileEditor({
             <span className="block text-[12px] text-fg">Sessions can start agents</span>
             <span className="mt-[3px] block text-[10px] text-fg-subtle">
               Sessions from this profile get the tools to start, list and stop agents of their
-              own. Off, they get none. On follows Settings &gt; Agents, which can turn them off
-              for every session.
+              own. Off, they get none. On follows Settings &gt; Tools, which can turn them off
+              for every session on the host.
             </span>
           </span>
         </label>

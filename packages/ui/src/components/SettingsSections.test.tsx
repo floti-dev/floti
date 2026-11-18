@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { SETTINGS_SECTIONS, SettingsSections, pluginSection } from './SettingsSections'
+import { SETTINGS_SECTIONS, SettingsSections, pluginSection, settingsGroupOf } from './SettingsSections'
 
 /** Every section, Hosts and Devices included. */
 const EVERY = SETTINGS_SECTIONS.map((section) => section.label)
@@ -19,18 +19,76 @@ describe('SettingsSections', () => {
     expect(onSelect).toHaveBeenCalledWith('browser')
   })
 
-  it('S1: always lists Agents after Sessions, then Hosts, then Devices', () => {
-    const onSelect = vi.fn()
-    render(<SettingsSections current="general" onSelect={onSelect} />)
-    const rows = [...screen.getByRole('navigation', { name: 'Settings sections' }).querySelectorAll('button')].map(
-      (row) => row.textContent
+  it('S1: lists this desktop’s sections under Floti desktop, then the host’s under Floti host', () => {
+    render(<SettingsSections current="general" onSelect={vi.fn()} />)
+    const listed = (group: string): string[] =>
+      [...(screen.getByRole('group', { name: new RegExp(`^${group}`) }).querySelectorAll('button'))].map(
+        (row) => row.textContent ?? ''
+      )
+    expect(listed('Floti desktop')).toEqual([
+      'General',
+      'Appearance',
+      'Terminal',
+      'Sessions',
+      'Browser',
+      'Files',
+      'Hosts',
+      'Devices'
+    ])
+    expect(listed('Floti host')).toEqual([
+      'Programs',
+      'Tools',
+      'Agents',
+      'Workspace',
+      'Plugins',
+      'Secrets',
+      'Archive',
+      'Updates'
+    ])
+    expect(SETTINGS_SECTIONS.filter((section) => section.group === 'host').map((section) => section.id)).toEqual([
+      'programs',
+      'tools',
+      'agents',
+      'workspace',
+      'plugins',
+      'secrets',
+      'archive',
+      'updates'
+    ])
+    expect(settingsGroupOf('browser')).toBe('desktop')
+    expect(settingsGroupOf('tools')).toBe('host')
+    expect(settingsGroupOf(pluginSection('/plugins/sample'))).toBe('host')
+  })
+
+  it('S4: with one host there is no switch, and the host’s name sits beside the label in mono', () => {
+    render(<SettingsSections current="tools" onSelect={vi.fn()} host={{ name: 'This PC' }} />)
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    const label = document.querySelector('[data-settings-host-label]') as HTMLElement
+    expect(label.textContent).toBe('Floti hostThis PC')
+    expect(within(label).getByText('This PC').className).toContain('font-mono')
+  })
+
+  it('S2: the Floti host label carries the host switch, which picks for the whole group; the desktop group has none', () => {
+    const onHostChange = vi.fn()
+    const hosts = [
+      { id: 'local', name: 'This PC', remote: false },
+      { id: 'h1', name: 'buildbox', remote: true }
+    ]
+    render(
+      <SettingsSections
+        current="tools"
+        onSelect={vi.fn()}
+        host={{ name: 'buildbox', choice: { hosts, host: 'h1', onHostChange } }}
+      />
     )
-    expect(rows).toEqual(SETTINGS_SECTIONS.map((section) => section.label))
-    expect(rows[rows.indexOf('Sessions') + 1]).toBe('Agents')
-    expect(rows[rows.indexOf('Agents') + 1]).toBe('Hosts')
-    expect(rows[rows.indexOf('Hosts') + 1]).toBe('Devices')
-    fireEvent.click(screen.getByRole('button', { name: 'Hosts' }))
-    expect(onSelect).toHaveBeenCalledWith('hosts')
+    const label = document.querySelector('[data-settings-host-label]') as HTMLElement
+    const sw = within(label).getByRole('radiogroup', { name: 'Settings host' })
+    expect(within(sw).getByRole('radio', { checked: true }).textContent).toBe('buildbox')
+    fireEvent.click(within(sw).getByRole('radio', { name: 'This PC' }))
+    expect(onHostChange).toHaveBeenCalledWith('local')
+    expect(
+      within(screen.getByRole('group', { name: /^Floti desktop/ })).queryByRole('radiogroup')
+    ).toBeNull()
   })
 })
 

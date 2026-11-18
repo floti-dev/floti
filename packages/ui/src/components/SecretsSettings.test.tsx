@@ -208,4 +208,33 @@ describe('SecretsPage', () => {
     expect(screen.queryByText('No secrets')).toBeNull()
     expect(screen.queryAllByRole('button', { name: /sample-token/ })).toHaveLength(0)
   })
+
+  it('S5: shows the secrets of a host out of reach as Unknown under the notice, never an empty list, with Add off', () => {
+    const onShowHosts = vi.fn()
+    render(
+      <SecretsPage
+        state={null}
+        plugins={[SAMPLE]}
+        onSave={vi.fn()}
+        onRemove={vi.fn()}
+        hostName="buildbox"
+        away={{ failedAt: '14:02' }}
+        onShowHosts={onShowHosts}
+      />
+    )
+    const notice = screen.getByRole('status')
+    expect(notice.textContent).toContain('Can’t reach buildbox')
+    expect(notice.textContent).toContain('Its link failed at 14:02.')
+    expect(within(screen.getByRole('region', { name: 'Secrets' })).getByText('Unknown')).toBeTruthy()
+    expect(screen.queryByText('No secrets')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add secret' })).toHaveProperty('disabled', true)
+    fireEvent.click(within(notice).getByRole('button', { name: 'Settings › Hosts' }))
+    expect(onShowHosts).toHaveBeenCalledOnce()
+  })
+
+  it('names the host whose secrets these are under the title', () => {
+    render(<SecretsPage state={{ available: true, secrets: [] }} plugins={[]} onSave={vi.fn()} onRemove={vi.fn()} hostName="buildbox" />)
+    expect(document.querySelector('[data-settings-host-line="buildbox"]')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add secret' })).toHaveProperty('disabled', false)
+  })
 })

@@ -117,8 +117,8 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   History is the window's palette, so it opens over the window and takes the
   keyboard until it is closed, which gives it back to where it was.
 - A launch is given the family only while a window that takes its calls is
-  attached, and only while `desktopMcp` is on (Settings > Agents, on by
-  default). A call with none attached, or waiting on a window that leaves,
+  attached, and only while `desktopMcp` is on (Settings > Floti host > Tools, kept
+  per host, on by default). A call with none attached, or waiting on a window that leaves,
   fails at once saying no window is attached. Nothing waits on a timer.
 - `desktop_settings` lists every setting the Settings page shows and
   `desktop_set` changes one or several by name (`changes`, and `host` for a

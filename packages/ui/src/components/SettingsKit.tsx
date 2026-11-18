@@ -18,6 +18,7 @@ import { CaretIcon, CheckIcon, WarnIcon } from './icons'
 export function SettingsPage({
   title,
   hint,
+  onHost,
   sole,
   aside,
   children,
@@ -25,6 +26,8 @@ export function SettingsPage({
 }: {
   title: string
   hint?: ReactNode | undefined
+  /** A host section's line naming its host (`HostLine`), under the title and above the hint. */
+  onHost?: ReactNode | undefined
   /** The page is one group: that group draws no heading of its own. */
   sole: boolean
   /** Beside the title, at its right: a page's own actions. */
@@ -37,6 +40,7 @@ export function SettingsPage({
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[17px] font-medium tracking-tight text-fg">{title}</h1>
+            {onHost}
             {hint !== undefined && <p className="mt-1 text-[12px] leading-[1.5] text-fg-muted">{hint}</p>}
           </div>
           {aside !== undefined && <div className="flex shrink-0 items-center gap-2">{aside}</div>}
@@ -85,11 +89,14 @@ export function Group({
   name,
   title,
   hint,
+  untitled = false,
   children
 }: {
   name: string
   title: string
   hint?: string | undefined
+  /** Drawn under its rule with no heading, its title naming the region only: the page's first group, which the title already introduces. */
+  untitled?: boolean | undefined
   children: ReactNode
 }): JSX.Element {
   // Named by its heading, so each group is a region a screen reader can jump
@@ -101,6 +108,14 @@ export function Group({
       <section data-settings-group={name} aria-label={title}>
         {hint !== undefined && <p className="mt-1 text-[12px] leading-[1.5] text-fg-muted">{hint}</p>}
         <div className="mt-6">{children}</div>
+      </section>
+    )
+  }
+  if (untitled) {
+    return (
+      <section data-settings-group={name} aria-label={title} className="mt-6">
+        <div aria-hidden className="island-rule mb-5" />
+        <div>{children}</div>
       </section>
     )
   }
@@ -175,6 +190,85 @@ export function CheckRow({
         <span className="block max-w-[68ch] text-[12px] leading-[1.5] text-fg-muted">{hint}</span>
       </span>
     </label>
+  )
+}
+
+/**
+ * A host section's line under its title: the host its values are kept on, in
+ * mono, and that every window attached to that host shows the same ones.
+ */
+export function HostLine({ name }: { name: string }): JSX.Element {
+  return (
+    <p data-settings-host-line={name} className="mt-1 text-[11.5px] leading-[1.5] text-fg-muted">
+      On <span className="font-mono text-[11px] text-fg">{name}</span>. Every window attached to it shows the same
+      values.
+    </p>
+  )
+}
+
+/**
+ * Why a host section's values are Unknown: its host cannot be reached. One
+ * sentence, above the rows, which keep their places so nothing jumps when the
+ * host is back.
+ */
+export function ReachNotice({
+  name,
+  failedAt,
+  onShowHosts
+}: {
+  name: string
+  /** When its link failed, as the window shows a time; null when the window has not seen it fail. */
+  failedAt: string | null
+  /** Opens Settings > Hosts, which says more. */
+  onShowHosts?: (() => void) | undefined
+}): JSX.Element {
+  return (
+    <div
+      role="status"
+      data-settings-host-away={name}
+      className="mt-5 mb-1 flex items-start gap-2.5 rounded-well border border-border-strong bg-surface-raised px-3 py-2.5"
+    >
+      <WarnIcon width={13} height={13} className="mt-0.5 shrink-0 text-danger" />
+      <div className="min-w-0">
+        <p className="text-[12px] font-medium text-fg">Can’t reach {name}</p>
+        <p className="text-[11px] leading-[1.5] text-fg-muted">
+          {failedAt === null ? '' : `Its link failed at ${failedAt}. `}Floti keeps trying, and {name}’s settings show
+          here when it is back.{' '}
+          {onShowHosts === undefined ? (
+            'Settings › Hosts says more.'
+          ) : (
+            <>
+              <button type="button" onClick={onShowHosts} className="text-accent-text hover:underline">
+                Settings › Hosts
+              </button>{' '}
+              says more.
+            </>
+          )}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/** What a value whose host cannot be read shows in its control's place: never a default. */
+export function UnknownValue(): JSX.Element {
+  return (
+    <span data-settings-unknown className="font-mono text-[11px] text-fg-subtle">
+      Unknown
+    </span>
+  )
+}
+
+/** A `CheckRow` whose value is not known: a resting box, the label, and Unknown where the sentence was. */
+export function UnknownCheckRow({ label }: { label: string }): JSX.Element {
+  return (
+    <div data-settings-unknown-row={label} className="grid grid-cols-[16px_minmax(0,1fr)] items-start gap-x-2 py-[5px] opacity-60">
+      <span aria-hidden className="mt-0.5 size-4 rounded-raised border-[1.5px] border-border-strong" />
+      <span className="min-w-0">
+        <span className="block text-[13px] text-fg">{label}</span>
+        <UnknownValue />
+      </span>
+    </div>
   )
 }
 

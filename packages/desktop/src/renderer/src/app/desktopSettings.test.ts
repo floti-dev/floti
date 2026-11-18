@@ -214,7 +214,7 @@ describe('desktop_set in the window', () => {
       [{ browserMcpLocalOnly: false, browserReach: 'local' }, 'Settings > Browser'],
       [{ scanRoots: ['C:\\work', 'D:\\new'] }, 'Settings > Workspace'],
       [{ 'plugin.quiet.on': true }, 'The user turns it on in Settings > Plugins.'],
-      [{ claudePath: 'C:\\other\\claude.exe' }, 'is changed only by the user, in Settings > General'],
+      [{ claudePath: 'C:\\other\\claude.exe' }, 'is changed only by the user, in Settings > Programs'],
       [{ transcriptArchiveMaxBytes: 2048 }, 'an undo cannot bring them back'],
       // What Floti or its sessions do on their own goes only toward doing less.
       [{ updateCheck: true }, 'Update floti by itself (updateCheck) can only be narrowed from a session'],

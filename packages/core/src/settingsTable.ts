@@ -43,13 +43,15 @@ import {
 /** The Settings sections a setting sits in, by the ids `SettingsSections` gives them. */
 export type SettingSection =
   | 'general'
-  | 'workspace'
   | 'appearance'
   | 'terminal'
   | 'sessions'
-  | 'agents'
   | 'files'
   | 'browser'
+  | 'programs'
+  | 'tools'
+  | 'agents'
+  | 'workspace'
   | 'archive'
   | 'updates'
 
@@ -200,7 +202,7 @@ function build(): readonly SettingEntry[] {
       key: 'claudePath',
       label: 'Claude CLI',
       description: 'The claude executable Floti runs. Found on PATH unless you set one.',
-      section: 'general',
+      section: 'programs',
       values: { kind: 'program' },
       session: 'nothing',
       why: 'it names the program every session runs, and Floti checks a program before it keeps it',
@@ -338,7 +340,7 @@ function build(): readonly SettingEntry[] {
       key: 'terminalShell',
       label: 'Shell for project panes',
       description: 'Claude sessions are unaffected. A project page can override it.',
-      section: 'terminal',
+      section: 'programs',
       values: { kind: 'program' },
       session: 'nothing',
       why: 'it names the program every project shell runs',
@@ -361,7 +363,7 @@ function build(): readonly SettingEntry[] {
         true: 'Sessions Floti hosts can list every Claude Code session running here - its name, its directory, whether it is busy or waiting on you - and, for the ones Floti started, what they are holding: child processes and listening ports. Each can also give itself a title saying what it is doing, shown beside its name here and in History. Not their conversations, and not the arguments they were launched with.',
         false: 'Off. Floti serves the tools to nobody, sessions are started without them and give themselves no titles.'
       },
-      section: 'sessions',
+      section: 'tools',
       values: { kind: 'boolean' },
       ...NARROW_AGENTS
     }),
@@ -411,7 +413,7 @@ function build(): readonly SettingEntry[] {
       label: 'Sessions can start agents',
       description:
         'Every session you start gets the floti-agents tools and floti agent. A profile can turn it off for its own sessions.',
-      section: 'agents',
+      section: 'tools',
       values: { kind: 'boolean' },
       ...NARROW_AGENTS
     }),
@@ -420,7 +422,7 @@ function build(): readonly SettingEntry[] {
       label: "Sessions can use Floti's window",
       description:
         "Every session you start gets the floti-desktop tools and floti desktop: asked to show you something, it opens a file, Files, a project's page, History or Settings beside its tab, and the keyboard stays in its terminal. It can read these settings, and change them or narrow what agents may do, with a toast you can undo.",
-      section: 'agents',
+      section: 'tools',
       values: { kind: 'boolean' },
       ...NARROW_AGENTS
     }),
@@ -429,7 +431,7 @@ function build(): readonly SettingEntry[] {
       label: "Show children in their parent's tab",
       description:
         "On this device. A parent's tab shows its running children beside its terminal while its pane has room, and never takes the focus from it. Off, the parent shows alone, with its children as chips in its crumb and rows in the tree.",
-      section: 'agents',
+      section: 'sessions',
       values: { kind: 'boolean' }
     }),
     plain({
@@ -532,17 +534,17 @@ function build(): readonly SettingEntry[] {
         true: 'Sessions Floti hosts can open pages of their own, read them, click and type, and drive a page of yours only once you share it from the browser bar. Floti serves the tools on a loopback port with a token unique to each session.',
         false: 'Off. Floti opens no port at all and sessions are started without the tools, exactly as they were before.'
       },
-      section: 'browser',
+      section: 'tools',
       values: { kind: 'boolean' },
       ...NARROW_AGENTS
     }),
     plain({
       key: 'browserMcpLocalOnly',
-      label: '…but only on this machine',
+      label: 'Hold Claude to localhost',
       description:
-        'Holds Claude’s browser tools to localhost even where the pane may go further. Off, they reach as far as the pane does, and never further.',
+        'Holds Claude’s browser tools to localhost, from a session on any host, even where the pane may go further. Off, they reach as far as the pane does, and never further. Kept on this device.',
       hint: {
-        true: 'Claude’s tools are held to localhost even where the pane may go further. You can still navigate the pane anywhere yourself.',
+        true: 'Claude’s browser tools reach only pages on this computer, from a session on any host, even where the pane may go further. You can still go anywhere yourself.',
         false: 'Claude’s tools reach as far as the pane does, and never further - the narrower of these two settings always wins.'
       },
       section: 'browser',

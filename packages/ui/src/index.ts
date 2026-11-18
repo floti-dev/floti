@@ -121,6 +121,7 @@ export {
   SettingsPane,
   updateOutcome,
   type AgentLimitSettings,
+  type SettingsHostView,
   type SettingsPaneProps,
   type TerminalSettings,
   type UpdateOutcome,
@@ -131,6 +132,9 @@ export {
   SETTINGS_SECTIONS,
   SettingsSections,
   pluginSection,
+  settingsGroupOf,
+  type SettingsGroup,
+  type SettingsHostPick,
   type SettingsPluginLink,
   type SettingsSection,
   type SettingsSectionId,
@@ -154,7 +158,7 @@ export { claudeBanner, type ClaudeBannerKind } from './lib/claudeBanner'
 export { OwnDataBanner, type OwnDataBannerProps } from './components/OwnDataBanner'
 export { HostLostBanner, type HostLostBannerProps } from './components/HostLostBanner'
 export { HostNotice, type HostNoticeProps, type HostNoticeState } from './components/HostNotice'
-export { HostSwitch, type HostChoice, type HostSwitchProps } from './components/HostSwitch'
+export { HostSwitch, type HostChoice, type HostChoiceHost, type HostSwitchProps } from './components/HostSwitch'
 export { ShellLostBar, type ShellLostBarProps } from './components/ShellLostBar'
 export { GitChip, type GitChipProps } from './components/GitChip'
 export { InventoryChips, type InventoryChipsProps } from './components/InventoryChips'

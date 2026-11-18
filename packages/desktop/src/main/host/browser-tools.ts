@@ -39,7 +39,7 @@ export interface BrowserToolRelay {
 
 /** The answer to a call for a session that is not running in the host with the browser tools. */
 export const NOT_A_BROWSER_SESSION =
-  "This session is not one Floti's browser tools answer for: it is not running in Floti's local host, or the browser tools are switched off in Settings > Browser."
+  "This session is not one Floti's browser tools answer for: it is not running in Floti's local host, or the browser tools are switched off for this host in Settings > Tools."
 
 /** The answer while the desktop is still starting and its browser tools are not ready. */
 export const BROWSER_TOOLS_STARTING = "Floti's browser tools are still starting. Try again in a moment."

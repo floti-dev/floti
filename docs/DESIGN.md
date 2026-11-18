@@ -912,12 +912,39 @@ overrides the gate; keep it.
   would flip the sidebar on every click across. A maximized pane keeps the
   window, and the view still switches for when it is given back.
 
-  **Settings is a view with a page.** The sidebar lists its sections (General,
-  Appearance, Terminal, Sessions, Workspace, Files, Browser, Archive,
-  Updates) as sidebar rows, and the pane shows the one picked - a 17px title,
-  then its groups. A section that is one group is that group: the title is
-  the page's and its hint is the line under it, with no caps heading of its
-  own. Opening Settings from anywhere opens both.
+  **Settings is a view with a page.** The sidebar lists its sections as
+  sidebar rows in two groups, each under a caps label, and the pane shows the
+  one picked - a 17px title, then its groups. **Floti desktop** is this
+  computer's window and what it keeps: General, Appearance, Terminal,
+  Sessions, Browser, Files, Hosts, Devices. **Floti host** is what each host
+  keeps and enforces for every session on it, whichever window started it:
+  Programs, Tools, Agents, Workspace, Plugins, Secrets, Archive, Updates, a
+  hairline above it. While more than one host is connected the Floti host
+  label carries the host switch, which picks for every section in the group;
+  with one, the host's name sits beside the label in 10.5px mono. Desktop
+  sections never follow the pick. A host section names its host on the line
+  under its title ("On `buildbox`. Every window attached to it shows the same
+  values.", the name in mono), and changes save on that host as they are made.
+  A picked host that cannot be reached shows its values as Unknown (mono,
+  `fg-subtle`, the rows at 60% and in their places) under one notice on
+  `surface-raised` with a `border-strong` edge and a `danger` warning glyph,
+  saying when its link failed, that Floti keeps trying, and that Settings ›
+  Hosts says more - never defaults. A section that is one group is that
+  group: the title is the page's and its hint is the line under it, with no
+  caps heading of its own. Opening Settings from anywhere opens both.
+
+  **The host switch** (`HostSwitch`) is the one control every surface that
+  shows one host at a time uses: History, Files, Agents and Settings' Floti
+  host group. It is a segmented control while it has at most three hosts and
+  they fit where it stands - measured, not counted, so one window changes form
+  as its sidebar narrows. Otherwise it is a button on the sunken well naming
+  the shown host (mono for a host on another computer, cut with an ellipsis),
+  with its state dot (`success` filled while connected, a `danger` ring while
+  out of reach) and a caret, which opens a `Menu` of every host the window is
+  connected to or trying to reach, in Settings › Hosts' order with This PC
+  first: each with its dot and its state on the right (`danger` for out of
+  reach), the shown one ticked. A host out of reach can be picked; its surface
+  says why it cannot be read.
   The rail sits outside the sidebar's `aside` on purpose: it is a column of
   titled buttons, and inside the `aside` every "first project row" selector
   would land on it.
@@ -990,7 +1017,7 @@ overrides the gate; keep it.
   its tabs to the pane that takes its room rather than closing them - a layout
   button that ended sessions would be a destructive control in disguise.
 
-  **A session's tab holds its children** (Settings > Agents, "Show children in
+  **A session's tab holds its children** (Settings > Sessions, "Show children in
   their parent's tab", on by default and kept per device). When the pane has
   room - the parent keeps 80 columns at its fixed 55%, and a child 60 columns
   by 8 rows, at the terminal's font, measured as the terminal measures, inside
