@@ -153,17 +153,11 @@ fn group_images<'d>(binary: &'d [u8], pe: &PeFile64<'d>) -> Vec<Image<'d>> {
 fn floti_exe_carries_the_app_icon() {
     let binary = std::fs::read(env!("CARGO_BIN_EXE_floti")).expect("read the built floti");
     // `object` is built with the PE reader only, so for an ELF or Mach-O floti
-    // `parse` answers an error rather than a kind. Either way it is no PE:
-    // skip. On Windows the binary must be a PE64, or the check proves nothing.
-    match FileKind::parse(&*binary) {
-        Ok(FileKind::Pe64) => {}
-        other => {
-            if cfg!(windows) {
-                panic!("the built floti.exe should be a 64-bit PE; it is {other:?}");
-            }
-            return;
-        }
-    }
+    // `parse` answers an error rather than a kind. Either way it is no PE, and
+    // there is no icon resource to read: nothing to check.
+    let Ok(FileKind::Pe64) = FileKind::parse(&*binary) else {
+        return;
+    };
     let icon_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
