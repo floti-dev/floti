@@ -158,10 +158,9 @@ fn floti_exe_carries_the_app_icon() {
     match FileKind::parse(&*binary) {
         Ok(FileKind::Pe64) => {}
         other => {
-            assert!(
-                !cfg!(windows),
-                "the built floti.exe should be a 64-bit PE; it is {other:?}"
-            );
+            if cfg!(windows) {
+                panic!("the built floti.exe should be a 64-bit PE; it is {other:?}");
+            }
             return;
         }
     }
