@@ -17,6 +17,7 @@ use floti_host::store::MIGRATIONS;
 use floti_host::testkit::{PATIENCE, RunningHost, TestClient, TestDirs};
 use floti_protocol::channel::{EventChannel, from_payload};
 use floti_protocol::channels::host::HostStopReason;
+use floti_protocol::channels::sessions::{PtermOpen, PtermOpenRequest};
 use floti_protocol::channels::workspace::{
     AppMode, BackendStatus, CompleteSetup, ExecutableSource, HostSettings, HostSettingsPatch,
     LocateBackend, LocateBackendRequest, ReadAppInfo, ReadSettings, ReadSetupStatus,
@@ -238,6 +239,52 @@ async fn every_settings_subscriber_gets_the_whole_settings_after_each_write() {
         "a later subscription starts with the latest"
     );
     assert_eq!(world.settings().await, capped);
+
+    world.stop().await;
+}
+
+/// The shell the host's settings choose is the one a plain terminal opens in
+/// when its open names none, whichever client opens it; cleared, the host
+/// takes the first shell it finds. A chosen shell that is not there shows as
+/// the one asked for, beside the one that runs instead.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plain_terminal_opens_in_the_shell_the_hosts_settings_choose() {
+    let mut world = World::start().await;
+    let chosen = world
+        .dirs
+        .root()
+        .join("chosen shell")
+        .join("gone.exe")
+        .to_string_lossy()
+        .into_owned();
+    world
+        .write(HostSettingsPatch {
+            terminal_shell: Some(Some(chosen.clone())),
+            ..HostSettingsPatch::default()
+        })
+        .await
+        .unwrap();
+    let folder = world.dirs.folder("a project");
+    let mut device = TestClient::connect(&world.endpoint, &["terminal"]).await;
+    let open = PtermOpenRequest {
+        path: folder.to_string_lossy().into_owned(),
+        cols: 80,
+        rows: 24,
+        shell: None,
+        separate: true,
+    };
+    let opened = device.request::<PtermOpen>(&open).await.unwrap();
+    assert_eq!(opened.requested.as_deref(), Some(chosen.as_str()));
+
+    world
+        .write(HostSettingsPatch {
+            terminal_shell: Some(None),
+            ..HostSettingsPatch::default()
+        })
+        .await
+        .unwrap();
+    let detected = device.request::<PtermOpen>(&open).await.unwrap();
+    assert_eq!(detected.requested, None);
 
     world.stop().await;
 }

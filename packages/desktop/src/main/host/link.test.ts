@@ -65,7 +65,6 @@ describe('the link to the local host', () => {
           ? Promise.reject(new LocalHostError('No local host answered on its socket; turn it off.'))
           : Promise.resolve(fakeLocalHost(connection))
       },
-      settings: () => ({}),
       log: () => undefined,
       ...steppedTimers()
     })
@@ -116,7 +115,6 @@ describe('the link to the local host', () => {
     const local = fakeLocalHost(connection, true)
     const link = createHostLink({
       start: () => Promise.resolve(local),
-      settings: () => ({}),
       log: () => undefined,
       ...steppedTimers()
     })
@@ -134,7 +132,6 @@ describe('the link to the local host', () => {
     const local = fakeLocalHost(connection, false)
     const link = createHostLink({
       start: () => Promise.resolve(local),
-      settings: () => ({}),
       log: () => undefined,
       ...steppedTimers()
     })
@@ -154,7 +151,6 @@ describe('the link to the local host', () => {
     const timers = steppedTimers()
     const link = createHostLink({
       start: () => Promise.resolve(local),
-      settings: () => ({}),
       log: () => undefined,
       ...timers
     })
@@ -182,7 +178,6 @@ describe('the link to the local host', () => {
     let starts = 0
     const link = createHostLink({
       start: () => Promise.resolve(started[starts++] as ReturnType<typeof fakeLocalHost>),
-      settings: () => ({}),
       log: () => undefined,
       ...steppedTimers()
     })
@@ -346,7 +341,6 @@ describe('the link to the local host', () => {
           const next = outcomes.shift()
           return next === undefined ? Promise.reject(new LocalHostError('No local host answered.')) : next()
         },
-        settings: () => ({}),
         log: () => undefined,
         ...timers
       })
