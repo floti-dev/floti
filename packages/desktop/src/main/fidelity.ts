@@ -470,9 +470,8 @@ const MULTILINE_PASTE = 'first line\nsecond line\nthird line'
  *
  * This was `/\x1b\[200~first line\r/.test(sink.input())`, and that is a test a
  * doubled stream passes: two complete bracketed envelopes contain a correct
- * one. It reported green for as long as Ctrl+V pasted twice (ClickUp
- * 868m0egkt), which is the failure CLAUDE.md names - a check that can pass with
- * no evidence behind it.
+ * one. It reported green for as long as Ctrl+V pasted twice, which is the
+ * failure CLAUDE.md names - a check that can pass with no evidence behind it.
  *
  * So three counts, each of which catches the second write on its own:
  *
