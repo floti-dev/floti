@@ -426,7 +426,8 @@ test("a session calls the plugin's tools, its background module answers, and tur
 
   // What the session was told: the plugin's own server, beside the desktop's, under
   // today's names, in a file in the host's own launch folder. Sessions can
-  // start agents by default, so the host's own agents family is there too.
+  // start agents and use Floti's window by default, so the host's own agents
+  // and desktop families are there too.
   const run = await claudeRunIn(world, world.projects.alpha)
   const file = run.argv[run.argv.indexOf('--mcp-config') + 1] ?? ''
   expect(file.toLowerCase().startsWith(join(world.dataDir, 'host').toLowerCase())).toBe(true)
@@ -434,6 +435,7 @@ test("a session calls the plugin's tools, its background module answers, and tur
   expect(Object.keys(config.mcpServers).sort()).toEqual([
     'floti-agents',
     'floti-browser',
+    'floti-desktop',
     'floti-plugin-sample',
     'floti-sessions'
   ])

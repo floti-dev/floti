@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
 import { COOKIE, POPUP_CODE, startBrowserFixture, type BrowserFixture } from './browser-fixture'
-import { expect, keepClearOfCursor, test, type Desktop } from './desktop'
+import { expect, keepClearOfCursor, menuLayer, test, type Desktop } from './desktop'
 
 /**
  * The browser pane: a page loads, the page is held to the desktop's posture, and what
@@ -103,12 +103,20 @@ const pressInPage = (
   )
 
 /** Whether each browser view in the app window is on screen. */
-const viewsShown = (desktop: Desktop): Promise<boolean[]> =>
-  desktop.app.evaluate(({ BrowserWindow }) =>
+/**
+ * Each browser page's view in the window: whether it is shown, and how wide.
+ * The menu layer is a view of its own above the pages and is not one of them.
+ */
+const pageViews = (desktop: Desktop): Promise<{ shown: boolean; width: number }[]> =>
+  desktop.app.evaluate(({ BrowserWindow, WebContentsView }) =>
     BrowserWindow.getAllWindows()[0]!.contentView.children.flatMap((view) =>
-      'webContents' in view ? [view.getVisible()] : []
+      view instanceof WebContentsView && !view.webContents.getURL().endsWith('/layer.html')
+        ? [{ shown: view.getVisible(), width: view.getBounds().width }]
+        : []
     )
   )
+
+const viewsShown = async (desktop: Desktop): Promise<boolean[]> => (await pageViews(desktop)).map(({ shown }) => shown)
 
 test('browsing: a page loads in a browser tab, and back and forward move through what was visited', async ({
   desktop
@@ -357,7 +365,7 @@ test("the keyboard: the browser's keys work with the caret in the page, and ever
   await expect(await pageAt(desktop, url)).toHaveTitle('Floti fixture tools')
 })
 
-test('the address list and the menu: the page stands down for each, the list keeps it down so a remembered address takes the click, and More opens over a still of the page', async ({
+test('the address list and the menu: each is drawn over the live page, which never stands down, and a remembered address in the list takes the click', async ({
   desktop
 }) => {
   const ui = desktop.window
@@ -376,37 +384,33 @@ test('the address list and the menu: the page stands down for each, the list kee
     ipcMain.on('browser:bounds', (_event, bounds: { visible: boolean }) => sent.push(bounds.visible))
   })
 
+  // The list a person sees is the menu layer's, over the page; the window
+  // keeps a transparent copy for a screen reader. Typing sends the layer new
+  // rows with the list still open; the fixture's origin starts both pages'
+  // addresses.
   await address(ui).click()
-  const list = ui.locator('[data-browser-suggestions]')
+  const list = (await menuLayer(desktop)).locator('[data-browser-suggestions]')
   await expect(list).toBeVisible()
-  await expect.poll(() => viewsShown(desktop)).toEqual([false])
-  // And it stays down while the list is open. The page is a native view over
-  // the window, so a view that came back for a moment would be under the
-  // pointer instead of the list, and a person's click would go to the page.
-  // (Playwright clicks the window's own document and cannot tell.) Typing
-  // renders the pane again with the list still open, which is what once
-  // brought the view back; the fixture's origin starts both pages' addresses.
   await address(ui).fill(fixture.http)
-  await expect(list.locator(`[data-browser-suggestion-url="${two}"]`)).toBeVisible()
-  await expect(list).toBeVisible()
+  const remembered = list.locator(`[data-browser-suggestion-url="${two}"]`)
+  await expect(remembered).toBeVisible()
 
-  await list.locator(`[data-browser-suggestion-url="${two}"]`).click()
-  await expect(list).toHaveCount(0)
+  await remembered.click()
+  await expect(ui.locator('[data-browser-suggestions-window]')).toHaveCount(0)
   await expect(address(ui)).toHaveValue(two)
-  await expect.poll(() => viewsShown(desktop)).toEqual([true])
-  // Down once for the list, and up again only when it closed: never back up
-  // for a moment in between.
+  await expect(await pageAt(desktop, two)).toHaveTitle('Floti fixture two')
+  // The page stayed on the screen throughout.
+  expect(await viewsShown(desktop)).toEqual([true])
   const sent = await desktop.app.evaluate(() => (globalThis as { boundsSent?: boolean[] }).boundsSent ?? [])
-  const runs = sent.filter((visible, at) => at === 0 || visible !== sent[at - 1])
-  expect(runs.slice(runs.indexOf(false))).toEqual([false, true])
+  expect(sent).not.toContain(false)
 
-  // Zoom, width, DevTools and clearing data are behind More.
+  // Zoom, width, DevTools and clearing data are behind More, drawn in the
+  // menu layer over the page, which stays on the screen and live.
   await ui.getByRole('button', { name: 'More' }).click()
-  const menu = ui.getByRole('menu', { name: 'Browser' })
+  const menu = (await menuLayer(desktop)).getByRole('menu', { name: 'Browser' })
   await expect(menu).toBeVisible()
-  // The page is off the screen for the menu, and a picture of it is where it was.
-  await expect.poll(() => viewsShown(desktop)).toEqual([false])
-  await expect(ui.locator('[data-browser-still]')).toHaveCount(1)
+  await expect.poll(() => viewsShown(desktop)).toEqual([true])
+  await expect(ui.locator('[data-browser-still]')).toHaveCount(0)
 
   await menu.getByRole('menuitem', { name: /Zoom in/ }).click()
   await expect(menu).toHaveCount(0)
@@ -523,15 +527,7 @@ test('resizing: the page stands down while a divider is held, so the drag toward
   expect(Math.round(before.width - after.width)).toBe(150)
   await expect.poll(() => viewsShown(desktop)).toEqual([true])
   const hole = (await ui.locator('[data-browser-hole]').boundingBox())!
-  await expect
-    .poll(() =>
-      desktop.app.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows()[0]!.contentView.children.flatMap((view) =>
-          'webContents' in view ? [view.getBounds().width] : []
-        )
-      )
-    )
-    .toEqual([Math.round(hole.width)])
+  await expect.poll(async () => (await pageViews(desktop)).map(({ width }) => width)).toEqual([Math.round(hole.width)])
 })
 
 test('dragging: the page stands down while the Browser tab is dragged, and is drawn where the tab lands', async ({

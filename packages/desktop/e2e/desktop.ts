@@ -213,6 +213,25 @@ export async function keepClearOfCursor(desktop: Desktop): Promise<void> {
   })
 }
 
+/** Whether a web contents' address is the browser's menu layer (`layer.html`). */
+const isMenuLayer = (url: string): boolean => new URL(url, 'file:///').pathname.endsWith('/layer.html')
+
+/**
+ * The browser's menu layer: a view of its own above the browser's pages, where
+ * the browser's menus and the address list are drawn over the live page.
+ * Playwright sees it as a page of its own once it has loaded.
+ */
+export async function menuLayer(desktop: Desktop): Promise<Page> {
+  let found: Page | undefined
+  await expect
+    .poll(() => {
+      found = desktop.app.windows().find((candidate) => isMenuLayer(candidate.url()))
+      return found !== undefined
+    })
+    .toBe(true)
+  return found as Page
+}
+
 /** Closes the desktop's window the way its close button or Alt+F4 does. */
 export const closeWindow = (app: ElectronApplication): Promise<void> =>
   app.evaluate(({ BrowserWindow }) => {
