@@ -14,8 +14,13 @@ description: Fixed procedures in Floti - adding an app setting, changing the dat
    its valid and invalid cases to the table in `store.test.ts`.
 3. Its entry in the settings table (`core/src/settingsTable.ts`): label,
    description, section, the values it takes, scope (device or per host),
-   what a session may do to it (change, only narrow, or nothing) and whether
-   `hostSettingsFor` tells the host. A setting that decides what agents may
+   what a session may do to it (change, only narrow, or nothing). A setting
+   that governs what a host's sessions run or may do is a host setting: scope
+   host, a field of `HostSettings` and `HostSettingsPatch` in
+   `crates/floti-protocol` (then rewrite the generated files), its default and
+   check in the host's `workspace/settings.rs`, and its key in
+   `HOST_SETTING_KEYS` (`core/src/types.ts`), so the desktop reads and writes
+   it on each host and never in `desktop.db`. A setting that decides what agents may
    reach or do, or what Floti or its sessions do on their own, is
    narrow-only. State the page does not show goes in
    `STATE_KEYS` instead. `settingsTable.test.ts` fails until one of the two

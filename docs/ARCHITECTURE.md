@@ -41,6 +41,29 @@ tools are in [AGENT-TOOLS.md](AGENT-TOOLS.md), plugins in
   and a copy that stops part way is sent again at the next connect. Config
   file versions kept in `desktop.db` are not copied; those already in
   `floti.db` stay there.
+- A setting is kept where it acts. What governs a host's sessions (the tool
+  families' switches, Sessions can start agents, the five agent limits, the
+  `claude` executable, the project shell, the archive's ceiling), the
+  folders it scans and its update check are host settings: fields of
+  `HostSettings` in `floti.db` (`crates/host/src/workspace/settings.rs`),
+  read and written by any client over that host's own connection
+  (`settings:read`, `settings:write`). Every accepted write reaches every
+  subscribed client as `settings:changed`, so every window attached to a host
+  shows the same values and no device pushes its own over another's.
+  Everything else is the device's, in `desktop.db`, including the browser
+  pane's reach and `browserMcpLocalOnly`, which limit this desktop's pane.
+  The desktop's one seam is the list of keys a host keeps
+  (`HOST_WORKSPACE_KEYS`, `core/src/types.ts`) and two functions in
+  `shared/host/records`: `settingsWithHost` lays a host's values over the device's and
+  `splitSettingsPatch` sends each half where it is kept; main's store refuses
+  a host key. Settings shows the host's in its Floti host group, under the
+  host its switch picks, and a host out of reach as Unknown. On the first
+  connect after the host came to keep them, the values this device had for
+  them in `desktop.db` were carried to its local host once
+  (`main/host/workspace.ts`, marked by `hostSettingsCarriedAt`); a host on
+  another computer keeps what it holds. A plain terminal opens in the shell
+  its request names, else its host's `terminalShell`, else the first shell
+  the host finds.
 - The host owns process lifetime. Every session's and plain terminal's pty and
   process tree is held by the session keeper (`floti keeper`,
   `crates/host/src/keeper`), a process the host starts outside its own tie,
