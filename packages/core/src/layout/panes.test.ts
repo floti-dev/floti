@@ -18,6 +18,7 @@ import {
   neighbourAt,
   notOpenHere,
   openBeside,
+  openBesideAsPreview,
   openFile,
   openTabWithPreview,
   openTab,
@@ -438,12 +439,16 @@ describe('openBeside', () => {
     expect(tree(opened.root)).toBe('row(1, 2)')
   })
 
-  it('lands in front of the pane beside the anchor, not beside the focused one', () => {
+  it('opens beside the anchor, and in a pane of its own when the pane beside is the focused one', () => {
     // The session is in the right pane; the user is in the left one.
     const layout = layoutOf(row([g(SETTINGS), g(session(1), PLANS)]), 0)
-    const anchored = activateTab(layout, 'session:1')
-    const back = focusGroup(anchored, 1)
-    expect(shape(openBeside(back, SESSIONS, 'session:1'))).toEqual(['>settings *sessions', ' *session:1 project:plans'])
+    const back = focusGroup(activateTab(layout, 'session:1'), 1)
+    const opened = openBeside(back, SESSIONS, 'session:1')
+    expect(shape(opened)).toEqual(['>*settings', ' *session:1 project:plans', ' *sessions'])
+    expect(tree(opened.root)).toBe('row(1, 2, 3)')
+    // The anchor's neighbour is the focused pane: a pane of its own, between them.
+    const three = focusGroup(layoutOf(row([g(session(1)), g(SETTINGS), g(BROWSER)]), 0), 2)
+    expect(shape(openBeside(three, PLANS, 'session:1'))).toEqual([' *session:1', ' *project:plans', '>*settings', ' *browser'])
   })
 
   it('leaves every other pane as it was, the focused one included', () => {
@@ -461,10 +466,25 @@ describe('openBeside', () => {
     expect(openBeside(opened, SETTINGS, 'session:1')).toBe(opened)
   })
 
+  it('never changes the focused pane’s front tab: one behind it there moves beside, one in front of it stays', () => {
+    // The user types in the session; the file is open behind it in the same pane.
+    const typing = activateTab(layoutOf(row([g(session(1), PLANS), g(SETTINGS)]), 0), 'session:1')
+    const anchoredElsewhere = openBeside(typing, PLANS, null)
+    expect(shape(anchoredElsewhere)).toEqual(['>*session:1', ' settings *project:plans'])
+    // The caller's tab is in another pane, and the file is behind the focused one's front.
+    const caller = focusGroup(layoutOf(row([g(session(2)), g(session(1), PLANS)]), 1), 2)
+    const moved = openBeside(activateTab(caller, 'session:1'), PLANS, 'session:2')
+    expect(shape(moved)).toEqual([' *session:2', ' *project:plans', '>*session:1'])
+    // Already in front where the keyboard is: nothing moves.
+    const shown = layoutOf(row([g(session(2)), g(PLANS)]), 1)
+    expect(openBeside(shown, PLANS, 'session:2')).toBe(shown)
+  })
+
   it('moves a tab out of the anchor’s own pane, keeping the anchor in front of it', () => {
-    const layout = activateTab(layoutOf(g(session(1), SETTINGS)), 'settings')
+    // The anchor's pane is not the focused one, and the tab hides the anchor there.
+    const layout = focusGroup(layoutOf(row([g(session(1), SETTINGS), g(BROWSER)]), 0), 2)
     const opened = openBeside(layout, SETTINGS, 'session:1')
-    expect(shape(opened)).toEqual(['>*session:1', ' *settings'])
+    expect(shape(opened)).toEqual([' *session:1', ' *settings', '>*browser'])
   })
 
   it('stands in the focused pane for an anchor in no pane, and still keeps the focus', () => {
@@ -475,6 +495,40 @@ describe('openBeside', () => {
 
   it('opens into the only pane of an empty window', () => {
     expect(shape(openBeside(EMPTY_LAYOUT, PLANS, null))).toEqual(['>*project:plans'])
+  })
+})
+
+describe('openBesideAsPreview', () => {
+  const file = (path: string): PaneRef => ({ kind: 'file', root: ALPHA_DIR, path: `${ALPHA_DIR}/${path}` })
+
+  it('opens the first as the preview beside the session, and each after in its place', () => {
+    const layout = layoutOf(g(session(1)))
+    const first = openBesideAsPreview(layout, file('a.ts'), 'session:1', null)
+    expect(shape(first.layout)).toEqual(['>*session:1', ` *file:${ALPHA_DIR}/a.ts`])
+    expect(first.preview).toBe(`file:${ALPHA_DIR}/a.ts`)
+    const second = openBesideAsPreview(first.layout, file('b.ts'), 'session:1', first.preview)
+    expect(shape(second.layout)).toEqual(['>*session:1', ` *file:${ALPHA_DIR}/b.ts`])
+    expect(second.preview).toBe(`file:${ALPHA_DIR}/b.ts`)
+  })
+
+  it('leaves a kept tab alone, and opens beside it as the new preview', () => {
+    const layout = layoutOf(row([g(session(1)), g(file('kept.ts'))]), 0)
+    const opened = openBesideAsPreview(layout, file('c.ts'), 'session:1', null)
+    expect(shape(opened.layout)).toEqual(['>*session:1', ` file:${ALPHA_DIR}/kept.ts *file:${ALPHA_DIR}/c.ts`])
+    expect(opened.preview).toBe(`file:${ALPHA_DIR}/c.ts`)
+  })
+
+  it('never replaces a preview in the focused pane or the anchor’s', () => {
+    const layout = activateTab(layoutOf(row([g(session(1), file('mine.ts')), g(SETTINGS)]), 0), 'session:1')
+    const opened = openBesideAsPreview(layout, file('d.ts'), 'session:1', `file:${ALPHA_DIR}/mine.ts`)
+    expect(shape(opened.layout)).toEqual([`>*session:1 file:${ALPHA_DIR}/mine.ts`, ` settings *file:${ALPHA_DIR}/d.ts`])
+  })
+
+  it('brings a tab already open beside, keeping the preview it had', () => {
+    const layout = layoutOf(row([g(session(1)), g(SETTINGS, PLANS)]), 0)
+    const opened = openBesideAsPreview(layout, SETTINGS, 'session:1', 'project:plans')
+    expect(shape(opened.layout)).toEqual(['>*session:1', ' *settings project:plans'])
+    expect(opened.preview).toBe('project:plans')
   })
 })
 

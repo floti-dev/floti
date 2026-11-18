@@ -15,7 +15,8 @@
 //! **Paths are the host's to judge.** Before anything is relayed, a relative
 //! path is resolved against the caller's folder, folded, and must sit under a
 //! folder the host knows (`KnownRoots::holding`), as a file where a file is
-//! asked for and as a folder where a folder is. A path that fails is refused
+//! asked for, as a folder where a folder is, and as either for a project. A
+//! path that fails is refused
 //! with the sentence saying why, and the window is never asked: nothing
 //! opens. The window is told the known folder holding the path and the path,
 //! as a [`DesktopOpen`].
@@ -101,9 +102,10 @@ pub(crate) struct SessionFacts {
 
 /// What the tools read, from what the host already knows.
 pub(crate) trait DesktopWorld: Send + Sync + 'static {
-    /// Session `id`'s folder, parent and starting device, or none for a
-    /// session the host has no record of. Blocking: it reads the store.
-    fn session(&self, id: u64) -> Option<SessionFacts>;
+    /// Session `id`'s folder, parent and starting device, none for a
+    /// session the host has no record of, or the sentence saying why it
+    /// cannot look (the host is stopping). Blocking: it reads the store.
+    fn session(&self, id: u64) -> Result<Option<SessionFacts>, String>;
 
     /// The deepest known folder holding `path`, or the sentence naming the
     /// rule. Blocking: it reads the store.
@@ -147,13 +149,9 @@ impl DesktopTools {
         let Some(world) = self.world.get().cloned() else {
             return problem(STILL_STARTING);
         };
-        let resolved = tokio::task::spawn_blocking(move || {
-            let mine = world.session(session).ok_or(NO_RECORD)?;
-            let open = resolve_open(world.as_ref(), Path::new(&mine.cwd), &arguments)?;
-            let caller = caller_of(world.as_ref(), session, mine);
-            Ok::<_, String>((caller, open))
-        })
-        .await;
+        let resolved =
+            tokio::task::spawn_blocking(move || resolve_call(world.as_ref(), session, &arguments))
+                .await;
         let (caller, open) = match resolved {
             Ok(Ok(resolved)) => resolved,
             Ok(Err(refused)) => return problem(&refused),
@@ -228,6 +226,18 @@ impl ToolFamily for DesktopTools {
     }
 }
 
+/// Who made a `desktop_open` call from `session` with `arguments`, and what
+/// it asks the window to open, or the sentence saying why nothing opens.
+fn resolve_call(
+    world: &dyn DesktopWorld,
+    session: u64,
+    arguments: &JsonObject,
+) -> Result<(DesktopCaller, DesktopOpen), String> {
+    let mine = world.session(session)?.ok_or(NO_RECORD)?;
+    let open = resolve_open(world, Path::new(&mine.cwd), arguments)?;
+    Ok((caller_of(world, session, mine), open))
+}
+
 /// Who `session`, whose facts are `mine`, is to the relay: it and the
 /// sessions above it, nearest first, and the device that started it or the
 /// nearest above it that a device started.
@@ -240,7 +250,7 @@ fn caller_of(world: &dyn DesktopWorld, session: u64, mine: SessionFacts) -> Desk
             break;
         }
         lineage.push(parent);
-        let Some(facts) = world.session(parent) else {
+        let Ok(Some(facts)) = world.session(parent) else {
             break;
         };
         starter = starter.or(facts.starter);
@@ -331,6 +341,9 @@ fn resolve_open(
         "project" => {
             let path = path_in(arguments, cwd, "project")?;
             let project = world.project_holding(&path)?;
+            if std::fs::metadata(&path).is_err() {
+                return Err(format!("There is no file or folder at {}.", path.display()));
+            }
             Ok(DesktopOpen::Project {
                 path: project.path.display().to_string(),
             })
@@ -425,15 +438,16 @@ pub(crate) struct HostDesktopWorld {
 const STOPPING: &str = "Floti's host is stopping, so nothing can be opened now.";
 
 impl DesktopWorld for HostDesktopWorld {
-    fn session(&self, id: u64) -> Option<SessionFacts> {
-        let hosted = self.hosted.upgrade()?;
-        let id: SessionId = session_id(id)?;
-        let record = hosted.record(id).ok()?;
-        Some(SessionFacts {
+    fn session(&self, id: u64) -> Result<Option<SessionFacts>, String> {
+        let hosted = self.hosted.upgrade().ok_or_else(|| STOPPING.to_owned())?;
+        let Some(id): Option<SessionId> = session_id(id) else {
+            return Ok(None);
+        };
+        Ok(hosted.record(id).ok().map(|record| SessionFacts {
             cwd: record.cwd,
             parent: record.parent_id,
             starter: hosted.starter_of(id),
-        })
+        }))
     }
 
     fn holding(&self, path: &Path) -> Result<KnownRoot, String> {
@@ -465,6 +479,8 @@ mod tests {
     struct World {
         sessions: HashMap<u64, SessionFacts>,
         known: Vec<(PathBuf, RootKind)>,
+        /// The host is stopping: it has let go of its sessions.
+        stopping: bool,
     }
 
     impl World {
@@ -483,8 +499,11 @@ mod tests {
     }
 
     impl DesktopWorld for World {
-        fn session(&self, id: u64) -> Option<SessionFacts> {
-            self.sessions.get(&id).cloned()
+        fn session(&self, id: u64) -> Result<Option<SessionFacts>, String> {
+            if self.stopping {
+                return Err(STOPPING.to_owned());
+            }
+            Ok(self.sessions.get(&id).cloned())
         }
 
         fn holding(&self, path: &Path) -> Result<KnownRoot, String> {
@@ -529,6 +548,7 @@ mod tests {
         let world = World {
             sessions: HashMap::from([(4, facts(&project, None, Some("laptop")))]),
             known: vec![(project.clone(), RootKind::Project)],
+            stopping: false,
         };
         Fixture {
             world,
@@ -638,6 +658,43 @@ mod tests {
     }
 
     #[test]
+    fn a_project_path_that_is_not_there_is_refused_and_nothing_opens() {
+        let fixture = fixture();
+        let refused = open(&fixture, json!({ "view": "project", "path": "gone dir" })).unwrap_err();
+        assert_eq!(
+            refused,
+            format!(
+                "There is no file or folder at {}.",
+                fixture.project.join("gone dir").display()
+            )
+        );
+    }
+
+    #[test]
+    fn a_call_names_its_session_and_says_why_when_the_host_has_none_or_is_stopping() {
+        let mut fixture = fixture();
+        let arguments = object(json!({ "view": "history", "search": "x" }));
+        let (caller, open) = resolve_call(&fixture.world, 4, &arguments).unwrap();
+        assert_eq!(caller.lineage, [4]);
+        assert_eq!(caller.starter.as_deref(), Some("laptop"));
+        assert_eq!(
+            open,
+            DesktopOpen::History {
+                search: "x".to_owned()
+            }
+        );
+        assert_eq!(
+            resolve_call(&fixture.world, 77, &arguments).unwrap_err(),
+            NO_RECORD
+        );
+        fixture.world.stopping = true;
+        assert_eq!(
+            resolve_call(&fixture.world, 4, &arguments).unwrap_err(),
+            STOPPING
+        );
+    }
+
+    #[test]
     fn what_cannot_be_opened_is_refused_saying_why() {
         let fixture = fixture();
         for (arguments, says) in [
@@ -728,8 +785,9 @@ mod tests {
                 (9, facts(folder, Some(8), None)),
             ]),
             known: Vec::new(),
+            stopping: false,
         };
-        let called = |id: u64| caller_of(&world, id, world.session(id).unwrap());
+        let called = |id: u64| caller_of(&world, id, world.session(id).unwrap().unwrap());
         assert_eq!(
             called(3),
             DesktopCaller {

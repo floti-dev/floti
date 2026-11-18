@@ -840,37 +840,41 @@ export function placeIn(layout: PaneLayout, ref: PaneRef, group: number): PaneLa
 }
 
 /**
- * Opens a tab beside tab `anchor` and leaves the focus where it was: what a
+ * Opens a tab beside tab `anchor` and leaves the keyboard where it was: what a
  * session's agent asked to show the user, while the user goes on typing to
  * that session.
  *
  * It goes to the pane beside the one holding `anchor` (`besideOf`), in front
- * there, or into a new pane on that one's right when it has no neighbour.
- * With `anchor` null or in no pane, the focused pane stands in for it. A tab
- * already open comes to the front where it is, unless that is the anchor's own
- * pane, where it would hide the anchor: then it moves beside, and the anchor
- * is the one in front of its pane. Either way the focused pane stays focused,
- * and no other pane's front tab changes.
+ * there, or into a new pane on that one's right when it has no neighbour or
+ * its neighbour is the focused pane. With `anchor` null or in no pane, the
+ * focused pane stands in for it. A tab already open comes to the front where
+ * it is, unless that is the anchor's own pane, where it would hide the anchor,
+ * or the focused pane, where it would take the keyboard: then it moves beside,
+ * and the anchor is the one in front of its pane. One already in front of the
+ * focused pane is left there. Either way the focused pane stays focused with
+ * the same tab in front.
  */
 export function openBeside(layout: PaneLayout, ref: PaneRef, anchor: string | null): PaneLayout {
   const id = paneId(ref)
-  if (id === anchor) return layout
-  const home = (anchor === null ? undefined : findTab(layout, anchor)?.group) ?? layout.focused
+  if (id === anchor || focusedGroup(layout).activeId === id) return layout
+  const home = homeOf(layout, anchor)
   const at = findTab(layout, id)
-  if (at !== null && at.group !== home) {
+  if (at !== null && at.group !== home && at.group !== layout.focused) {
     const group = groupById(layout, at.group)!
     if (group.activeId === id) return layout
     return normalize(layout.root, replaced(layout, { ...group, activeId: id }), layout.focused, layout)
   }
   let base = layout
   if (at !== null) {
-    const group = groupById(layout, home)!
+    // Behind the front of the focused pane, or in the anchor's own pane: it
+    // leaves for the pane beside.
+    const group = groupById(layout, at.group)!
     const left = without(group, at.index)
     const front = group.activeId === id && anchor !== null && findTab(layout, anchor) !== null ? anchor : left.activeId
     base = normalize(layout.root, replaced(layout, { ...left, activeId: front }), layout.focused, layout)
   }
   const beside = besideOf(base, home)
-  if (beside === null) {
+  if (beside === null || beside === base.focused) {
     const created = base.nextId
     return normalize(
       insertBeside(base.root, home, { group: created }, 'right'),
@@ -881,6 +885,43 @@ export function openBeside(layout: PaneLayout, ref: PaneRef, anchor: string | nu
   }
   const target = groupById(base, beside)!
   return normalize(base.root, replaced(base, { id: target.id, tabs: [...target.tabs, ref], activeId: id }), base.focused, base)
+}
+
+/**
+ * `openBeside` for a tab that stands as the preview (`openFile`'s rule): a
+ * session's agent showing several things in a row replaces the last one it
+ * showed rather than leaving a tab for each, and the user keeps one the usual
+ * way. A new tab takes the preview's place when the preview is in a pane that
+ * is neither the focused one nor the anchor's, and comes to the front there;
+ * otherwise it opens as `openBeside` opens it, as the new preview. A tab
+ * already open is only brought beside. `preview` is the id of the tab standing
+ * as the preview now, or null; what comes back is the layout and the preview
+ * after.
+ */
+export function openBesideAsPreview(
+  layout: PaneLayout,
+  ref: PaneRef,
+  anchor: string | null,
+  preview: string | null
+): { layout: PaneLayout; preview: string | null } {
+  const id = paneId(ref)
+  const still = preview !== null && findTab(layout, preview) !== null ? preview : null
+  if (findTab(layout, id) !== null) return { layout: openBeside(layout, ref, anchor), preview: still }
+  const at = still === null ? null : findTab(layout, still)
+  if (at !== null && at.group !== layout.focused && at.group !== homeOf(layout, anchor)) {
+    const group = groupById(layout, at.group)!
+    const tabs = group.tabs.map((tab) => (paneId(tab) === still ? ref : tab))
+    return {
+      layout: normalize(layout.root, replaced(layout, { id: group.id, tabs, activeId: id }), layout.focused, layout),
+      preview: id
+    }
+  }
+  return { layout: openBeside(layout, ref, anchor), preview: id }
+}
+
+/** The pane `anchor` is in, or the focused one when it is null or in none. */
+function homeOf(layout: PaneLayout, anchor: string | null): number {
+  return (anchor === null ? undefined : findTab(layout, anchor)?.group) ?? layout.focused
 }
 
 /** A file tab, as `openFile` takes it. */

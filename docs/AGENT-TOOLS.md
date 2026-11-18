@@ -83,7 +83,7 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   caller's folder, folded, and must sit under a folder the host knows
   (`KnownRoots::holding` in `workspace/roots.rs`, judged before and after
   links as the files service judges a path), as a file where a file is asked
-  for and as a folder where a folder is. Anything else is refused with the
+  for, as a folder where a folder is, and as either for a project. Anything else is refused with the
   sentence saying why, and no window is asked: nothing opens. The window is
   told the known folder holding the path and the path (`DesktopOpen`).
 - The host has no window, so each call goes over `agentDesktop:call` to one
@@ -106,12 +106,16 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   exit's notification.
 - What opens is shown beside the caller's tab without moving the focus
   (`openBeside` in `packages/core/src/layout/panes.ts`): the pane beside the
-  one holding it, or a new pane on its right, the focused pane and the
-  keyboard left where they were, so the user keeps typing to the session. A
-  line is scrolled to without taking the keyboard. When the caller's tab is
-  not in that window, it opens beside the focused pane. History is the
-  window's palette, so it opens over the window and takes the keyboard until
-  it is closed, which gives it back to where it was.
+  one holding it, or a new pane on its right when it has none or its
+  neighbour is the focused pane, so the focused pane keeps its front tab and
+  the keyboard, and the user keeps typing to the session. A tab already open
+  in the focused pane behind its front moves beside rather than coming to
+  the front there. A tab opens as the preview (`openBesideAsPreview`): the
+  next one the agent opens takes its place, until the user keeps it as any
+  preview is kept. A line is scrolled to without taking the keyboard. When
+  the caller's tab is not in that window, it opens beside the focused pane.
+  History is the window's palette, so it opens over the window and takes the
+  keyboard until it is closed, which gives it back to where it was.
 - A launch is given the family only while a window that takes its calls is
   attached, and only while `desktopMcp` is on (Settings > Agents, on by
   default). A call with none attached, or waiting on a window that leaves,

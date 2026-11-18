@@ -38,7 +38,7 @@ import {
   liveSessionsIn,
   moveTab,
   notOpenHere,
-  openBeside,
+  openBesideAsPreview,
   openFile,
   openTab,
   openTabWithPreview,
@@ -3306,8 +3306,14 @@ export function App(): JSX.Element {
         return null;
       },
       openBeside: (ref, anchor) => {
-        const landed = findTab(openBeside(open, ref, anchor), paneId(ref));
-        commit((current) => openBeside(current, ref, anchor));
+        // As the preview: the next thing the agent shows takes its place,
+        // and the user keeps one the usual way.
+        const placed = openBesideAsPreview(open, ref, anchor, preview);
+        const landed = findTab(placed.layout, paneId(ref));
+        commit(
+          (current) => openBesideAsPreview(current, ref, anchor, preview).layout,
+        );
+        setPreview(placed.preview);
         // Opened in a pane a maximized one is hiding: the window is given back.
         setMaximized((current) =>
           current === null || current === landed?.group ? current : null,
@@ -3354,6 +3360,7 @@ export function App(): JSX.Element {
     });
   }, [
     open,
+    preview,
     commit,
     sessionsById,
     remoteSessionOf,

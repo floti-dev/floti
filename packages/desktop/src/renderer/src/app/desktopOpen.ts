@@ -10,8 +10,10 @@ import type { DesktopCall, DesktopToolResult } from './host/desktopTools'
  * The host has already resolved and checked every path: it sends a
  * `DesktopOpen` naming the known folder holding a path and the path. So the
  * window only places what it is told. A file, a project's page and a Settings
- * tab open beside the caller's tab (`openBeside` in `panes.ts`), or beside the
- * focused pane when the caller's tab is not in this window; Files is the
+ * tab open beside the caller's tab as the preview, which the next one the
+ * agent opens replaces until the user keeps it (`openBesideAsPreview` in
+ * `panes.ts`), or beside the focused pane when the caller's tab is not in
+ * this window; Files is the
  * sidebar, pointed at the folder; History is the window's palette, which opens
  * over everything and takes the keyboard until it is closed.
  *
@@ -27,7 +29,10 @@ export interface DesktopOpenWindow {
    * Null when neither is here.
    */
   anchorOf(host: string, session: number): string | null
-  /** Opens `ref` beside tab `anchor`, the focused pane standing in for null; the focus stays where it is. */
+  /**
+   * Opens `ref` beside tab `anchor`, the focused pane standing in for null, as
+   * the preview the next one replaces; the focus stays where it is.
+   */
   openBeside(ref: PaneRef, anchor: string | null): void
   /** The file at `path` of `host` opens scrolled to `line`. */
   revealLine(host: string, path: string, line: number): void
