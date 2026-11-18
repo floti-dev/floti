@@ -384,29 +384,78 @@ pub fn tail(path: &Path, most: usize, word: Option<&str>) -> io::Result<Option<V
 }
 
 /// `line` with what is shaped like a secret hidden: the value after
-/// `Bearer `, and any run of [`SECRET_HEX_RUN`] or more hex digits (a token,
-/// a hash, a whole key). A key's fingerprint, a few bytes, stays.
+/// `Bearer ` or `Bearer:`, what follows a known key's prefix (Anthropic's
+/// `sk-ant-`, GitHub's `ghp_`, `gho_`, `ghu_`, `ghs_` and `github_pat_`), and
+/// any run of [`SECRET_HEX_RUN`] or more hex digits (a token, a hash, a whole
+/// key). A key's fingerprint, a few bytes, stays. Main's `hideSecrets` hides
+/// the same.
 pub fn hide_secrets(line: &str) -> Cow<'_, str> {
-    match hide_bearers(line) {
-        Cow::Borrowed(line) => hide_hex_runs(line),
-        Cow::Owned(line) => Cow::Owned(hide_hex_runs(&line).into_owned()),
+    let passes: [fn(&str) -> Cow<'_, str>; 3] = [hide_bearers, hide_keys, hide_hex_runs];
+    let mut changed: Option<String> = None;
+    for pass in passes {
+        let next = match pass(changed.as_deref().unwrap_or(line)) {
+            Cow::Owned(next) => Some(next),
+            Cow::Borrowed(_) => None,
+        };
+        if next.is_some() {
+            changed = next;
+        }
     }
+    changed.map_or(Cow::Borrowed(line), Cow::Owned)
 }
 
-/// `line` with the value after each `Bearer ` (any case) hidden.
+/// `line` with the value after each `Bearer ` or `Bearer:` (any case) hidden.
 fn hide_bearers(line: &str) -> Cow<'_, str> {
-    const BEARER: &[u8] = b"bearer ";
+    const BEARER: &[u8] = b"bearer";
     let bytes = line.as_bytes();
     hide_spans(line, |at| {
-        if bytes.len() - at <= BEARER.len()
-            || !bytes[at..at + BEARER.len()].eq_ignore_ascii_case(BEARER)
-        {
+        let after = at + BEARER.len();
+        if bytes.len() <= after || !bytes[at..after].eq_ignore_ascii_case(BEARER) {
             return None;
         }
-        let value = at + BEARER.len();
+        let colon = usize::from(bytes[after] == b':');
+        let spaces = bytes[after + colon..]
+            .iter()
+            .take_while(|byte| **byte == b' ')
+            .count();
+        if colon + spaces == 0 {
+            return None;
+        }
+        let value = after + colon + spaces;
         let past = bytes[value..]
             .iter()
             .position(u8::is_ascii_whitespace)
+            .map_or(bytes.len(), |end| value + end);
+        (past > value).then_some((value, past))
+    })
+}
+
+/// The prefixes of keys whose shape says what they are.
+const KEY_PREFIXES: [&[u8]; 6] = [
+    b"sk-ant-",
+    b"ghp_",
+    b"gho_",
+    b"ghu_",
+    b"ghs_",
+    b"github_pat_",
+];
+
+/// `line` with what follows each [`KEY_PREFIXES`] prefix, at the start of a
+/// word, hidden: the run of letters, digits, `_` and `-` after it.
+fn hide_keys(line: &str) -> Cow<'_, str> {
+    let bytes = line.as_bytes();
+    let word = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
+    hide_spans(line, |at| {
+        if at > 0 && word(bytes[at - 1]) {
+            return None;
+        }
+        let prefix = KEY_PREFIXES
+            .iter()
+            .find(|prefix| bytes[at..].starts_with(prefix))?;
+        let value = at + prefix.len();
+        let past = bytes[value..]
+            .iter()
+            .position(|byte| !(word(*byte) || *byte == b'-'))
             .map_or(bytes.len(), |end| value + end);
         (past > value).then_some((value, past))
     })

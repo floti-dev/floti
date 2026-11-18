@@ -14,8 +14,10 @@ import { format } from 'node:util'
  *
  * It is bounded as `host.log` is (`host_log.rs`): a log past `MAIN_LOG_LIMIT`
  * becomes `main.log.1`, the one before it `main.log.2`, up to
- * `KEPT_MAIN_LOGS` older files, and a new `main.log` is begun. A file it
- * makes is the owner's alone.
+ * `KEPT_MAIN_LOGS` older files, and a new `main.log` is begun. On macOS and
+ * Linux a file it makes is the owner's alone (mode 0600); on Windows the mode
+ * means nothing, and the file takes the access of the folder it is in, which
+ * is in the user's own data folder.
  *
  * Nothing it writes names a cookie, a token or a key: main logs none
  * (cookies are handled only in `browserCookies.ts`, which logs no name or
@@ -42,16 +44,22 @@ export const TAIL_MOST = 500
 export const HIDDEN = '[hidden]'
 
 /**
- * What is shaped like a secret: the value after `Bearer `, and a run of 64 or
- * more hex digits (a token, a hash, a whole key). A key's fingerprint, a few
- * bytes, stays. The host's `hide_secrets` hides the same.
+ * What is shaped like a secret: the value after `Bearer ` or `Bearer:`, what
+ * follows a known key's prefix at the start of a word (Anthropic's `sk-ant-`,
+ * GitHub's `ghp_`, `gho_`, `ghu_`, `ghs_` and `github_pat_`), and a run of 64
+ * or more hex digits (a token, a hash, a whole key). A key's fingerprint, a
+ * few bytes, stays. The host's `hide_secrets` hides the same.
  */
-const BEARER = /(bearer )\S+/gi
+const BEARER = /(bearer(?::|:? +))(\S+)/gi
+const KEY = /(?<![A-Za-z0-9_])(sk-ant-|gh[pous]_|github_pat_)[A-Za-z0-9_-]+/g
 const HEX_RUN = /[0-9a-f]{64,}/gi
 
 /** `line` with what is shaped like a secret hidden. */
 export function hideSecrets(line: string): string {
-  return line.replace(HEX_RUN, HIDDEN).replace(BEARER, `$1${HIDDEN}`)
+  return line
+    .replace(BEARER, `$1${HIDDEN}`)
+    .replace(KEY, `$1${HIDDEN}`)
+    .replace(HEX_RUN, HIDDEN)
 }
 
 /** The file calls the log makes: node's, or a test's. */

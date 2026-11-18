@@ -235,3 +235,34 @@ fn secrets_are_hidden_and_a_fingerprint_stays() {
     assert!(matches!(hide_secrets(plain), std::borrow::Cow::Borrowed(_)));
     assert_eq!(hide_secrets("Bearer "), "Bearer ");
 }
+
+#[test]
+fn known_key_shapes_and_a_bearer_with_a_colon_are_hidden() {
+    for (line, said) in [
+        ("Bearer: abc.def next", format!("Bearer: {HIDDEN} next")),
+        (
+            "authorization bearer:xyz",
+            format!("authorization bearer:{HIDDEN}"),
+        ),
+        (
+            "key sk-ant-api03-AbC_d-9 was set",
+            format!("key sk-ant-{HIDDEN} was set"),
+        ),
+        ("GH_TOKEN=ghp_A1b2C3", format!("GH_TOKEN=ghp_{HIDDEN}")),
+        (
+            "(gho_x) (ghu_y) (ghs_z)",
+            format!("(gho_{HIDDEN}) (ghu_{HIDDEN}) (ghs_{HIDDEN})"),
+        ),
+        (
+            "pat github_pat_11AB_cd, then",
+            format!("pat github_pat_{HIDDEN}, then"),
+        ),
+    ] {
+        assert_eq!(hide_secrets(line), said, "{line}");
+    }
+    // A prefix inside a word, or with nothing after it, is no key; a bearer
+    // with neither a space nor a colon after it is a word.
+    for kept in ["mysk-ant-x", "the ghp_ prefix", "bearers carry", "Bearer:"] {
+        assert_eq!(hide_secrets(kept), kept);
+    }
+}

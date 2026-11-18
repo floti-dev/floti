@@ -18,8 +18,10 @@
 //! its load state and error, and the agent limits. It asks the host for them
 //! (`app:info`, `setup:status`, `plugins:list`, `settings:read`) and says
 //! them through [`crate::status`], as `desktop_status` does, so the two never
-//! say a thing two ways. None of them is a problem; one it could not ask is
-//! said as a line too.
+//! say a thing two ways. They are asked once the host has answered its ping,
+//! and given [`STATUS_DEADLINE`] apart from it, so a host slow to say how it
+//! stands still counts as answering. None of them is a problem; one it could
+//! not ask is said as a line too, and changes nothing about how doctor ends.
 //!
 //! Beside this computer's host it reports each problem it finds on this
 //! computer, one line each with the line that fixes it
@@ -85,6 +87,11 @@ const CLIENT_NAME: &str = "floti doctor";
 
 /// How long a host on this computer has to answer.
 const LOCAL_DEADLINE: Duration = Duration::from_secs(10);
+
+/// How long a host that answered has to say how it stands, once it has:
+/// `setup:status` runs each agent CLI's version command. Past it, doctor
+/// says it could not ask, and the host still counts as answering.
+const STATUS_DEADLINE: Duration = Duration::from_secs(30);
 
 /// How `floti doctor` ended, which is its exit status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -429,13 +436,15 @@ async fn check_local(folders: &Folders) -> Vec<Line> {
     let reached = tokio::time::timeout(LOCAL_DEADLINE, async {
         let mut connection = client::connect(&endpoint, &device, &host).await?;
         let (welcome, answer) = timed_ping(&mut connection).await?;
-        let standing = ask_status(&mut connection, &welcome).await;
-        connection.close().await;
-        Ok::<_, ClientError>((answer, standing))
+        Ok::<_, ClientError>((connection, welcome, answer))
     })
     .await;
     match reached {
-        Ok(Ok((answer, standing))) => {
+        Ok(Ok((mut connection, welcome, answer))) => {
+            // It answered: how it stands is asked apart, and never makes it
+            // one that does not.
+            let standing = within(STATUS_DEADLINE, ask_status(&mut connection, &welcome)).await;
+            connection.close().await;
             let mut lines = vec![answer.line(THIS_PC)];
             lines.extend(status_lines(THIS_PC, standing));
             lines
@@ -478,6 +487,16 @@ async fn ask_status(connection: &mut Connection, welcome: &Welcome) -> Result<Ho
         settings: &settings,
         tool_families: None,
     }))
+}
+
+/// What `asking` answers, or that it did not answer within `deadline`.
+async fn within<T>(
+    deadline: Duration,
+    asking: impl Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+    tokio::time::timeout(deadline, asking)
+        .await
+        .unwrap_or_else(|_| Err(format!("it did not answer within {deadline:?}")))
 }
 
 /// `C`'s answer from the host on `connection`, or why there is none.
@@ -664,6 +683,28 @@ mod tests {
         assert!(unknown.well);
 
         assert!(finding_line(&Finding::Fine).is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_host_slow_to_say_how_it_stands_is_said_as_not_asked_and_is_no_problem() {
+        let slow = within(
+            STATUS_DEADLINE,
+            std::future::pending::<Result<HostStatus, String>>(),
+        )
+        .await;
+        let lines = status_lines(THIS_PC, slow);
+        assert_eq!(
+            lines
+                .iter()
+                .map(|line| line.text.as_str())
+                .collect::<Vec<_>>(),
+            ["This PC: could not ask how it stands: it did not answer within 30s"]
+        );
+        assert!(lines.iter().all(|line| line.well));
+        assert_eq!(
+            within(STATUS_DEADLINE, async { Ok::<_, String>(3) }).await,
+            Ok(3)
+        );
     }
 
     #[test]

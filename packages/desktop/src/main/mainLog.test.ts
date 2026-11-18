@@ -19,7 +19,7 @@ afterEach(() => {
 const names = (): string[] => readdirSync(logs).sort()
 
 describe('main.log', () => {
-  it('is made in the logs folder, owner-only, with each line appended', () => {
+  it('is made in the logs folder, owner-only on macOS and Linux, with each line appended', () => {
     const log = createMainLog(logs)
     expect(log.path).toBe(join(logs, MAIN_LOG_FILE))
     log.write('one')
@@ -56,6 +56,19 @@ describe('main.log', () => {
     expect(lines).toEqual([`sent Authorization: Bearer ${HIDDEN} and ${HIDDEN}`, `bearer ${HIDDEN}`])
     // A fingerprint, a few bytes, stays.
     expect(hideSecrets('device 1a2b3c4d5e6f7a8b attached')).toBe('device 1a2b3c4d5e6f7a8b attached')
+  })
+
+  it('hides known key shapes and a bearer with a colon, as the host does', () => {
+    const cases: [string, string][] = [
+      ['Bearer: abc.def next', `Bearer: ${HIDDEN} next`],
+      ['authorization bearer:xyz', `authorization bearer:${HIDDEN}`],
+      ['key sk-ant-api03-AbC_d-9 was set', `key sk-ant-${HIDDEN} was set`],
+      ['GH_TOKEN=ghp_A1b2C3', `GH_TOKEN=ghp_${HIDDEN}`],
+      ['(gho_x) (ghu_y) (ghs_z)', `(gho_${HIDDEN}) (ghu_${HIDDEN}) (ghs_${HIDDEN})`],
+      ['pat github_pat_11AB_cd, then', `pat github_pat_${HIDDEN}, then`]
+    ]
+    for (const [line, said] of cases) expect(hideSecrets(line)).toBe(said)
+    for (const kept of ['mysk-ant-x', 'the ghp_ prefix', 'bearers carry', 'Bearer:']) expect(hideSecrets(kept)).toBe(kept)
   })
 
   it('tails the latest lines oldest first, at most 500, only those holding the word in any case', async () => {

@@ -182,13 +182,17 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   asks main for on the client-only `ownLog:tail`; with `word`, only lines
   holding it, in any case. Main writes `main.log` beside `host.log`, in the
   logs folder of the host it starts, rotated as `host.log` is
-  (`main/mainLog.ts`). With no window attached, the answer is the host's
+  (`main/mainLog.ts`): owner-only on macOS and Linux, and on Windows with
+  the access of that folder, which is in the user's own data folder. With
+  no window attached, the answer is the host's
   lines and says main's log is read through a window.
 - Neither answer holds a token, key or credential. The logs hold none by
   design (a key is named by its fingerprint), and every line and string in
   both answers, the window's part included, also has what is shaped like a
-  secret hidden as `[hidden]`: the value after `Bearer `, and a run of 64 or
-  more hex digits (`hide_secrets`, and `hideSecrets` in main).
+  secret hidden as `[hidden]`: the value after `Bearer ` or `Bearer:`, what
+  follows a known key's prefix (`sk-ant-`, `ghp_`, `gho_`, `ghu_`, `ghs_`,
+  `github_pat_`), and a run of 64 or more hex digits (`hide_secrets`, and
+  `hideSecrets` in main).
 - From a session's shell it is `floti desktop open <view> ...`
   (`crates/host/src/desktop_cli.rs`: `file <path> [--line <n>]`,
   `folder <path>`, `project <path>`, `history [<search>...]`,
