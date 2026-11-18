@@ -144,7 +144,8 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   reach and local-only rule, the five agent limits, plugins' switches and the
   folders Floti scans, each kept folder compared exactly) or what Floti or
   its sessions do on their own (`updateCheck`, `browserSearch`,
-  `quitSessions`, where only End narrows, and `restoreWithoutAsking`) may be
+  `quitSessions`, which moves only toward end in end < ask < keep, and
+  `restoreWithoutAsking`) may be
   narrowed and never widened from a session; a set that would widen one is
   refused saying the user changes it in Settings. The `claude` executable, the project shell and the archive's
   ceiling (lowering it drops conversations an undo cannot bring back) only the

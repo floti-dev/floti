@@ -156,8 +156,13 @@ describe('the settings table', () => {
     expect(narrows('browserSearch', 'google', 'off')).toBe(true)
     expect(narrows('browserSearch', 'off', 'google')).toBe(false)
     expect(narrows('browserSearch', 'google', 'bing')).toBe(false)
-    expect(narrows('quitSessions', 'keep', 'end')).toBe(true)
-    expect(narrows('quitSessions', 'end', 'keep')).toBe(false)
+    // Quitting is ordered end < ask < keep: only moves toward end narrow.
+    for (const [from, to] of [['keep', 'ask'], ['keep', 'end'], ['ask', 'end'], ['end', 'end'], ['keep', 'keep']]) {
+      expect(narrows('quitSessions', from, to), `${String(from)} -> ${String(to)}`).toBe(true)
+    }
+    for (const [from, to] of [['end', 'ask'], ['end', 'keep'], ['ask', 'keep'], ['end', 'nonsense']]) {
+      expect(narrows('quitSessions', from, to), `${String(from)} -> ${String(to)}`).toBe(false)
+    }
     expect(narrows('restoreWithoutAsking', true, false)).toBe(true)
     expect(narrows('restoreWithoutAsking', false, true)).toBe(false)
     // What names a program to run, and what would drop archived conversations, only the user changes.

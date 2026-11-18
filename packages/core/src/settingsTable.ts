@@ -144,6 +144,19 @@ const noHigher = (from: unknown, to: unknown): boolean =>
 const fewerFolders = (from: unknown, to: unknown): boolean =>
   Array.isArray(from) && Array.isArray(to) && to.every((folder) => typeof folder === 'string' && from.includes(folder))
 
+/**
+ * What quitting leaves running, least first: end < ask < keep. A move narrows
+ * when it goes toward end or stays; any move toward keep widens. `ask` is not
+ * a value `quitSessions` takes yet (`QUIT_SESSIONS`); it has its place here so
+ * the rule holds if it becomes one.
+ */
+const QUIT_ORDER = ['end', 'ask', 'keep'] as const
+const quitNarrows = (from: unknown, to: unknown): boolean => {
+  const was = QUIT_ORDER.indexOf(from as (typeof QUIT_ORDER)[number])
+  const now = QUIT_ORDER.indexOf(to as (typeof QUIT_ORDER)[number])
+  return was !== -1 && now !== -1 && now <= was
+}
+
 const options = (values: readonly string[], label: (value: string) => string): SettingOption[] =>
   values.map((value) => ({ value, label: label(value) }))
 
@@ -386,9 +399,9 @@ function build(): readonly SettingEntry[] {
         ]
       },
       scope: 'host',
-      // Keep leaves agents running with nobody there: only end narrows it.
+      // Ordered by how much keeps running after quit: a session may move it only toward end.
       session: 'narrow',
-      narrows: (from, to) => to === 'end' || to === from,
+      narrows: quitNarrows,
       toldToHost: false,
       read: (settings, host) => quitChoice(settings, host),
       patch: (settings, host, value) =>
