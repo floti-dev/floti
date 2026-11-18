@@ -319,6 +319,13 @@ export function backendPathsWith(
 }
 
 /**
+ * Why a change of the `claude` was refused: without the host's settings, the
+ * map it replaces would lose every other backend's executable.
+ */
+export const claudeNeedsHostSettings = (why: string): string =>
+  `The claude was not changed: the host's settings could not be read, and changing it without them would drop the programs it keeps for its other agents (${why}).`
+
+/**
  * A window's settings patch, split into what the host keeps and what the
  * device keeps. `host` is the host's settings as last heard, which a change
  * of the `claude` keeps every other backend's executable from.

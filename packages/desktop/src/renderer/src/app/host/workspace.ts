@@ -4,6 +4,7 @@ import type { HostConnection, HostSubscription } from '../../../../shared/host/c
 import type * as P from '../../../../shared/host/protocol'
 import {
   cachedProjectsFromHost,
+  claudeNeedsHostSettings,
   claudeStatusFromHost,
   NO_CLAUDE_BACKEND,
   discoveryFromHost,
@@ -277,8 +278,15 @@ export function createWorkspaceAdapter({
 
       'settings:write': async (patch) => {
         // A change of the claude replaces the host's whole map of executables,
-        // whose others are kept as the host holds them: read first when not known.
-        if (patch.claudePath !== undefined) await hostKnown()
+        // whose others are kept as the host holds them: they are read first
+        // when not known, and with them unreadable nothing is written.
+        if (patch.claudePath !== undefined && hostSettings === null) {
+          try {
+            hostSettings = await (await act()).request('settings:read', null)
+          } catch (error) {
+            throw new Error(claudeNeedsHostSettings((error as Error).message))
+          }
+        }
         const split = splitSettingsPatch(patch, hostSettings)
         if (remote !== undefined && Object.keys(split.own).length > 0) throw new Error(ownSettingsElsewhere(remote.name()))
         // A write of the desktop's half alone answers with the host's laid over, so

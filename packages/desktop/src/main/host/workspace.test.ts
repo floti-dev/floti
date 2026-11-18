@@ -473,6 +473,29 @@ describe('the workspace through the local host', () => {
     expect(w.chosen.at(-1)).toBe(PICKED)
   })
 
+  it('changes the claude only once it knows the host’s other executables, and refuses with nothing written while it cannot read them', async () => {
+    const w = world()
+    let readable = false
+    let current = hostSettings({ backendPaths: { pi: PI } })
+    w.connection
+      .answer('settings:read', () => {
+        if (!readable) throw new Error('the store is locked')
+        return current
+      })
+      .answer('settings:write', (patch) => (current = { ...current, ...patch }))
+
+    await expect(w.workspace.writeSettings({ claudePath: PICKED, theme: 'dark' })).rejects.toThrow(
+      /claude was not changed.*the store is locked/
+    )
+    expect(w.connection.payloads('settings:write')).toEqual([])
+    expect(w.own.writes).toEqual([])
+
+    readable = true
+    await w.workspace.writeSettings({ claudePath: PICKED, theme: 'dark' })
+    expect(w.connection.payloads('settings:write')).toEqual([{ backendPaths: { 'claude-code': PICKED, pi: PI } }])
+    expect(w.own.writes).toEqual([{ theme: 'dark' }])
+  })
+
   it('writes the workspace keys to the host and every other key to Floti, and lays the host’s over Floti’s', async () => {
     const w = world()
     const after = await w.workspace.writeSettings({

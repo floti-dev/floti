@@ -400,6 +400,29 @@ describe('the window’s workspace over its own connection', () => {
     })
   })
 
+  it('changes the claude only once it knows the host’s other executables, and refuses with nothing written while it cannot read them', async () => {
+    const { adapter, own, connection } = world()
+    let readable = false
+    let current = hostSettings({ backendPaths: { pi: PI } })
+    connection
+      .answer('settings:read', () => {
+        if (!readable) throw new Error('the store is locked')
+        return current
+      })
+      .answer('settings:write', (patch) => (current = { ...current, ...patch }))
+
+    await expect(ask(adapter, 'settings:write', { claudePath: PICKED, theme: 'dark' })).rejects.toThrow(
+      /claude was not changed.*the store is locked/
+    )
+    expect(connection.payloads('settings:write')).toEqual([])
+    expect(own.writes).toEqual([])
+
+    readable = true
+    await ask(adapter, 'settings:write', { claudePath: PICKED, theme: 'dark' })
+    expect(connection.payloads('settings:write')).toEqual([{ backendPaths: { 'claude-code': PICKED, pi: PI } }])
+    expect(own.writes).toEqual([{ theme: 'dark' }])
+  })
+
   it('hears a host setting another window changed, and shows the host’s value over whatever this device once kept', async () => {
     const { adapter, connection, emitted, listen, link } = world(new FakeConnection(), ownBridge({ sessionAgents: true }))
     listen()

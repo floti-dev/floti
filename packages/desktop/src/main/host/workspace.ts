@@ -15,6 +15,7 @@ import type { HostLink } from './link'
 import type * as P from './protocol'
 import {
   cachedProjectsFromHost,
+  claudeNeedsHostSettings,
   claudeStatusFromHost,
   NO_CLAUDE_BACKEND,
   discoveryFromHost,
@@ -341,8 +342,18 @@ export function createHostWorkspace({
 
     async writeSettings(patch) {
       // A change of the claude replaces the host's whole map of executables,
-      // whose others are kept as the host holds them: connected first, so they are known.
-      if (patch.claudePath !== undefined) await host()
+      // whose others are kept as the host holds them: they are read first
+      // when not known, and with them unreadable nothing is written.
+      if (patch.claudePath !== undefined) {
+        const connection = await host()
+        if (hostSettings === null) {
+          try {
+            heard(await connection.request('settings:read', null))
+          } catch (error) {
+            throw new Error(claudeNeedsHostSettings((error as Error).message))
+          }
+        }
+      }
       const split = splitSettingsPatch(patch, hostSettings)
       const mine = Object.keys(split.own).length > 0 ? writeOwn(split.own) : own()
       if (Object.keys(split.host).length === 0) return overlay(mine)
