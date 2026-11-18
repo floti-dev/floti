@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, type SessionRecord } from '@floti/core'
-import { settingsTable } from '@floti/core/types'
+import type { SessionRecord } from '@floti/core'
 import { FakeConnection, fakeLink } from '../../../test/host-connection'
 import type { ConfirmRequest } from './session-host'
 import type * as P from './protocol'
 import { HostRequestError } from './client'
-import { CLAUDE_CODE_BACKEND, createHostSessions, hostSettingsFor, quitQuestion } from './sessions'
+import { CLAUDE_CODE_BACKEND, createHostSessions, quitQuestion } from './sessions'
 import { createTerminalStreams } from './streams'
 
 const ROW: P.SessionRecord = {
@@ -780,81 +779,6 @@ describe('sessions through the local host', () => {
       expect(w.host.sessions.list().map((session) => session.id)).toContain(21)
       expect(w.connection.streamsFor('session:data', 21)).toHaveLength(1)
       expect(changes).toBe(1)
-    })
-  })
-
-  describe('the settings the host is given', () => {
-    it('writes the claude, the shell, the archive’s ceiling, whether the browser tools are on and held to this machine, whether the session tools are on, and whether sessions can start agents within which limits', () => {
-      expect(
-        hostSettingsFor(
-          {
-            ...DEFAULT_SETTINGS,
-            claudePath: null,
-            terminalShell: 'pwsh',
-            transcriptArchiveMaxBytes: 256 * 1024 * 1024,
-            browserMcp: false,
-            browserMcpLocalOnly: true,
-            sessionMcp: false,
-            desktopMcp: false,
-            sessionAgents: false,
-            agentChildrenPerParent: 6,
-            agentSessionsPerHost: 12,
-            agentDepth: 3,
-            agentStartsPerParent: 20,
-            agentCommandsPerParent: 2
-          },
-          '/bin/claude'
-        )
-      ).toEqual({
-        backendPaths: { [CLAUDE_CODE_BACKEND]: '/bin/claude' },
-        terminalShell: 'pwsh',
-        transcriptArchiveMaxBytes: 256 * 1024 * 1024,
-        browserMcp: false,
-        browserMcpLocalOnly: true,
-        sessionMcp: false,
-        desktopMcp: false,
-        sessionAgents: false,
-        agentChildrenPerParent: 6,
-        agentSessionsPerHost: 12,
-        agentDepth: 3,
-        agentStartsPerParent: 20,
-        agentCommandsPerParent: 2
-      })
-      expect(
-        hostSettingsFor({ ...DEFAULT_SETTINGS, browserMcp: true, browserMcpLocalOnly: false, sessionMcp: true }, null)
-      ).toMatchObject({ browserMcp: true, browserMcpLocalOnly: false, sessionMcp: true })
-    })
-
-    it('tells the host the defaults - agents on, 4 children, 8 on the host, 2 deep, 16 starts, 4 command children - when the user has changed none', () => {
-      expect(hostSettingsFor(DEFAULT_SETTINGS, null)).toMatchObject({
-        sessionAgents: true,
-        agentChildrenPerParent: 4,
-        agentSessionsPerHost: 8,
-        agentDepth: 2,
-        agentStartsPerParent: 16,
-        agentCommandsPerParent: 4
-      })
-    })
-
-    it('tells the host whether sessions can use Floti’s window: on until the user turns it off', () => {
-      expect(hostSettingsFor(DEFAULT_SETTINGS, null)).toMatchObject({ desktopMcp: true })
-      expect(hostSettingsFor({ ...DEFAULT_SETTINGS, desktopMcp: false }, null)).toMatchObject({ desktopMcp: false })
-    })
-
-    it('tells the host exactly the settings the settings table says it is told', () => {
-      const told = Object.keys(hostSettingsFor(DEFAULT_SETTINGS, 'C:\\claude.exe')).map((key) =>
-        key === 'backendPaths' ? 'claudePath' : key
-      )
-      const marked = settingsTable()
-        .filter((entry) => entry.toldToHost)
-        .map((entry) => entry.key)
-      expect(marked.sort()).toEqual(told.sort())
-    })
-
-    it('tells the host no limit on heavy agents, whatever an earlier version kept', () => {
-      const kept = { ...DEFAULT_SETTINGS, agentHeavyPerHost: 3 } as typeof DEFAULT_SETTINGS
-      expect(hostSettingsFor(DEFAULT_SETTINGS, null)).not.toHaveProperty('agentHeavyPerHost')
-      expect(hostSettingsFor(kept, null)).not.toHaveProperty('agentHeavyPerHost')
     })
   })
 })

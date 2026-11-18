@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
+  carryHostSettingsAgain,
   createProfile,
   openStore,
   writeSettings,
@@ -170,7 +171,9 @@ export const hostDataOf = (world: World): string => join(world.dataDir, 'host', 
 /**
  * The settings a world starts with: its projects folder scanned, its fake
  * `claude` chosen, first run done, and the update check off so nothing goes to
- * the network. Written through the app's own store, before the app opens it.
+ * the network. Written through the app's own store, before the app opens it;
+ * the ones a host keeps are carried to the world's host on the app's next
+ * connect.
  * The host's data folder is marked to seal inside itself, so no host a test
  * starts reaches a credential store.
  */
@@ -186,6 +189,7 @@ export function seedSettings(world: World, patch: Partial<AppSettings> = {}): vo
       firstRunCompletedAt: new Date().toISOString(),
       ...patch
     })
+    carryHostSettingsAgain(store)
   } finally {
     store.close()
   }

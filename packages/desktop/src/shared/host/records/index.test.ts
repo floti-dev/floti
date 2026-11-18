@@ -2,7 +2,38 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '@floti/core'
 import type * as P from '../protocol'
 import { historyPageFromHost, historySessionFromHost } from './history'
-import { claudeStatusFromHost, endedFromHost, profileFromHost, sessionFromHost, settingsWithHost, splitSettingsPatch } from './index'
+import {
+  claudeStatusFromHost,
+  endedFromHost,
+  HOST_SETTING_KEYS,
+  HOST_WORKSPACE_KEYS,
+  profileFromHost,
+  sessionFromHost,
+  settingsWithHost,
+  splitSettingsPatch
+} from './index'
+
+const hostSettings = (patch: Partial<P.HostSettings> = {}): P.HostSettings => ({
+  scanRoots: [],
+  pinnedProjects: [],
+  firstRunCompletedAt: null,
+  backendPaths: {},
+  terminalShell: null,
+  transcriptArchiveMaxBytes: 1024,
+  browserMcp: true,
+  browserMcpLocalOnly: false,
+  sessionMcp: true,
+  desktopMcp: true,
+  restoreWithoutAsking: false,
+  sessionAgents: true,
+  agentChildrenPerParent: 4,
+  agentSessionsPerHost: 8,
+  agentDepth: 2,
+  agentStartsPerParent: 16,
+  agentCommandsPerParent: 4,
+  updateCheck: true,
+  ...patch
+})
 
 const hostSession = (patch: Partial<P.SessionRecord> = {}): P.SessionRecord => ({
   id: 9,
@@ -324,27 +355,94 @@ describe('a window settings patch, split between the host and Floti', () => {
 
     expect(split.host).toEqual({ updateCheck: false })
     expect(split.own).toEqual({ theme: 'dark' })
-    const host: P.HostSettings = {
-      scanRoots: [],
-      pinnedProjects: [],
-      firstRunCompletedAt: null,
-      backendPaths: {},
-      terminalShell: null,
-      transcriptArchiveMaxBytes: 1024,
-      browserMcp: true,
-      browserMcpLocalOnly: false,
-      sessionMcp: true,
-      desktopMcp: true,
-      restoreWithoutAsking: false,
-      sessionAgents: true,
-      agentChildrenPerParent: 4,
-      agentSessionsPerHost: 8,
-      agentDepth: 2,
-      agentStartsPerParent: 16,
-      agentCommandsPerParent: 4,
-      updateCheck: true
-    }
-    expect(settingsWithHost({ ...DEFAULT_SETTINGS, updateCheck: false }, host).updateCheck).toBe(true)
+    expect(settingsWithHost({ ...DEFAULT_SETTINGS, updateCheck: false }, hostSettings()).updateCheck).toBe(true)
+  })
+
+  it('sends every setting that governs a host\'s sessions to that host, and keeps none of them on this device', () => {
+    const split = splitSettingsPatch({
+      terminalShell: '/bin/zsh',
+      transcriptArchiveMaxBytes: 2048,
+      browserMcp: false,
+      sessionMcp: false,
+      desktopMcp: false,
+      sessionAgents: false,
+      agentChildrenPerParent: 2,
+      agentSessionsPerHost: 3,
+      agentDepth: 1,
+      agentStartsPerParent: 5,
+      agentCommandsPerParent: 6,
+      browserMcpLocalOnly: true,
+      theme: 'dark'
+    })
+
+    expect(split.host).toEqual({
+      terminalShell: '/bin/zsh',
+      transcriptArchiveMaxBytes: 2048,
+      browserMcp: false,
+      sessionMcp: false,
+      desktopMcp: false,
+      sessionAgents: false,
+      agentChildrenPerParent: 2,
+      agentSessionsPerHost: 3,
+      agentDepth: 1,
+      agentStartsPerParent: 5,
+      agentCommandsPerParent: 6
+    })
+    // What limits this device's own browser pane stays on this device.
+    expect(split.own).toEqual({ browserMcpLocalOnly: true, theme: 'dark' })
+    for (const key of HOST_SETTING_KEYS) expect(HOST_WORKSPACE_KEYS, key).toContain(key)
+  })
+
+  it('reads and writes the claude a host runs as its executable for Claude Code, keeping every other backend\'s', () => {
+    const host = hostSettings({ backendPaths: { 'claude-code': '/opt/claude', pi: '/opt/pi' } })
+
+    expect(settingsWithHost(DEFAULT_SETTINGS, host).claudePath).toBe('/opt/claude')
+    expect(settingsWithHost(DEFAULT_SETTINGS, hostSettings()).claudePath).toBeNull()
+    expect(splitSettingsPatch({ claudePath: '/usr/bin/claude' }, host).host).toEqual({
+      backendPaths: { 'claude-code': '/usr/bin/claude', pi: '/opt/pi' }
+    })
+    // Cleared, the host finds its own.
+    expect(splitSettingsPatch({ claudePath: null }, host).host).toEqual({ backendPaths: { pi: '/opt/pi' } })
+    expect(splitSettingsPatch({ claudePath: '/usr/bin/claude' }).host).toEqual({
+      backendPaths: { 'claude-code': '/usr/bin/claude' }
+    })
+    expect(splitSettingsPatch({ claudePath: null }, host).own).toEqual({})
+  })
+
+  it('lays every one of a host\'s settings over this device\'s, and leaves this device\'s own as they are', () => {
+    const host = hostSettings({
+      terminalShell: '/bin/fish',
+      transcriptArchiveMaxBytes: 4096,
+      browserMcp: false,
+      browserMcpLocalOnly: true,
+      sessionMcp: false,
+      desktopMcp: false,
+      sessionAgents: false,
+      agentChildrenPerParent: 1,
+      agentSessionsPerHost: 2,
+      agentDepth: 3,
+      agentStartsPerParent: 4,
+      agentCommandsPerParent: 5
+    })
+    const shown = settingsWithHost({ ...DEFAULT_SETTINGS, theme: 'dark', browserMcpLocalOnly: false }, host)
+
+    expect(shown).toMatchObject({
+      terminalShell: '/bin/fish',
+      transcriptArchiveMaxBytes: 4096,
+      browserMcp: false,
+      sessionMcp: false,
+      desktopMcp: false,
+      sessionAgents: false,
+      agentChildrenPerParent: 1,
+      agentSessionsPerHost: 2,
+      agentDepth: 3,
+      agentStartsPerParent: 4,
+      agentCommandsPerParent: 5,
+      theme: 'dark',
+      // The host's copy is never the device's pane's.
+      browserMcpLocalOnly: false
+    })
+    expect(settingsWithHost(DEFAULT_SETTINGS, null)).toBe(DEFAULT_SETTINGS)
   })
 
   it('keeps the tabs, panes and splits on this device, never in the host', () => {

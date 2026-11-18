@@ -1,7 +1,9 @@
 import {
+  HOST_SETTING_KEYS,
   openStore,
   readSettings,
   reconcileRunningSessions,
+  SettingsValidationError,
   settleWalkthrough,
   writeSettings,
   type AppSettings,
@@ -45,7 +47,16 @@ export function createServices(): Services {
   }
 }
 
+/**
+ * Writes the desktop's own settings to `desktop.db`. A setting a host keeps
+ * for its sessions (`HOST_SETTING_KEYS`) is refused whole, before anything is
+ * written: it is that host's, written over the window's connection to it.
+ */
 export function updateSettings(services: Services, patch: Partial<AppSettings>): AppSettings {
+  const hostKept = HOST_SETTING_KEYS.filter((key) => patch[key] !== undefined)
+  if (hostKept.length > 0) {
+    throw new SettingsValidationError(hostKept.map((key) => `${key}: kept by each host, not on this device`))
+  }
   services.settings = writeSettings(services.store, patch)
   return services.settings
 }

@@ -1675,6 +1675,8 @@ export interface AppSettings {
   /**
    * A `claude` executable the user picked by hand, for the machine where it is
    * not on PATH and not in the usual install directory. Null means "find it".
+   * Each host keeps its own (`HostSettings.backendPaths`, `HOST_SETTING_KEYS`):
+   * a path means something only on the computer it names.
    *
    * A path, never a credential: Floti locates the CLI and hands it a pty, and
    * signing in stays entirely between the user and `claude`.
@@ -1701,6 +1703,8 @@ export interface AppSettings {
   /**
    * The executable new project shells are opened with, or null to let Floti
    * detect one. An absolute path, for the reason `DetectedShell.path` gives.
+   * Each host keeps its own (`HOST_SETTING_KEYS`) and opens its terminals with
+   * it: a shell is a program on the host's computer.
    *
    * Project shells only. A Claude session is not a shell - Floti hands the
    * `claude` executable its own pty and this setting never reaches it.
@@ -1908,8 +1912,8 @@ export interface AppSettings {
    * off for its own sessions (`Profile.sessionAgents`); this is the setting
    * every other session follows.
    *
-   * Told to the host on every connect and every change, and the host serves the
-   * tools - the desktop's own process serves none. On by default, because the design
+   * Each host keeps its own (`HOST_SETTING_KEYS`) and serves the tools - the
+   * desktop's own process serves none. On by default, because the design
    * keeps the tools' reach to the caller's own children, bounds them with the
    * four limits below, and a capability that has to be found first is one most
    * sessions never get.
@@ -2060,6 +2064,53 @@ export const BROWSER_PROJECT_URLS_MAX = 200
 
 /** How many hosts' seen notices a device keeps: more hosts than anybody connects to, as a ceiling on a value rewritten whole. */
 export const NOTICES_SEEN_HOSTS_MAX = 64
+
+/**
+ * The settings that govern what a host's sessions run and may do: the
+ * `claude` they run (the host's `backendPaths`), the shell a plain terminal
+ * opens, the archive's ceiling, which tool families its sessions get and the
+ * limits on the agents they start. Each host keeps its own (`HostSettings`);
+ * every window attached to it reads and writes them over its own connection
+ * and hears every change, and `desktop.db` keeps none of them. A device's rows
+ * from before are carried to its local host once, on the first connect after
+ * the upgrade (`main/host/workspace.ts`).
+ *
+ * `browserMcpLocalOnly` is not one: it limits this device's own browser pane,
+ * and the desktop enforces it on every navigation.
+ */
+export const HOST_SETTING_KEYS = [
+  'claudePath',
+  'terminalShell',
+  'transcriptArchiveMaxBytes',
+  'browserMcp',
+  'sessionMcp',
+  'desktopMcp',
+  'sessionAgents',
+  'agentChildrenPerParent',
+  'agentSessionsPerHost',
+  'agentDepth',
+  'agentStartsPerParent',
+  'agentCommandsPerParent'
+] as const satisfies ReadonlyArray<keyof AppSettings>
+
+export type HostSettingKey = (typeof HOST_SETTING_KEYS)[number]
+
+/**
+ * Every setting a host keeps for all its clients: the folders it scans, the
+ * projects pinned out of their workspace, whether setup was finished, whether
+ * it looks for updates by itself, and `HOST_SETTING_KEYS`. What a window reads
+ * is the device's settings with these laid over from the host it shows, and a
+ * change to one goes to that host. Every other setting is the device's own.
+ */
+export const HOST_WORKSPACE_KEYS = [
+  'scanRoots',
+  'pinnedProjects',
+  'firstRunCompletedAt',
+  'updateCheck',
+  ...HOST_SETTING_KEYS
+] as const satisfies ReadonlyArray<keyof AppSettings>
+
+export type HostWorkspaceKey = (typeof HOST_WORKSPACE_KEYS)[number]
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',

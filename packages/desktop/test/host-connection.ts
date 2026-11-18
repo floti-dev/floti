@@ -57,7 +57,6 @@ export function fakeLink(
     onConnected(listener: (connection: HostConnection) => void | Promise<void>) {
       listeners.push(listener)
     },
-    writeSettings: () => undefined,
     quit: () => Promise.resolve(),
     release: () => Promise.resolve(),
     keepConnected: () => undefined,
@@ -92,7 +91,6 @@ export function reconnectingLink(first: FakeConnection): HostLink & { reconnect(
     onConnected: (listener) => {
       listeners.push(listener)
     },
-    writeSettings: () => undefined,
     quit: () => Promise.resolve(),
     release: () => Promise.resolve(),
     keepConnected: () => undefined,

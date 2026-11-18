@@ -3,9 +3,9 @@ import { delimiter, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /**
- * Locates the `claude` CLI on this computer, for the local host the desktop starts
- * (`hostSettingsFor`) and the spike page's self-test. The host checks the
- * version and the sign-in itself.
+ * Locates the `claude` CLI on this computer, for the spike page's self-test.
+ * The local host finds and checks its own; the one it chose, when it chose
+ * one, is the override here (`setClaudeOverride`, from the host's settings).
  */
 
 /**
@@ -35,11 +35,12 @@ export function isExecutableFile(path: string): boolean {
 }
 
 /**
- * A path the user picked by hand, which wins over discovery.
+ * The `claude` the local host chose for its sessions, which wins over
+ * discovery.
  *
- * Module state, set once at startup from settings and again when the picker
- * writes a new one, rather than a parameter threaded through every caller:
- * the host's settings and the self-test want the same answer.
+ * Module state, set each time main hears the local host's settings, rather
+ * than a parameter threaded through every caller: the spike page and the
+ * self-test want the same answer the host's sessions run.
  */
 let overridePath: string | null = null
 
@@ -72,7 +73,11 @@ function searchPath(name: string): string | null {
 
 /** The `claude` entry point on this machine, or null if there is not one. */
 export function findClaudeExecutable(): string | null {
-  if (overridePath !== null) return overridePath
+  return overridePath ?? discoverClaudeExecutable()
+}
+
+/** The `claude` this machine has where nobody chose one: an install location, then PATH. */
+export function discoverClaudeExecutable(): string | null {
   for (const candidate of installCandidates()) {
     if (isExecutableFile(candidate)) return candidate
   }

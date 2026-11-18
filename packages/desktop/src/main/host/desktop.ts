@@ -5,11 +5,19 @@ import { createReadStream, existsSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, hostname, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { listProfiles, readPluginFolders, readPluginSettings, type AppSettings } from '@floti/core'
+import {
+  finishHostSettingsCarry,
+  hostSettingsToCarry,
+  listProfiles,
+  readPluginFolders,
+  readPluginSettings,
+  readSettings,
+  type AppSettings
+} from '@floti/core'
 import { parseSums, type FlotiOs, type RemoteHost, type SshConfigHosts, type WslDistroList } from '@floti/core/types'
 import { createClientFolderRemoteAdder, type RemoteHostAdder } from './remote-add'
 import { readSshConfigHosts } from './ssh-config'
-import { findClaudeExecutable, setClaudeOverride } from '../claude-cli'
+import { discoverClaudeExecutable, setClaudeOverride } from '../claude-cli'
 import { emit } from '../ipc'
 import { appMode, dataDir, templatesDir } from '../paths'
 import type { Confirm, QuitConfirm } from './session-host'
@@ -61,8 +69,7 @@ import { createRemotePlugins, type RemotePlugins } from './remote-plugins'
 import { createHostPlugins, type HostPlugins } from './plugins'
 import { createHostProfiles, type HostProfiles } from './profiles'
 import { createHostResources, type HostResources } from './resources'
-import type { HostSettingsPatch } from './protocol'
-import { createHostSessions, hostSettingsFor, type Emit, type HostSessions } from './sessions'
+import { createHostSessions, type Emit, type HostSessions } from './sessions'
 import { createHostWorkspace, type HostWorkspace } from './workspace'
 
 /**
@@ -183,12 +190,18 @@ export function connectLocalHost(log: (line: string) => void, startHost = true):
   return startLocalHost(places(), launcherDeps(log), { startHost })
 }
 
-/** What the launcher runs this run's `floti` with. */
-function launcherDeps(log: (line: string) => void): LauncherDeps {
+/**
+ * What the launcher runs this run's `floti` with. `browser`: whether main's
+ * connection says it has a browser, which only a desktop whose browser pane
+ * can run does (`browser-sandbox.ts`), so the host grants its sessions the
+ * browser tools only where a call has somewhere to go.
+ */
+function launcherDeps(log: (line: string) => void, browser = true): LauncherDeps {
   return {
     ...programs,
     appVersion: app.getVersion(),
     deviceName: hostname(),
+    browser,
     log,
     setTimeout: (run, ms) => setTimeout(run, ms),
     clearTimeout: (timer) => clearTimeout(timer as NodeJS.Timeout)
@@ -485,7 +498,7 @@ export function createDesktopRemoteInstaller(
  * that floti speaks this desktop's protocol (`connectUpdatingLocalHost`). Each
  * step is published on `localHostSteps`.
  */
-export function createLocalHostLink(settings: () => HostSettingsPatch, log: (line: string) => void): HostLink {
+export function createLocalHostLink(log: (line: string) => void, browser = true): HostLink {
   let prepared = false
   return createHostLink({
     start: async ({ startHost }) => {
@@ -493,7 +506,7 @@ export function createLocalHostLink(settings: () => HostSettingsPatch, log: (lin
       await localFloti.ready()
       prepared = true
       try {
-        const host = await connectUpdatingLocalHost(places(), launcherDeps(log), {
+        const host = await connectUpdatingLocalHost(places(), launcherDeps(log, browser), {
           startHost,
           versionOf: flotiVersionLine,
           step: (step) => localHostSteps.begin(step),
@@ -517,14 +530,13 @@ export function createLocalHostLink(settings: () => HostSettingsPatch, log: (lin
       try {
         const to = await updatePlanOrThrow(log)
         localHostSteps.begin({ step: 'updating', from: refusedSide(localRefusal), to })
-        return await restartLocalHost(places(), launcherDeps(log), localRefusal)
+        return await restartLocalHost(places(), launcherDeps(log, browser), localRefusal)
       } catch (error) {
         // Nothing was restarted, or the host could not be asked: the link stands where it stood.
         localHostSteps.restore(before)
         throw error
       }
     },
-    settings,
     // A host that refuses this Floti or cannot be reached is tried again on
     // the link's own waits; the window's reads wait for it meanwhile.
     retryFailedConnects: true,
@@ -543,8 +555,7 @@ export function createDesktopHost({
   browserAvailability
 }: DesktopHostDeps): DesktopHost {
   const log = (line: string): void => console.log(line)
-  const settings = (): AppSettings => withBrowserAvailability(services.settings, browserAvailability)
-  const link = createLocalHostLink(() => hostSettingsFor(settings(), findClaudeExecutable()), log)
+  const link = createLocalHostLink(log, browserAvailability.available)
   const send: Emit = (channel, payload) => emit(window(), channel, payload)
   // The window hears discovery, the settings and profiles over its own
   // connection (`renderer/src/app/host`); main keeps the host's scan and
@@ -555,12 +566,18 @@ export function createDesktopHost({
     emit: toNoWindow,
     own: () => services.settings,
     writeOwn: (patch) => updateSettings(services, patch),
-    claudePicked: (path) => {
-      updateSettings(services, { claudePath: path })
-      setClaudeOverride(path)
+    hostSettingsToCarry: () => hostSettingsToCarry(services.store),
+    hostSettingsCarried: () => {
+      finishHostSettingsCarry(services.store)
+      services.settings = readSettings(services.store)
     },
+    discoveredClaude: discoverClaudeExecutable,
+    // Main's own spike page and self-test run the `claude` the local host's sessions run.
+    claudeChosen: setClaudeOverride,
     log
   })
+  /** The local host's settings over this device's, with the browser tools off where the pane cannot run. */
+  const settings = (): AppSettings => withBrowserAvailability(workspace.overlay(services.settings), browserAvailability)
   // The window carries its own terminals, hears its sessions' exits and the
   // host's notifications, and asks its own questions over its own connection;
   // main keeps the running count its quit asks about, the browser tools'
@@ -578,12 +595,15 @@ export function createDesktopHost({
     browserIdentityEnded: (key) => browserTools()?.forgetOpener(key),
     log
   })
-  const browserRelay = createBrowserToolRelay({
-    link,
-    opener: (session) => hosted.sessions.browserOpener(session),
-    run: (opener, tool, args) => browserTools()?.runBrowserTool(opener, tool, args) ?? null,
-    log
-  })
+  // Where the pane cannot run, main says it has no browser and takes no browser calls.
+  const browserRelay: BrowserToolRelay = browserAvailability.available
+    ? createBrowserToolRelay({
+        link,
+        opener: (session) => hosted.sessions.browserOpener(session),
+        run: (opener, tool, args) => browserTools()?.runBrowserTool(opener, tool, args) ?? null,
+        log
+      })
+    : { stop: () => undefined }
   const profiles = createHostProfiles({
     link,
     dialogs: nativeProfileDialogs(window),

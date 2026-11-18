@@ -22,17 +22,20 @@ import type { HostAdapter } from './router'
  * checks Claude Code, makes workspaces and keeps the templates, and the window
  * asks it over its own connection, in ipc.ts's shapes.
  *
- * The settings are split by who keeps them. The host's half (`HostSettings`'s
- * scan roots, pins and setup stamp) is read and written over the protocol.
- * The desktop's own half - the window, theme, terminal and browser preferences, and
- * the `claude` the desktop picked, which main tells the host - stays with the desktop's main
- * process on the client-only `ownSettings:*`, whose write does what main does
- * with it. The window is answered the desktop's half with the host's laid over; while
- * this PC's host cannot be used it is the desktop's own, so the window still paints
- * its tabs and saves their layout, and the window's notice says why.
+ * The settings are split by who keeps them. The host's half
+ * (`HOST_WORKSPACE_KEYS`: the scan roots, pins and setup stamp, the update
+ * check, and every setting that governs what its sessions run and may do,
+ * the `claude` among them) is read and written over this host's own
+ * connection, and every window attached to the host hears each change on
+ * `settings:changed`, whoever made it. The desktop's own half - the window,
+ * theme, terminal look and browser preferences - stays with the desktop's
+ * main process on the client-only `ownSettings:*`. The window is answered the
+ * desktop's half with the host's laid over; while this PC's host cannot be
+ * used it is the desktop's own, so the window still paints its tabs and saves
+ * their layout, and the window's notice says why.
  *
  * The pickers are the window's own: `path:chooseFile` for the `claude`
- * program, whose choice the host checks before the desktop keeps it.
+ * program, which the host checks and keeps (`setup:locateBackend`).
  *
  * The first listener starts the window's first scan, as main did when the
  * window said it had painted; a host that cannot be reached says why on
@@ -70,6 +73,10 @@ export interface WorkspaceAdapterDeps {
 /** Why a host on another computer's router refuses a write of this device's own settings. */
 export const ownSettingsElsewhere = (host: string): string =>
   `This device’s own settings are kept on This PC and never sent to ${host}.`
+
+/** Why a host on another computer's `claude` is not located from this PC's file picker. */
+export const pickerElsewhere = (host: string): string =>
+  `This PC’s file picker browses this PC, so it cannot choose the claude ${host} runs.`
 
 export interface WorkspaceAdapter extends HostAdapter {
   /** The workspaces and projects on the sidebar: the host's last scan, or its cached one before any. */
@@ -269,7 +276,10 @@ export function createWorkspaceAdapter({
       },
 
       'settings:write': async (patch) => {
-        const split = splitSettingsPatch(patch)
+        // A change of the claude replaces the host's whole map of executables,
+        // whose others are kept as the host holds them: read first when not known.
+        if (patch.claudePath !== undefined) await hostKnown()
+        const split = splitSettingsPatch(patch, hostSettings)
         if (remote !== undefined && Object.keys(split.own).length > 0) throw new Error(ownSettingsElsewhere(remote.name()))
         // A write of the desktop's half alone answers with the host's laid over, so
         // the host's are read first when they are not known yet.
@@ -290,18 +300,17 @@ export function createWorkspaceAdapter({
       'roots:remove': async ({ path }) => (await act()).request('roots:remove', { path }),
 
       'setup:status': async () => claude(await (await host()).request('setup:status', null)),
-      // The picker is the window's own; the host checks what it chose, and
-      // only a program it kept becomes the desktop's, which main tells the host on
-      // every connect from then on.
+      // The picker is the window's own; the host checks what it chose and
+      // keeps it, and every window attached hears it on `settings:changed`.
       'setup:locateClaude': async () => {
-        // The picker browses this PC, and the `claude` the desktop keeps is this PC's.
-        if (remote !== undefined) throw new Error(ownSettingsElsewhere(remote.name()))
+        if (remote !== undefined) throw new Error(pickerElsewhere(remote.name()))
         // Said before the picker opens: a choice nobody could check would be lost.
         const connection = await act()
         const { path } = await own.invoke('path:chooseFile', { title: 'Locate the claude executable' })
         if (path === null) return claude(await connection.request('setup:status', null))
         const status = await connection.request('setup:locateBackend', { backend: CLAUDE_CODE_BACKEND, path })
-        if (status.error === null && status.installed) settled(await own.invoke('ownSettings:write', { claudePath: path }))
+        // What the host kept is in its settings now; the window is answered them before the status.
+        if (status.error === null && status.installed) await adoptHost(await connection.request('settings:read', null))
         return claudeStatusFromHost(status)
       },
       'setup:complete': async () => adoptHost(await (await act()).request('setup:complete', null)),

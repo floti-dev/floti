@@ -1,4 +1,5 @@
-import type { AppSettings, CachedProject, DiscoveryResult } from '@floti/core'
+import { DEFAULT_SETTINGS, HOST_SETTING_KEYS } from '@floti/core'
+import type { AppSettings, CachedProject, DiscoveryResult, HostSettingKey } from '@floti/core'
 import type {
   FolderTemplateKind,
   FolderTemplatePreview,
@@ -31,18 +32,25 @@ import { CLAUDE_CODE_BACKEND, type Emit } from './sessions'
  * setup was finished, checks Claude Code for setup, makes workspaces and keeps
  * the templates; the desktop's main process does none of it.
  *
- * The settings are split by who owns them. The workspace keys
- * (`HOST_WORKSPACE_KEYS`) are the host's and are held here in memory, never
- * written to `desktop.db`. Everything else is the desktop's: the window's own keys,
- * and the ones the desktop tells the host on every connect (`hostSettingsFor`).
- * What the window reads is the desktop's settings with the host's keys laid
- * over; while the host cannot be reached it is the desktop's own, so the window still paints, and the
- * sidebar says why from its own refused read.
+ * The settings are split by who owns them. The host's keys
+ * (`HOST_WORKSPACE_KEYS`: the workspace keys, the update check and every
+ * setting that governs what its sessions run and may do) are the host's and
+ * are held here in memory, never written to `desktop.db`; nothing is pushed to
+ * the host on connect. Everything else is the desktop's own. What the window
+ * reads is the desktop's settings with the host's keys laid over; while the
+ * host cannot be reached it is the desktop's own, so the window still paints,
+ * and the sidebar says why from its own refused read. Main itself reads the
+ * local host's `claude` from here, for its spike page and self-test
+ * (`claudeChosen`), and the browser tools' switch (`overlay`).
  *
  * On the first connect to a host that has never been set up - no scan roots
  * and no finished setup - the desktop's own scan roots, pins and setup stamp are
  * written to it once, before `connection()` resolves, so a user who turns the
  * setting on keeps the sidebar and the finished setup they had.
+ *
+ * On the first connect after the host came to keep `HOST_SETTING_KEYS`, the
+ * values this device kept for them in `desktop.db` are carried to the local
+ * host once (`carryHostSettings`), and `desktop.db` keeps none from then on.
  *
  * On every connect it subscribes to `settings:changed`, `discovery:updated`,
  * `scan:status` and `git:updated` and hands each to the window, and it keeps
@@ -125,9 +133,41 @@ export interface HostWorkspaceDeps {
   own: () => AppSettings
   /** Writes the desktop's own settings, and answers them after. */
   writeOwn: (patch: Partial<AppSettings>) => AppSettings
-  /** An executable the host checked and kept for Claude Code, which the desktop's Settings then show. */
-  claudePicked: (path: string) => void
+  /**
+   * This device's values for `HOST_SETTING_KEYS` still waiting for the one
+   * carry to the local host, as `desktop.db` holds them; null once carried.
+   */
+  hostSettingsToCarry: () => Partial<Pick<AppSettings, HostSettingKey>> | null
+  /** Records the carry: `desktop.db` drops its rows for `HOST_SETTING_KEYS` and never carries again. */
+  hostSettingsCarried: () => void
+  /** The `claude` this computer finds by itself, without any chosen one. */
+  discoveredClaude: () => string | null
+  /** The `claude` the local host chose for its sessions, or null where it finds its own, each time it is heard. */
+  claudeChosen: (path: string | null) => void
   log: (line: string) => void
+}
+
+const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
+
+/**
+ * What the carry writes to the local host: each of this device's values that
+ * differs from its default. The `claude` goes only where this device chose
+ * one. The desktop used to write the one it found by itself when none was
+ * chosen, so a host still holding exactly that one has it taken out, and finds
+ * its own.
+ */
+export function carriedHostSettings(
+  rows: Partial<Pick<AppSettings, HostSettingKey>>,
+  current: P.HostSettings,
+  discovered: string | null
+): P.HostSettingsPatch {
+  const differing: Partial<AppSettings> = {}
+  for (const key of HOST_SETTING_KEYS) {
+    if (rows[key] !== undefined && !same(rows[key], DEFAULT_SETTINGS[key])) Object.assign(differing, { [key]: rows[key] })
+  }
+  const held = current.backendPaths[CLAUDE_CODE_BACKEND]
+  if (differing.claudePath === undefined && discovered !== null && held === discovered) differing.claudePath = null
+  return splitSettingsPatch(differing, current).host
 }
 
 export interface HostWorkspace extends WorkspaceService {
@@ -147,7 +187,10 @@ export function createHostWorkspace({
   emit,
   own,
   writeOwn,
-  claudePicked,
+  hostSettingsToCarry,
+  hostSettingsCarried,
+  discoveredClaude,
+  claudeChosen,
   log
 }: HostWorkspaceDeps): HostWorkspace {
   let hostSettings: P.HostSettings | null = null
@@ -158,8 +201,14 @@ export function createHostWorkspace({
   const host = (): Promise<HostConnection> => link.connection()
   const overlay = (settings: AppSettings): AppSettings => settingsWithHost(settings, hostSettings)
 
-  const adoptSettings = (next: P.HostSettings): AppSettings => {
+  /** The host's settings as last heard, and the `claude` they choose told to main. */
+  const heard = (next: P.HostSettings): void => {
     hostSettings = next
+    claudeChosen(next.backendPaths[CLAUDE_CODE_BACKEND] ?? null)
+  }
+
+  const adoptSettings = (next: P.HostSettings): AppSettings => {
+    heard(next)
     return overlay(own())
   }
 
@@ -192,20 +241,42 @@ export function createHostWorkspace({
     return next
   }
 
+  /**
+   * This device's values for `HOST_SETTING_KEYS`, carried to the local host
+   * once, in one write, and then dropped from `desktop.db` with a marker that
+   * keeps the carry from running again. A write the host refuses keeps both
+   * as they were, and the next connect tries again; a host on another
+   * computer is never carried to.
+   */
+  const carryHostSettings = async (connection: HostConnection, current: P.HostSettings): Promise<P.HostSettings> => {
+    try {
+      const rows = hostSettingsToCarry()
+      if (rows === null) return current
+      const patch = carriedHostSettings(rows, current, discoveredClaude())
+      const next = Object.keys(patch).length === 0 ? current : await connection.request('settings:write', patch)
+      hostSettingsCarried()
+      return next
+    } catch (error) {
+      log(
+        `host: this device's settings for its host were not carried to the local host, and are tried again on the next connect (${(error as Error).message})`
+      )
+      return current
+    }
+  }
+
   link.onConnected(async (connection) => {
     for (const subscription of subscriptions) subscription.unsubscribe()
     const ended = (channel: string) => (error: Error) => log(`host: ${channel} ended (${error.message})`)
     try {
       const read = await connection.request('settings:read', null)
-      adoptSettings(await carryUpdateCheck(connection, await copyOnFirstConnect(connection, read)))
+      const copied = await carryUpdateCheck(connection, await copyOnFirstConnect(connection, read))
+      adoptSettings(await carryHostSettings(connection, copied))
     } catch (error) {
       log(`host: could not read the local host's settings (${(error as Error).message})`)
     }
     subscriptions = [
       connection.subscribe('settings:changed', {
-        snapshot: (state) => {
-          hostSettings = state
-        },
+        snapshot: heard,
         event: (next) => emit('settings:changed', adoptSettings(next)),
         error: ended('settings:changed')
       }),
@@ -269,7 +340,10 @@ export function createHostWorkspace({
     },
 
     async writeSettings(patch) {
-      const split = splitSettingsPatch(patch)
+      // A change of the claude replaces the host's whole map of executables,
+      // whose others are kept as the host holds them: connected first, so they are known.
+      if (patch.claudePath !== undefined) await host()
+      const split = splitSettingsPatch(patch, hostSettings)
       const mine = Object.keys(split.own).length > 0 ? writeOwn(split.own) : own()
       if (Object.keys(split.host).length === 0) return overlay(mine)
       return adoptSettings(await (await host()).request('settings:write', split.host))
@@ -304,12 +378,11 @@ export function createHostWorkspace({
     },
 
     async locateClaude(path) {
-      const status = await (await host()).request('setup:locateBackend', { backend: CLAUDE_CODE_BACKEND, path })
-      // Kept by the host only once it ran; the desktop's Settings show the same one,
-      // and tell it to the host on every connect from then on.
+      const connection = await host()
+      const status = await connection.request('setup:locateBackend', { backend: CLAUDE_CODE_BACKEND, path })
+      // Kept by the host only once it ran, in its settings, which every window hears.
       if (status.error === null && status.installed) {
-        claudePicked(path)
-        emit('settings:changed', overlay(own()))
+        emit('settings:changed', adoptSettings(await connection.request('settings:read', null)))
       }
       return claudeStatusFromHost(status)
     },

@@ -3300,9 +3300,9 @@ export function App(): JSX.Element {
   /**
    * What a session's agent reads and changes here with `desktop_settings`
    * and `desktop_set` (`desktopSettings.ts`): the settings through the same
-   * save the Settings page makes - a host's own keys on that host, the rest
-   * on this device, which main tells this PC's host - and plugins' switches
-   * through each host's own, with the toast every change raises.
+   * save the Settings page makes - a host's own keys on that host, over the
+   * window's connection to it, the rest on this device - and plugins'
+   * switches through each host's own, with the toast every change raises.
    */
   const { saveSettings } = launcher;
   const raiseAgentToast = agentToasts.raise;

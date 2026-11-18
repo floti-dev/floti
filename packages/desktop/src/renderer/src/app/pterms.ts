@@ -117,8 +117,8 @@ export interface MountShellOptions {
   rows: number
   /**
    * Open this pane under a specific executable rather than the default shell.
-   * Absent means "whatever `terminalShell` says", which is what every pane does
-   * until someone picks otherwise in its header.
+   * Absent means "whatever the host's `terminalShell` says", which is what
+   * every pane does until someone picks otherwise in its header.
    */
   shell?: string | null
   /**

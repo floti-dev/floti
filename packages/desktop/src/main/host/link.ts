@@ -1,16 +1,13 @@
 import { RECONNECT_FIRST_MS, nextReconnectWait } from '../../shared/host/reconnect'
 import type { HostConnection } from './client'
 import type { LocalHost } from './launcher'
-import type { HostSettingsPatch } from './protocol'
 
 /**
  * The desktop's one connection to the local host, made when the desktop starts and again
  * whenever it is wanted after the last one failed or ended.
  *
- * On every connect, before anything else uses it, the desktop writes the two things
- * its own Settings decide for the host's sessions - the `claude` it runs and
- * the shell a terminal opens - and reads nothing else back: everything else in
- * the host's settings is the host's.
+ * A connect writes no settings: the host keeps its own, which every client
+ * reads and changes over its own connection.
  *
  * The desktop never stops the host on its own. A deliberate quit tells it what
  * becomes of what this device started (`host:quit`) and lets go; the host
@@ -46,8 +43,7 @@ import type { HostSettingsPatch } from './protocol'
  *
  * A host on another computer is reached by a link of its own
  * (`remote.ts`), made with the same function: its `start` never starts a
- * host, it writes none of the desktop's settings there (this PC's `claude` and shell
- * mean nothing on another computer), and it keeps trying from its first
+ * host, and it keeps trying from its first
  * connect (`keepConnected`). A link that merely drops sends nothing; only a
  * quit sends `host:quit`, and forgetting a host (`release`) sends nothing at
  * all.
@@ -73,13 +69,10 @@ export interface HostLink {
   /** Settles once the attempt in flight has, without starting one. */
   settled(): Promise<void>
   /**
-   * Called on every connect, after the settings are written and before
-   * `connection()` resolves, so nothing is asked of the host before what it
-   * needs to answer is subscribed.
+   * Called on every connect, before `connection()` resolves, so nothing is
+   * asked of the host before what it needs to answer is subscribed.
    */
   onConnected(listener: (connection: HostConnection) => void | Promise<void>): void
-  /** Writes the desktop's settings for the host's sessions to the host connected now. */
-  writeSettings(): void
   /**
    * The desktop is quitting on purpose: tells the host that the plain terminals this
    * device opened end, and with `end` the sessions it started too, then lets
@@ -153,8 +146,6 @@ export interface HostLinkDeps {
    * and a host that does not answer is a failure rather than one to start.
    */
   start: (options: { startHost: boolean }) => Promise<LocalHost>
-  /** What the desktop writes to the host on every connect; nothing when absent. */
-  settings?: () => HostSettingsPatch
   /** What the log calls the host: the local host when absent. */
   name?: string
   /**
@@ -254,15 +245,6 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
     deps.clearTimeout(timer)
   }
 
-  const writeSettings = async (connection: HostConnection): Promise<void> => {
-    if (deps.settings === undefined) return
-    try {
-      await connection.request('settings:write', deps.settings())
-    } catch (error) {
-      deps.log(`host: could not write Floti's settings to ${name} (${(error as Error).message})`)
-    }
-  }
-
   const connect = async (): Promise<HostConnection> => {
     const started = await deps.start({ startHost: mayStart })
     if (stopping !== null) {
@@ -300,7 +282,6 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
         () => undefined
       )
     }
-    await writeSettings(connection)
     for (const listener of listeners) {
       try {
         await listener(connection)
@@ -357,11 +338,6 @@ export function createHostLink(deps: HostLinkDeps): HostLink {
 
     onConnected(listener) {
       listeners.push(listener)
-    },
-
-    writeSettings() {
-      const connection = local?.connection
-      if (connection !== undefined) void writeSettings(connection)
     },
 
     async stopHost() {

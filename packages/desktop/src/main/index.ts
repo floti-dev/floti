@@ -84,7 +84,7 @@ import { requestSmallCorners } from './corners'
 import { runSelftest } from './selftest'
 import { runFidelity } from './fidelity'
 import { runClaudeChecks } from './claudecheck'
-import { findClaudeExecutable, setClaudeOverride } from './claude-cli'
+import { findClaudeExecutable } from './claude-cli'
 import { pickerAnswer, runPackagingChecks } from './packagingcheck'
 import { screenshot } from './bridge'
 
@@ -392,10 +392,6 @@ function announceLiveMode(): void {
 function startApp(options: AppOptions = {}): void {
   announceLiveMode()
   const services: Services = createServices()
-  // Before anything can spawn: a `claude` the user picked by hand has to win
-  // over discovery in every caller, and the session host does not read
-  // settings.
-  setClaudeOverride(services.settings.claudePath)
   // Before the window exists: an install from before the setup pane has roots
   // and no completion stamp, and stamping it after the first paint would flash
   // a setup pane over a working launcher.
@@ -474,9 +470,11 @@ function startApp(options: AppOptions = {}): void {
   const checkConfirm = options.confirm
   /*
    * Whether the browser pane may run: not in a Linux desktop started without
-   * Chromium's sandbox (`browser-sandbox.ts`). Every read of the browser tools'
-   * switch goes through `browserSettings`, so with the pane off no session is
-   * given the tools.
+   * Chromium's sandbox (`browser-sandbox.ts`). With the pane off, main's
+   * connection to the local host does not say it has a browser, so the host
+   * grants no session the browser tools (`createDesktopHost`). The tools'
+   * switch itself is the local host's setting, which every read here takes
+   * through `browserSettings`.
    */
   const browserPane = browserAvailability({
     platform: process.platform,
@@ -485,7 +483,8 @@ function startApp(options: AppOptions = {}): void {
     appArmorRestricts: process.platform === 'linux' ? readAppArmorRestricts() : null
   })
   if (!browserPane.available) console.log("browser: off - Floti is running without Chromium's sandbox (--no-sandbox)")
-  const browserSettings = (): AppSettings => withBrowserAvailability(services.settings, browserPane)
+  const browserSettings = (): AppSettings =>
+    withBrowserAvailability(desktopHost.workspace.overlay(services.settings), browserPane)
   const desktopHost: DesktopHost = createDesktopHost({
     services,
     window: () => win,
@@ -717,7 +716,6 @@ function startApp(options: AppOptions = {}): void {
     },
     ...(options.chooseDirectory !== undefined ? { chooseDirectory: options.chooseDirectory } : {}),
     ...(options.chooseFile !== undefined ? { chooseFile: options.chooseFile } : {}),
-    hostSettingsChanged: () => desktopHost.link.writeSettings(),
     remoteHosts,
     remoteInstall: createDesktopRemoteInstaller((line) => console.log(line), remoteHosts),
     remoteAdd: createDesktopRemoteAdder({

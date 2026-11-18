@@ -1,6 +1,7 @@
 import {
   describeSettingValues,
   findSettingEntry,
+  HOST_SETTING_KEYS,
   LOCAL_HOST_KEY,
   settingsTable,
   settingValueProblem,
@@ -36,10 +37,12 @@ import type { DesktopCall, DesktopToolResult } from './host/desktopTools'
  * changed - also when a write fails partway, for whatever was already
  * written, and the answer then says what changed and what did not.
  *
- * The desktop tells only this PC's host the settings it keeps for its
- * sessions (`hostSettingsFor`); a host on another computer is not told them.
- * So the answer to a session there says so rather than claim its host
- * follows.
+ * A setting a host keeps (`HOST_WORKSPACE_KEYS`) is read from and written
+ * to the host the call names, or the caller's own host when it names none:
+ * the host whose connection delivered the call. Every window attached to
+ * that host hears the change, and the host's sessions follow it. Every
+ * answer names the host it read or changed, by its name and id, and a
+ * narrow-only setting is judged against that host's own value.
  */
 
 /** A host the window reaches, as the tools name it. */
@@ -90,6 +93,9 @@ const refused = (sentence: string): DesktopToolResult => ({ content: [{ type: 't
 const readable = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
+
+/** A host as an answer names it: its name, then its id. */
+const named = (host: SettingsHost): string => `${host.name} (${host.id})`
 
 /** One plugin switch on one host. */
 interface PluginSwitchOn {
@@ -226,7 +232,8 @@ export async function listSettings(call: DesktopCall, window: DesktopSettingsWin
   const reads = await Promise.all(window.hosts().map((host) => readHost(window, host)))
   const local = reads.find((read) => read.host.id === LOCAL_HOST_KEY)
   if (local === undefined || local.settings === null) {
-    return refused(`Floti’s window could not read its settings: ${local?.problem ?? 'this PC’s host is not there'}.`)
+    const where = local === undefined ? `this PC’s host (${LOCAL_HOST_KEY})` : named(local.host)
+    return refused(`Floti’s window could not read its settings on ${where}: ${local?.problem ?? 'it is not there'}.`)
   }
   const settings = [...settingsTable().map((entry) => listedEntry(entry, reads)), ...listedPlugins(reads)]
   const hosts = reads.map((read) => ({
@@ -312,6 +319,10 @@ function landing(change: Change, host: SettingsHost): string {
   return change.entry.scope === 'host' ? `on this device, for ${host.name}` : 'on this device'
 }
 
+/** Whether `change` is to a setting that governs what a host's sessions run and may do. */
+const governsSessions = (change: Change): boolean =>
+  change.kind === 'setting' && (HOST_SETTING_KEYS as readonly string[]).includes(change.entry.key)
+
 /** What a write did: the changes it made, and the ones it could not, with why. */
 interface Written {
   done: Change[]
@@ -373,15 +384,17 @@ const reversed = (changes: readonly Change[]): Change[] =>
  */
 export async function setSettings(call: DesktopCall, window: DesktopSettingsWindow): Promise<DesktopToolResult> {
   const args = (typeof call.arguments === 'object' && call.arguments !== null ? call.arguments : {}) as Record<string, unknown>
-  if (!isChanges(args.changes)) {
-    return refused('Say what to change in changes: each setting’s name and its new value, such as {"sessionAgents": false}.')
-  }
   const hosts = window.hosts()
   const hostId = typeof args.host === 'string' ? args.host : call.host
   const host = hosts.find((each) => each.id === hostId)
   if (host === undefined) {
     return refused(
       `${hostId} is not a host this window is connected to: ${hosts.map((each) => `${each.id} (${each.name})`).join(', ')}. Nothing was changed.`
+    )
+  }
+  if (!isChanges(args.changes)) {
+    return refused(
+      `Say what to change in changes: each setting’s name and its new value, such as {"sessionAgents": false}. Nothing was changed on ${named(host)}.`
     )
   }
   const names = Object.keys(args.changes)
@@ -392,20 +405,20 @@ export async function setSettings(call: DesktopCall, window: DesktopSettingsWind
     settings = await window.settingsOn(host.id)
     switches = needsPlugins ? pluginSwitches(await window.pluginsOn(host.id)) : new Map()
   } catch (error) {
-    return refused(`Floti’s window could not read the settings on ${host.name}: ${readable(error)}. Nothing was changed.`)
+    return refused(`Floti’s window could not read the settings on ${named(host)}: ${readable(error)}. Nothing was changed.`)
   }
 
   const judged = names.map((name) => judge(name, (args.changes as Record<string, unknown>)[name], settings, switches, host))
   const refusals = judged.filter((each): each is string => typeof each === 'string')
-  if (refusals.length > 0) return refused(`${refusals.join(' ')} Nothing was changed.`)
+  if (refusals.length > 0) return refused(`${refusals.join(' ')} Nothing was changed on ${named(host)}.`)
   const changes = (judged as Change[]).filter((change) =>
     change.kind === 'setting' ? !same(change.from, change.to) : change.to !== change.each.value
   )
   if (changes.length === 0) {
-    return answered(`Nothing to change: ${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} already as asked.`, {
-      changed: [],
-      host: host.id
-    })
+    return answered(
+      `Nothing to change on ${named(host)}: ${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} already as asked.`,
+      { changed: [], host: host.id, hostName: host.name }
+    )
   }
 
   const { done, failed, untried } = await write(window, host.id, changes, settings)
@@ -413,7 +426,7 @@ export async function setSettings(call: DesktopCall, window: DesktopSettingsWind
     some.map((change) => `${changeLabel(change)}: ${changeWords(change)} (${changeName(change)})`).join('; ')
   if (done.length === 0) {
     return refused(
-      `Floti could not save ${listed(failed?.changes ?? [])}: ${failed?.problem ?? 'it did not say why'}.${untried.length === 0 ? '' : ` ${listed(untried)} was not tried.`} Nothing was changed.`
+      `Floti could not save ${listed(failed?.changes ?? [])} on ${named(host)}: ${failed?.problem ?? 'it did not say why'}.${untried.length === 0 ? '' : ` ${listed(untried)} was not tried.`} Nothing was changed.`
     )
   }
 
@@ -434,18 +447,15 @@ export async function setSettings(call: DesktopCall, window: DesktopSettingsWind
   )
 
   const changed = done.map((change) => `${changeLabel(change)}: ${changeWords(change)} (${changeName(change)}) ${landing(change, host)}`)
-  const told = done.some((change) => change.kind === 'setting' && change.entry.toldToHost)
-  const follows = !told
-    ? ''
-    : call.host === LOCAL_HOST_KEY
-      ? ' Floti’s host follows at once: sessions started from now on get what it says.'
-      : ` This PC’s host follows at once, but ${hosts.find((each) => each.id === call.host)?.name ?? call.host}, the host your session runs on, is not told this setting: its sessions go on as they were.`
+  const follows = done.some(governsSessions)
+    ? ` ${host.name} follows at once: sessions it starts from now on get what it says.`
+    : ''
   if (failed !== null) {
     return refused(
-      `Changed ${changed.join('; ')}, but Floti could not save ${listed(failed.changes)}: ${failed.problem}.${untried.length === 0 ? '' : ` ${listed(untried)} was not tried.`} The user sees a toast naming your session, with Undo, for what changed.${follows}`
+      `Changed for ${named(host)}: ${changed.join('; ')}, but Floti could not save ${listed(failed.changes)}: ${failed.problem}.${untried.length === 0 ? '' : ` ${listed(untried)} was not tried.`} The user sees a toast naming your session, with Undo, for what changed.${follows}`
     )
   }
-  return answered(`Changed ${changed.join('; ')}. The user sees a toast naming your session, with Undo.${follows}`, {
+  return answered(`Changed for ${named(host)}: ${changed.join('; ')}. The user sees a toast naming your session, with Undo.${follows}`, {
     changed: done.map((change) => ({
       name: changeName(change),
       from: change.kind === 'setting' ? change.from : change.each.value,
@@ -453,6 +463,6 @@ export async function setSettings(call: DesktopCall, window: DesktopSettingsWind
       landed: landing(change, host)
     })),
     host: host.id,
-    ...(told ? { yourHostFollows: call.host === LOCAL_HOST_KEY } : {})
+    hostName: host.name
   })
 }

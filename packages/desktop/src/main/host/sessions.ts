@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import {
   sessionLabel,
-  type AppSettings,
   type SavedPaneLayout,
   type SessionActivityState,
   type SessionRecord,
@@ -70,36 +69,6 @@ import type { TerminalStreams } from './streams'
 
 /** The one backend the desktop launches. */
 export { CLAUDE_CODE_BACKEND }
-
-/**
- * What the desktop writes to the host on every connect: the `claude` its sessions
- * run - the one chosen in Settings, or the one the desktop finds - the shell a
- * terminal opens, the ceiling its transcript archive is held to, whether its
- * sessions get the browser tools and whether those are held to this machine,
- * whether they get the session tools, and whether they can start agents of
- * their own, with the limits on a family of them and on the commands it runs
- * for watching. The host serves that
- * last family and judges every start against the numbers it was last told;
- * the desktop's own process serves none of it.
- */
-export function hostSettingsFor(settings: AppSettings, discovered: string | null): P.HostSettingsPatch {
-  const claude = settings.claudePath ?? discovered
-  return {
-    ...(claude === null ? {} : { backendPaths: { [CLAUDE_CODE_BACKEND]: claude } }),
-    terminalShell: settings.terminalShell,
-    transcriptArchiveMaxBytes: settings.transcriptArchiveMaxBytes,
-    browserMcp: settings.browserMcp,
-    browserMcpLocalOnly: settings.browserMcpLocalOnly,
-    sessionMcp: settings.sessionMcp,
-    desktopMcp: settings.desktopMcp,
-    sessionAgents: settings.sessionAgents,
-    agentChildrenPerParent: settings.agentChildrenPerParent,
-    agentSessionsPerHost: settings.agentSessionsPerHost,
-    agentDepth: settings.agentDepth,
-    agentStartsPerParent: settings.agentStartsPerParent,
-    agentCommandsPerParent: settings.agentCommandsPerParent
-  }
-}
 
 export type Emit = <K extends EventChannel>(channel: K, payload: EventPayload<K>) => void
 

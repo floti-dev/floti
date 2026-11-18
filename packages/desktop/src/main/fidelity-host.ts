@@ -165,10 +165,7 @@ export async function checkHostRedraw(
   const ctx: Ctx = { win, dataDir, cols, rows, windowsBuild }
   const notes: string[] = []
   const log: string[] = []
-  const link = createLocalHostLink(
-    () => ({}),
-    (line) => log.push(line)
-  )
+  const link = createLocalHostLink((line) => log.push(line))
   const comparisons: Record<string, string | null> = {}
   let stream: HostStream | null = null
   let sessionId: number | null = null

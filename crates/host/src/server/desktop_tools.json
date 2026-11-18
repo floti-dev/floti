@@ -64,7 +64,7 @@
     },
     {
       "name": "desktop_set",
-      "description": "Changes one or several of Floti's settings by name, through the same save Settings makes, and shows the user a toast naming your session with Undo. changes maps each name desktop_settings lists to its new value, such as {\"sessionAgents\": false}. A setting kept per host, and a plugin's switch, changes on host: your own session's host unless you name another. A value a setting does not take is refused naming the ones it does, and a change that would widen what agents, or Floti on its own, may reach or do is refused saying the user makes it in Settings; either way nothing in the call changes. Use it when the user asks you to change how Floti behaves, such as \"turn off agents\".",
+      "description": "Changes one or several of Floti's settings by name, through the same save Settings makes, and shows the user a toast naming your session with Undo. changes maps each name desktop_settings lists to its new value, such as {\"sessionAgents\": false}. A setting kept per host, and a plugin's switch, changes on host: your own session's host unless you name another, and that host's sessions follow it. A value a setting does not take is refused naming the ones it does, and a change that would widen what agents, or Floti on its own, may reach or do is refused saying the user makes it in Settings; either way nothing in the call changes. Use it when the user asks you to change how Floti behaves, such as \"turn off agents\".",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -75,7 +75,7 @@
           },
           "host": {
             "type": "string",
-            "description": "For a setting kept per host and a plugin's switch: the host to change it on, by its id in desktop_settings. Your own session's host when left out."
+            "description": "For every setting kept per host (what sessions run, the tools they get, the agents they may start and the archive among them) and a plugin's switch: the host to change it on, by its id in desktop_settings. Your own session's host when left out. The answer names the host it changed."
           }
         },
         "required": ["changes"],

@@ -104,8 +104,6 @@ export interface SettingEntry {
   narrows?: (from: unknown, to: unknown) => boolean
   /** For one a session may not change: why only the user changes it. */
   why?: string
-  /** Whether the desktop tells its host about it on every connect and change (`hostSettingsFor`). */
-  toldToHost: boolean
   /** Its value on `host`, out of the settings read with that host's own keys laid over. */
   read: (settings: AppSettings, host: string) => unknown
   /** The patch that gives it `value` on `host`, from `settings` as they stand. */
@@ -168,13 +166,12 @@ const integer = (bounds: { min: number; max: number }): SettingValues => ({
 
 /** An entry kept as one value on the device or the host, the common case. */
 function plain(
-  entry: Omit<SettingEntry, 'read' | 'patch' | 'defaultOn' | 'scope' | 'toldToHost' | 'session'> &
-    Partial<Pick<SettingEntry, 'scope' | 'toldToHost' | 'session'>>
+  entry: Omit<SettingEntry, 'read' | 'patch' | 'defaultOn' | 'scope' | 'session'> &
+    Partial<Pick<SettingEntry, 'scope' | 'session'>>
 ): SettingEntry {
   const key = entry.key
   return {
     scope: 'device',
-    toldToHost: false,
     session: entry.narrows === undefined ? 'change' : 'narrow',
     ...entry,
     read: (settings) => settings[key],
@@ -183,7 +180,8 @@ function plain(
   }
 }
 
-const NARROW_AGENTS = { narrows: offOnly, toldToHost: true } as const
+/** A host's switch for what its sessions' agents may reach: a session may only turn it off. */
+const NARROW_AGENTS = { narrows: offOnly, scope: 'host' } as const
 
 function build(): readonly SettingEntry[] {
   const searchHint = Object.fromEntries(
@@ -206,7 +204,7 @@ function build(): readonly SettingEntry[] {
       values: { kind: 'program' },
       session: 'nothing',
       why: 'it names the program every session runs, and Floti checks a program before it keeps it',
-      toldToHost: true
+      scope: 'host'
     }),
 
     plain({
@@ -344,7 +342,7 @@ function build(): readonly SettingEntry[] {
       values: { kind: 'program' },
       session: 'nothing',
       why: 'it names the program every project shell runs',
-      toldToHost: true
+      scope: 'host'
     }),
     plain({
       key: 'projectShellHeightPct',
@@ -402,7 +400,6 @@ function build(): readonly SettingEntry[] {
       // Ordered by how much keeps running after quit: a session may move it only toward end.
       session: 'narrow',
       narrows: quitNarrows,
-      toldToHost: false,
       read: (settings, host) => quitChoice(settings, host),
       patch: (settings, host, value) =>
         ({ quitSessions: { ...settings.quitSessions, [host]: value } }) as Partial<AppSettings>,
@@ -442,7 +439,7 @@ function build(): readonly SettingEntry[] {
       section: 'agents',
       values: integer(AGENT_CHILDREN_PER_PARENT),
       narrows: noHigher,
-      toldToHost: true
+      scope: 'host'
     }),
     plain({
       key: 'agentCommandsPerParent',
@@ -452,7 +449,7 @@ function build(): readonly SettingEntry[] {
       section: 'agents',
       values: integer(AGENT_COMMANDS_PER_PARENT),
       narrows: noHigher,
-      toldToHost: true
+      scope: 'host'
     }),
     plain({
       key: 'agentSessionsPerHost',
@@ -462,7 +459,7 @@ function build(): readonly SettingEntry[] {
       section: 'agents',
       values: integer(AGENT_SESSIONS_PER_HOST),
       narrows: noHigher,
-      toldToHost: true
+      scope: 'host'
     }),
     plain({
       key: 'agentDepth',
@@ -472,7 +469,7 @@ function build(): readonly SettingEntry[] {
       section: 'agents',
       values: integer(AGENT_DEPTH),
       narrows: noHigher,
-      toldToHost: true
+      scope: 'host'
     }),
     plain({
       key: 'agentStartsPerParent',
@@ -481,7 +478,7 @@ function build(): readonly SettingEntry[] {
       section: 'agents',
       values: integer(AGENT_STARTS_PER_PARENT),
       narrows: noHigher,
-      toldToHost: true
+      scope: 'host'
     }),
 
     plain({
@@ -550,8 +547,7 @@ function build(): readonly SettingEntry[] {
       },
       section: 'browser',
       values: { kind: 'boolean' },
-      narrows: onOnly,
-      toldToHost: true
+      narrows: onOnly
     }),
 
     plain({
@@ -562,7 +558,7 @@ function build(): readonly SettingEntry[] {
       values: integer(TRANSCRIPT_ARCHIVE_BYTES),
       session: 'nothing',
       why: 'lowering it drops archived conversations at once, and an undo cannot bring them back',
-      toldToHost: true
+      scope: 'host'
     }),
 
     plain({

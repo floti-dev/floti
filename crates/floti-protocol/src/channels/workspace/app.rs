@@ -100,7 +100,10 @@ pub struct HostSettings {
     pub transcript_archive_max_bytes: u64,
     /// Whether the host serves its browser tools to the sessions it hosts.
     pub browser_mcp: bool,
-    /// Whether those tools are confined to this machine.
+    /// Whether those tools are confined to the browser's own machine. No
+    /// host reads it: it limits a desktop's own browser pane, which keeps it
+    /// per device and enforces it on every navigation. Kept here for clients
+    /// that still send it.
     pub browser_mcp_local_only: bool,
     /// Whether the host tells a session what other sessions are doing.
     pub session_mcp: bool,

@@ -24,6 +24,8 @@ import type {
   ScanStatus
 } from '../../ipc'
 import type * as P from '../protocol'
+import { HOST_SETTING_KEYS, HOST_WORKSPACE_KEYS, type HostSettingKey, type HostWorkspaceKey } from '@floti/core/types'
+import { CLAUDE_CODE_BACKEND } from '../backend'
 
 export {
   historyPageFromHost,
@@ -270,18 +272,14 @@ export function offerFromHost(offer: P.RestoreOffer, layout: SavedPaneLayout | n
   }
 }
 
+export { HOST_SETTING_KEYS, HOST_WORKSPACE_KEYS, type HostSettingKey, type HostWorkspaceKey }
+
 /**
- * The settings the host keeps for every client: the folders it scans, the
- * projects pinned out of their workspace, whether setup was finished, and
- * whether it looks for updates by itself. Every other setting is the desktop's own,
- * the window's, or one the desktop tells the host on every connect
- * (`hostSettingsFor`).
+ * The device's settings with the host's laid over (`HOST_WORKSPACE_KEYS`), or
+ * the device's own while there are none. The `claude` the host's sessions run
+ * is the window's `claudePath`: the host's chosen executable for Claude Code,
+ * or null where the host finds its own.
  */
-export const HOST_WORKSPACE_KEYS = ['scanRoots', 'pinnedProjects', 'firstRunCompletedAt', 'updateCheck'] as const
-
-export type HostWorkspaceKey = (typeof HOST_WORKSPACE_KEYS)[number]
-
-/** The desktop's settings with the host's workspace keys laid over, or the desktop's own while there are none. */
 export function settingsWithHost(own: AppSettings, host: P.HostSettings | null): AppSettings {
   if (host === null) return own
   return {
@@ -289,23 +287,69 @@ export function settingsWithHost(own: AppSettings, host: P.HostSettings | null):
     scanRoots: host.scanRoots,
     pinnedProjects: host.pinnedProjects,
     firstRunCompletedAt: host.firstRunCompletedAt,
-    updateCheck: host.updateCheck
+    updateCheck: host.updateCheck,
+    claudePath: host.backendPaths[CLAUDE_CODE_BACKEND] ?? null,
+    terminalShell: host.terminalShell,
+    transcriptArchiveMaxBytes: host.transcriptArchiveMaxBytes,
+    browserMcp: host.browserMcp,
+    sessionMcp: host.sessionMcp,
+    desktopMcp: host.desktopMcp,
+    sessionAgents: host.sessionAgents,
+    agentChildrenPerParent: host.agentChildrenPerParent,
+    agentSessionsPerHost: host.agentSessionsPerHost,
+    agentDepth: host.agentDepth,
+    agentStartsPerParent: host.agentStartsPerParent,
+    agentCommandsPerParent: host.agentCommandsPerParent
   }
 }
 
-/** A window's settings patch, split into what the host keeps and what the desktop keeps. */
-export function splitSettingsPatch(patch: Partial<AppSettings>): {
+/**
+ * The host's executables with Claude Code's set to `claude`, or taken out so
+ * the host finds its own: `backendPaths` replaces the whole map, so every
+ * other backend's is kept as `host` holds it.
+ */
+export function backendPathsWith(
+  host: P.HostSettings | null,
+  claude: string | null
+): P.HostSettings['backendPaths'] {
+  const others = Object.fromEntries(
+    Object.entries(host?.backendPaths ?? {}).filter(([backend]) => backend !== CLAUDE_CODE_BACKEND)
+  )
+  return claude === null ? others : { ...others, [CLAUDE_CODE_BACKEND]: claude }
+}
+
+/**
+ * A window's settings patch, split into what the host keeps and what the
+ * device keeps. `host` is the host's settings as last heard, which a change
+ * of the `claude` keeps every other backend's executable from.
+ */
+export function splitSettingsPatch(
+  patch: Partial<AppSettings>,
+  host: P.HostSettings | null = null
+): {
   host: P.HostSettingsPatch
   own: Partial<AppSettings>
 } {
-  const host: P.HostSettingsPatch = {}
+  const kept: P.HostSettingsPatch = {}
   const own: Partial<AppSettings> = { ...patch }
-  if (patch.scanRoots !== undefined) host.scanRoots = patch.scanRoots
-  if (patch.pinnedProjects !== undefined) host.pinnedProjects = patch.pinnedProjects
-  if (patch.firstRunCompletedAt !== undefined) host.firstRunCompletedAt = patch.firstRunCompletedAt
-  if (patch.updateCheck !== undefined) host.updateCheck = patch.updateCheck
+  if (patch.scanRoots !== undefined) kept.scanRoots = patch.scanRoots
+  if (patch.pinnedProjects !== undefined) kept.pinnedProjects = patch.pinnedProjects
+  if (patch.firstRunCompletedAt !== undefined) kept.firstRunCompletedAt = patch.firstRunCompletedAt
+  if (patch.updateCheck !== undefined) kept.updateCheck = patch.updateCheck
+  if (patch.claudePath !== undefined) kept.backendPaths = backendPathsWith(host, patch.claudePath)
+  if (patch.terminalShell !== undefined) kept.terminalShell = patch.terminalShell
+  if (patch.transcriptArchiveMaxBytes !== undefined) kept.transcriptArchiveMaxBytes = patch.transcriptArchiveMaxBytes
+  if (patch.browserMcp !== undefined) kept.browserMcp = patch.browserMcp
+  if (patch.sessionMcp !== undefined) kept.sessionMcp = patch.sessionMcp
+  if (patch.desktopMcp !== undefined) kept.desktopMcp = patch.desktopMcp
+  if (patch.sessionAgents !== undefined) kept.sessionAgents = patch.sessionAgents
+  if (patch.agentChildrenPerParent !== undefined) kept.agentChildrenPerParent = patch.agentChildrenPerParent
+  if (patch.agentSessionsPerHost !== undefined) kept.agentSessionsPerHost = patch.agentSessionsPerHost
+  if (patch.agentDepth !== undefined) kept.agentDepth = patch.agentDepth
+  if (patch.agentStartsPerParent !== undefined) kept.agentStartsPerParent = patch.agentStartsPerParent
+  if (patch.agentCommandsPerParent !== undefined) kept.agentCommandsPerParent = patch.agentCommandsPerParent
   for (const key of HOST_WORKSPACE_KEYS) delete own[key]
-  return { host, own }
+  return { host: kept, own }
 }
 
 /** A repository's state: one git answered has no `error` at all, as the desktop's own discovery says. */

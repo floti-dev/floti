@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path'
-import { sql } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import { RETIRED_TAB_KINDS, upgradeSavedLayout } from '../layout/panes'
 import {
   isPluginRailId,
@@ -41,7 +41,9 @@ import {
   THEME_PREFERENCES,
   TRANSCRIPT_ARCHIVE_BYTES,
   WORKSPACE_TABS_MAX,
-  type AppSettings
+  HOST_SETTING_KEYS,
+  type AppSettings,
+  type HostSettingKey
 } from '../types'
 import type { Store } from './db'
 import { appSettings } from './schema'
@@ -878,4 +880,65 @@ export function settleWalkthrough(store: Store): void {
 function createdByThisOpen(store: Store): boolean {
   const { applied, alreadyApplied } = store.migrations
   return alreadyApplied.length === 0 && applied.length > 0
+}
+
+/**
+ * The row of `app_settings` that says this device's host settings
+ * (`HOST_SETTING_KEYS`) were carried to its local host. It is no setting:
+ * `readSettings` skips every key `AppSettings` does not have, and
+ * `writeSettings` writes none.
+ */
+const HOST_SETTINGS_CARRIED = 'hostSettingsCarriedAt'
+
+/**
+ * This device's rows for `HOST_SETTING_KEYS`, each read and validated as a
+ * write would be, for the one carry to its local host; a row that does not
+ * read or fit is left out. Null once they were carried.
+ */
+export function hostSettingsToCarry(store: Store): Partial<Pick<AppSettings, HostSettingKey>> | null {
+  const marker = store.db.select().from(appSettings).where(eq(appSettings.key, HOST_SETTINGS_CARRIED)).get()
+  if (marker !== undefined) return null
+  const rows = store.db
+    .select()
+    .from(appSettings)
+    .where(inArray(appSettings.key, [...HOST_SETTING_KEYS]))
+    .all()
+  const carried: Partial<Record<HostSettingKey, unknown>> = {}
+  for (const row of rows) {
+    const key = row.key as HostSettingKey
+    const value = parsedOrNull(row.value)
+    if (value === null && row.value !== 'null') continue
+    if (validateSetting(key, value) === null) carried[key] = value
+  }
+  return carried as Partial<Pick<AppSettings, HostSettingKey>>
+}
+
+/**
+ * Records that this device's host settings reached its local host: every row
+ * of `HOST_SETTING_KEYS` goes and the marker is written, in one transaction,
+ * so the carry never runs again and `desktop.db` keeps none of them.
+ */
+export function finishHostSettingsCarry(store: Store, at: string = new Date().toISOString()): void {
+  const finish = store.raw.transaction(() => {
+    store.db
+      .delete(appSettings)
+      .where(inArray(appSettings.key, [...HOST_SETTING_KEYS]))
+      .run()
+    store.db
+      .insert(appSettings)
+      .values({ key: HOST_SETTINGS_CARRIED, value: JSON.stringify(at) })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: JSON.stringify(at) } })
+      .run()
+  })
+  finish()
+}
+
+/**
+ * Has the next connect carry this device's rows of `HOST_SETTING_KEYS` to its
+ * local host again, whatever was carried before: for a dev run or a test that
+ * chooses a host setting (the fake `claude`) in `desktop.db` before the app
+ * opens it.
+ */
+export function carryHostSettingsAgain(store: Store): void {
+  store.db.delete(appSettings).where(eq(appSettings.key, HOST_SETTINGS_CARRIED)).run()
 }

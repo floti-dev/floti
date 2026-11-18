@@ -51,9 +51,8 @@ describe("main's listeners", () => {
   it('S21: serves no agents family, route or environment for it, and puts none in a launch: only the host does', () => {
     expect(mainSources().size).toBeGreaterThan(20)
     // The family's name, its route, its tools and the two variables that carry a
-    // session's token and address to `floti agent`. Main is told whether sessions
-    // may start agents and within which limits (`hostSettingsFor`), and that is
-    // all of it that main knows.
+    // session's token and address to `floti agent`. Whether sessions may start
+    // agents, and within which limits, is each host's setting; main knows none of it.
     const family = /floti-agents|\/mcp\/agents|agents_(start|list|stop|send|wait|read|report)|FLOTI_AGENT_(TOKEN|URL)|floti agent/
     expect(filesWhere((source) => family.test(source))).toEqual([])
   })
