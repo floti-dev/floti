@@ -16,7 +16,8 @@ description: Fixed procedures in Floti - adding an app setting, changing the dat
    description, section, the values it takes, scope (device or per host),
    what a session may do to it (change, only narrow, or nothing) and whether
    `hostSettingsFor` tells the host. A setting that decides what agents may
-   reach or do is narrow-only. State the page does not show goes in
+   reach or do, or what Floti or its sessions do on their own, is
+   narrow-only. State the page does not show goes in
    `STATE_KEYS` instead. `settingsTable.test.ts` fails until one of the two
    holds the key, and when the values disagree with the validator.
 4. A row in the matching group of `ui/src/components/SettingsPane.tsx`, its

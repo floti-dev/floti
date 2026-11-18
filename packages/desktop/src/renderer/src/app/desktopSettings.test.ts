@@ -151,10 +151,10 @@ describe('desktop_set in the window', () => {
     expect(w.settingsOn(LOCAL_HOST_KEY).sessionAgents).toBe(false)
     const [sentence, json] = texts(result)
     expect(sentence).toBe(
-      'Changed Sessions can start agents: off (sessionAgents) on This PC. The user sees a toast naming your session, with Undo. Floti’s host follows at once: sessions started from now on get what it says.'
+      'Changed Sessions can start agents: off (sessionAgents) on this device. The user sees a toast naming your session, with Undo. Floti’s host follows at once: sessions started from now on get what it says.'
     )
     expect(JSON.parse(json!)).toEqual({
-      changed: [{ name: 'sessionAgents', from: true, to: false }],
+      changed: [{ name: 'sessionAgents', from: true, to: false, landed: 'on this device' }],
       host: LOCAL_HOST_KEY,
       yourHostFollows: true
     })
@@ -173,8 +173,10 @@ describe('desktop_set in the window', () => {
       set({ agentDepth: 1, browserReach: 'local', theme: 'dark', 'plugin.trackr.tools': false, scanRoots: ['C:\\work'] }),
       w.window
     )
+    // This device's settings in one save, the host's own in another, then the plugin.
     expect(w.saves).toEqual([
-      [LOCAL_HOST_KEY, { agentDepth: 1, browserReach: 'local', theme: 'dark', scanRoots: ['C:\\work'] }]
+      [LOCAL_HOST_KEY, { agentDepth: 1, browserReach: 'local', theme: 'dark' }],
+      [LOCAL_HOST_KEY, { scanRoots: ['C:\\work'] }]
     ])
     expect(w.switched).toEqual([[LOCAL_HOST_KEY, 'C:\\plugins\\trackr', 'tools', false]])
     expect(w.toasts[0]?.title).toBe('lead changed 5 settings')
@@ -198,9 +200,15 @@ describe('desktop_set in the window', () => {
       [{ scanRoots: ['C:\\work', 'D:\\new'] }, 'Settings > Workspace'],
       [{ 'plugin.quiet.on': true }, 'The user turns it on in Settings > Plugins.'],
       [{ claudePath: 'C:\\other\\claude.exe' }, 'is changed only by the user, in Settings > General'],
-      [{ transcriptArchiveMaxBytes: 2048 }, 'an undo cannot bring them back']
+      [{ transcriptArchiveMaxBytes: 2048 }, 'an undo cannot bring them back'],
+      // What Floti or its sessions do on their own goes only toward doing less.
+      [{ updateCheck: true }, 'Update floti by itself (updateCheck) can only be narrowed from a session'],
+      [{ browserSearch: 'bing' }, 'Search from the address bar (browserSearch) can only be narrowed'],
+      [{ quitSessions: 'keep' }, 'When you quit Floti (quitSessions) can only be narrowed'],
+      [{ restoreWithoutAsking: true }, 'Settings > Sessions'],
+      [{ scanRoots: ['C:\\WORK', 'C:\\play'] }, 'Folders Floti scans (scanRoots) can only be narrowed']
     ] as const) {
-      const w = windowWith({ sessionAgents: false, browserMcpLocalOnly: true })
+      const w = windowWith({ sessionAgents: false, browserMcpLocalOnly: true, updateCheck: false })
       const result = await setSettings(set(changes), w.window)
       expect(result.isError, JSON.stringify(changes)).toBe(true)
       expect(texts(result)[0]).toContain(says)
@@ -214,7 +222,16 @@ describe('desktop_set in the window', () => {
   it('refuses a value outside a setting’s values naming them, and a name that is not a setting', async () => {
     const w = windowWith()
     const result = await setSettings(
-      set({ theme: 'purple', agentDepth: 99, terminalCursorBlink: 'yes', paneLayout: null, nonsense: 1, 'plugin.gone.on': false }),
+      set({
+        theme: 'purple',
+        agentDepth: 99,
+        terminalCursorBlink: 'yes',
+        paneLayout: null,
+        nonsense: 1,
+        'plugin.gone.on': false,
+        constructor: 1,
+        toString: 1
+      }),
       w.window
     )
     expect(result.isError).toBe(true)
@@ -224,6 +241,11 @@ describe('desktop_set in the window', () => {
     expect(sentence).toContain('terminalCursorBlink (Blink the cursor) takes true or false; "yes" is not one.')
     expect(sentence).toContain('paneLayout is not a setting but something Floti remembers')
     expect(sentence).toContain('nonsense is not one of Floti’s settings')
+    // A name that only an object's prototype has is not mistaken for one.
+    expect(sentence).toContain('constructor is not one of Floti’s settings')
+    expect(sentence).toContain('toString is not one of Floti’s settings')
+    const proto = await setSettings(call('desktop_set', JSON.parse('{"changes":{"__proto__":1}}')), w.window)
+    expect(texts(proto)[0]).toBe('__proto__ is not one of Floti’s settings: desktop_settings lists them by name. Nothing was changed.')
     expect(sentence).toContain('plugin.gone.on is not a plugin switch on This PC: it has plugin.trackr.on, plugin.trackr.tools, plugin.quiet.on.')
     expect(w.saves).toEqual([])
   })
@@ -232,8 +254,14 @@ describe('desktop_set in the window', () => {
     const w = windowWith()
     const onBuildBox = await setSettings(set({ quitSessions: 'end', scanRoots: [] }, {}, BUILD_BOX), w.window)
     expect(onBuildBox.isError).toBeUndefined()
-    expect(w.saves).toEqual([[BUILD_BOX, { quitSessions: { [BUILD_BOX]: 'end' }, scanRoots: [] }]])
+    expect(w.saves).toEqual([
+      [BUILD_BOX, { quitSessions: { [BUILD_BOX]: 'end' } }],
+      [BUILD_BOX, { scanRoots: [] }]
+    ])
     expect(w.toasts[0]?.title).toBe('build-box:7 changed 2 settings')
+    expect(texts(onBuildBox)[0]).toContain(
+      'Changed When you quit Floti: End the sessions it started (quitSessions) on this device, for Build box; Folders Floti scans: none (scanRoots) on Build box.'
+    )
 
     const fromRemote = await setSettings(set({ sessionAgents: false }, {}, BUILD_BOX), w.window)
     const [sentence, json] = texts(fromRemote)
@@ -243,9 +271,14 @@ describe('desktop_set in the window', () => {
     expect(sentence).not.toContain('Floti’s host follows at once: sessions started')
     expect(JSON.parse(json!)).toMatchObject({ yourHostFollows: false })
 
-    const named = await setSettings(set({ updateCheck: true }, { host: BUILD_BOX }), w.window)
-    expect(named.isError).toBeUndefined()
-    expect(w.saves.at(-1)).toEqual([BUILD_BOX, { updateCheck: true }])
+    // Naming another host: what this device keeps still lands here, and the answer says so.
+    const named = await setSettings(set({ density: 'compact', updateCheck: false }, { host: 'local' }, BUILD_BOX), w.window)
+    expect(texts(named)[0]).toContain(
+      'Changed Density: Compact (density) on this device; Update floti by itself: off (updateCheck) on This PC.'
+    )
+    const elsewhere = await setSettings(set({ terminalFontSize: 16 }, { host: BUILD_BOX }), w.window)
+    expect(texts(elsewhere)[0]).toContain('Size: 16 (terminalFontSize) on this device.')
+    expect(texts(elsewhere)[0]).not.toContain('on Build box')
 
     const unknown = await setSettings(set({ updateCheck: true }, { host: 'laptop' }), w.window)
     expect(texts(unknown)[0]).toBe(
@@ -262,17 +295,49 @@ describe('desktop_set in the window', () => {
     expect(w.toasts).toEqual([])
   })
 
-  it('says when the save failed, and that Undo could not put it back', async () => {
+  it('says when the save failed and nothing changed, and that Undo could not put it back', async () => {
     const w = windowWith()
     const failing: DesktopSettingsWindow = { ...w.window, save: () => Promise.reject(new Error('the database is locked')) }
-    expect(texts(await setSettings(set({ density: 'compact' }), failing))[0]).toBe(
-      'Floti could not save that: the database is locked.'
+    const result = await setSettings(set({ density: 'compact', 'plugin.trackr.on': false }), failing)
+    expect(result.isError).toBe(true)
+    expect(texts(result)[0]).toBe(
+      'Floti could not save Density: Compact (density): the database is locked. Trackr is on: off (plugin.trackr.on) was not tried. Nothing was changed.'
     )
     expect(w.toasts).toEqual([])
+    expect(w.switched).toEqual([])
 
     await setSettings(set({ density: 'compact' }), w.window)
     w.window.save = () => Promise.reject(new Error('the host went away'))
     await expect(w.toasts[0]!.undo()).resolves.toBe('the host went away')
+  })
+
+  it('raises the toast for what was written when a later step fails, and says what changed and what did not', async () => {
+    const w = windowWith()
+    const failing: DesktopSettingsWindow = {
+      ...w.window,
+      setPlugin: (host, path, which, on) =>
+        path.endsWith('quiet') ? Promise.reject(new Error('the plugin is busy')) : w.window.setPlugin(host, path, which, on)
+    }
+    w.plugins[LOCAL_HOST_KEY] = [plugin('trackr', true, true), plugin('quiet', true, null)]
+    const result = await setSettings(
+      set({ sessionAgents: false, 'plugin.trackr.tools': false, 'plugin.quiet.on': false, scanRoots: [] }),
+      failing
+    )
+    expect(result.isError).toBe(true)
+    expect(texts(result)[0]).toBe(
+      'Changed Sessions can start agents: off (sessionAgents) on this device; Folders Floti scans: none (scanRoots) on This PC; Trackr’s tools: off (plugin.trackr.tools) on This PC, but Floti could not save quiet is on: off (plugin.quiet.on): the plugin is busy. The user sees a toast naming your session, with Undo, for what changed. Floti’s host follows at once: sessions started from now on get what it says.'
+    )
+    expect(w.toasts.map(({ title, detail }) => ({ title, detail }))).toEqual([
+      {
+        title: 'lead changed 3 settings',
+        detail: 'Sessions can start agents: off · Folders Floti scans: none · Trackr’s tools: off'
+      }
+    ])
+
+    await expect(w.toasts[0]!.undo()).resolves.toBeNull()
+    const back = w.settingsOn(LOCAL_HOST_KEY)
+    expect([back.sessionAgents, back.scanRoots]).toEqual([true, ['C:\\work', 'C:\\play']])
+    expect(w.switched.at(-1)).toEqual([LOCAL_HOST_KEY, 'C:\\plugins\\trackr', 'tools', true])
   })
 
   it('refuses a call with nothing to change', async () => {

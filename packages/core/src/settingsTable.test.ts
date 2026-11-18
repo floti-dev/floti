@@ -107,7 +107,7 @@ describe('the settings table', () => {
     expect(settingEntry('agentDepth').patch(settings, 'local', 1)).toEqual({ agentDepth: 1 })
   })
 
-  it('lets a session only narrow what agents may reach or do', () => {
+  it('lets a session only narrow what agents, or Floti on its own, may reach or do', () => {
     const narrowOnly = settingsTable()
       .filter((entry) => entry.session === 'narrow')
       .map((entry) => entry.key)
@@ -121,10 +121,14 @@ describe('the settings table', () => {
         'browserMcp',
         'browserMcpLocalOnly',
         'browserReach',
+        'browserSearch',
         'desktopMcp',
+        'quitSessions',
+        'restoreWithoutAsking',
         'scanRoots',
         'sessionAgents',
-        'sessionMcp'
+        'sessionMcp',
+        'updateCheck'
       ].sort()
     )
     const narrows = (key: SettingKey, from: unknown, to: unknown): boolean => {
@@ -140,8 +144,22 @@ describe('the settings table', () => {
     expect(narrows('browserReach', 'local', 'web')).toBe(false)
     expect(narrows('agentDepth', 2, 1)).toBe(true)
     expect(narrows('agentDepth', 2, 3)).toBe(false)
-    expect(narrows('scanRoots', [ABSOLUTE, OTHER], [ABSOLUTE.toUpperCase()])).toBe(true)
+    expect(narrows('scanRoots', [ABSOLUTE, OTHER], [ABSOLUTE])).toBe(true)
+    expect(narrows('scanRoots', [ABSOLUTE, OTHER], [])).toBe(true)
     expect(narrows('scanRoots', [ABSOLUTE], [ABSOLUTE, OTHER])).toBe(false)
+    // A folder differing only in case is another folder on macOS and Linux, so it is refused on every OS.
+    expect(narrows('scanRoots', ['/home/u/work'], ['/home/u/WORK'])).toBe(false)
+    expect(narrows('scanRoots', [ABSOLUTE], [ABSOLUTE.toUpperCase()])).toBe(false)
+    // What Floti or its sessions do on their own goes only toward doing less.
+    expect(narrows('updateCheck', true, false)).toBe(true)
+    expect(narrows('updateCheck', false, true)).toBe(false)
+    expect(narrows('browserSearch', 'google', 'off')).toBe(true)
+    expect(narrows('browserSearch', 'off', 'google')).toBe(false)
+    expect(narrows('browserSearch', 'google', 'bing')).toBe(false)
+    expect(narrows('quitSessions', 'keep', 'end')).toBe(true)
+    expect(narrows('quitSessions', 'end', 'keep')).toBe(false)
+    expect(narrows('restoreWithoutAsking', true, false)).toBe(true)
+    expect(narrows('restoreWithoutAsking', false, true)).toBe(false)
     // What names a program to run, and what would drop archived conversations, only the user changes.
     for (const key of ['claudePath', 'terminalShell', 'transcriptArchiveMaxBytes'] as const) {
       expect(settingEntry(key).session).toBe('nothing')

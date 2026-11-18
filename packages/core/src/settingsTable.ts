@@ -79,8 +79,9 @@ export type SettingValues =
 
 /**
  * What a session may do to a setting: change it to any value it takes, only
- * narrow what agents may reach or do with it (`narrows`), or nothing (only the
- * user changes it, in Settings).
+ * narrow it (`narrows`) where it decides what agents may reach or do or what
+ * Floti or its sessions do on their own, or nothing (only the user changes
+ * it, in Settings).
  */
 export type SessionMay = 'change' | 'narrow' | 'nothing'
 
@@ -134,12 +135,14 @@ const offOnly = (from: unknown, to: unknown): boolean => to === false || to === 
 const onOnly = (from: unknown, to: unknown): boolean => to === true || to === from
 const noHigher = (from: unknown, to: unknown): boolean =>
   typeof from === 'number' && typeof to === 'number' && to <= from
-const samePath = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
-/** Folders narrow when every one kept was already there: a session may stop Floti scanning one, never add one. */
+/**
+ * Folders narrow when every one kept was already there, spelt exactly as it
+ * was: a session may stop Floti scanning one, never add one. Exactly, on every
+ * OS: on macOS and Linux a path that differs only in case is another folder,
+ * and on Windows a change of case alone is refused, which costs nothing.
+ */
 const fewerFolders = (from: unknown, to: unknown): boolean =>
-  Array.isArray(from) &&
-  Array.isArray(to) &&
-  to.every((folder) => typeof folder === 'string' && from.some((was) => typeof was === 'string' && samePath(was, folder)))
+  Array.isArray(from) && Array.isArray(to) && to.every((folder) => typeof folder === 'string' && from.includes(folder))
 
 const options = (values: readonly string[], label: (value: string) => string): SettingOption[] =>
   values.map((value) => ({ value, label: label(value) }))
@@ -361,7 +364,9 @@ function build(): readonly SettingEntry[] {
         false: 'When Floti stops without shutting down, the next start lists the sessions it was running and asks which to reopen.'
       },
       section: 'sessions',
-      values: { kind: 'boolean' }
+      values: { kind: 'boolean' },
+      // On relaunches agents with no person there: a session may only turn it off.
+      narrows: offOnly
     }),
     {
       key: 'quitSessions',
@@ -381,7 +386,9 @@ function build(): readonly SettingEntry[] {
         ]
       },
       scope: 'host',
-      session: 'change',
+      // Keep leaves agents running with nobody there: only end narrows it.
+      session: 'narrow',
+      narrows: (from, to) => to === 'end' || to === from,
       toldToHost: false,
       read: (settings, host) => quitChoice(settings, host),
       patch: (settings, host, value) =>
@@ -502,7 +509,9 @@ function build(): readonly SettingEntry[] {
       values: {
         kind: 'choice',
         options: options(BROWSER_SEARCH_ENGINES, (search) => browserSearchName(search as BrowserSearch) ?? 'Off')
-      }
+      },
+      // An engine sends what is typed in the address bar to it: a session may only turn it off.
+      narrows: (from, to) => to === 'off' || to === from
     }),
     plain({
       key: 'browserMcp',
@@ -550,7 +559,9 @@ function build(): readonly SettingEntry[] {
         "This PC's host looks for a newer floti at most once a day and installs it without ending a session. Check now works either way.",
       section: 'updates',
       values: { kind: 'boolean' },
-      scope: 'host'
+      scope: 'host',
+      // On is a request Floti makes by itself: a session may only turn it off.
+      narrows: offOnly
     })
   ]
 }

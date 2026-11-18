@@ -142,14 +142,20 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   anything is written. A setting that decides what agents may reach or do
   (the tool families' switches, Sessions can start agents, the browser's
   reach and local-only rule, the five agent limits, plugins' switches and the
-  folders Floti scans) may be narrowed and never widened from a session; a
-  set that would widen one is refused saying the user changes it in
-  Settings. The `claude` executable, the project shell and the archive's
+  folders Floti scans, each kept folder compared exactly) or what Floti or
+  its sessions do on their own (`updateCheck`, `browserSearch`,
+  `quitSessions`, where only End narrows, and `restoreWithoutAsking`) may be
+  narrowed and never widened from a session; a set that would widen one is
+  refused saying the user changes it in Settings. The `claude` executable, the project shell and the archive's
   ceiling (lowering it drops conversations an undo cannot bring back) only the
   user changes. A value a setting does not take is refused naming the ones it
   does. One refusal and nothing in the call changes.
 - Every change shows a toast in the window naming the session and what it
-  changed, with Undo, which puts back every value the call changed. A setting
+  changed, with Undo, which puts back every value the call changed. A set is
+  written in steps that land whole or not at all (this device's settings, the
+  host's own, then each plugin's switch); when one fails, what was already
+  written still gets the toast and its Undo, and the answer says what changed,
+  where each change landed, and what failed. A setting
   kept per host and a plugin's switch change on the caller's own host unless
   `host` names another. Main tells only this PC's host the settings it keeps
   for sessions, so the answer to a session on a host on another computer says

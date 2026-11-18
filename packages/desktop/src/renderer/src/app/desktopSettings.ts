@@ -13,6 +13,7 @@ import {
   type SettingValues
 } from '@floti/core/types'
 import { SETTINGS_SECTIONS } from '@floti/ui'
+import { HOST_WORKSPACE_KEYS } from '../../../shared/host/records'
 import type { DesktopCall, DesktopToolResult } from './host/desktopTools'
 
 /**
@@ -28,10 +29,12 @@ import type { DesktopCall, DesktopToolResult } from './host/desktopTools'
  * own `plugins:setEnabled` and `plugins:setTools`.
  *
  * A set is judged whole before anything is written: every name must be a
- * setting, every value one it takes, and a setting that decides what agents
- * may reach or do may only be narrowed. One refusal and nothing in the call
- * changes. What it does change shows the user a toast naming the session,
- * with Undo, which puts back every value the call changed.
+ * setting, every value one it takes, and a setting that decides what agents,
+ * or Floti on its own, may reach or do may only be narrowed. One refusal and
+ * nothing in the call changes. What it does change shows the user a toast
+ * naming the session, with Undo, which puts back every value the call
+ * changed - also when a write fails partway, for whatever was already
+ * written, and the answer then says what changed and what did not.
  *
  * The desktop tells only this PC's host the settings it keeps for its
  * sessions (`hostSettingsFor`); a host on another computer is not told them.
@@ -277,13 +280,13 @@ function judge(
     }
     if (typeof to !== 'boolean') return `${name} (${pluginLabel(each)}) takes true or false; ${JSON.stringify(to)} is not one.`
     if (to && !each.value) {
-      return `${pluginLabel(each)} can only be turned off from a session: turning it on would widen what agents may reach or do. The user turns it on in Settings > Plugins.`
+      return `${pluginLabel(each)} can only be turned off from a session: turning it on would widen what agents or Floti may do. The user turns it on in Settings > Plugins.`
     }
     return { kind: 'plugin', name, each, to }
   }
   const entry = findSettingEntry(name)
   if (entry === null) {
-    const state = STATE_KEYS[name as SettingKey]
+    const state = Object.hasOwn(STATE_KEYS, name) ? STATE_KEYS[name as SettingKey] : undefined
     return state === undefined
       ? `${name} is not one of Floti’s settings: desktop_settings lists them by name.`
       : `${name} is not a setting but something Floti remembers (${state}), so a session does not change it.`
@@ -296,26 +299,65 @@ function judge(
   }
   const from = entry.read(settings, host.id)
   if (entry.session === 'narrow' && !(entry.narrows?.(from, to) ?? false)) {
-    return `${entry.label} (${name}) can only be narrowed from a session: ${settingValueWords(entry.values, to)} would widen what agents may reach or do. The user changes it in ${where}.`
+    return `${entry.label} (${name}) can only be narrowed from a session: ${settingValueWords(entry.values, to)} would widen what agents or Floti may do. The user changes it in ${where}.`
   }
   return { kind: 'setting', entry, from, to }
 }
 
-/** Writes `changes` on `host`, settings first, then plugins' switches, each as Settings writes it. */
+const hostKept = (key: string): boolean => (HOST_WORKSPACE_KEYS as readonly string[]).includes(key)
+
+/** Where `change` lands: this device, or `host` for what a host keeps and for its plugins. */
+function landing(change: Change, host: SettingsHost): string {
+  if (change.kind === 'plugin' || hostKept(change.entry.key)) return `on ${host.name}`
+  return change.entry.scope === 'host' ? `on this device, for ${host.name}` : 'on this device'
+}
+
+/** What a write did: the changes it made, and the ones it could not, with why. */
+interface Written {
+  done: Change[]
+  failed: { changes: Change[]; problem: string } | null
+  /** Changes after the failure, which were not tried. */
+  untried: Change[]
+}
+
+/**
+ * Writes `changes` on `host` as Settings writes them, in steps that land
+ * whole or not at all: this device's settings in one save, the host's own in
+ * another, then each plugin's switch. It stops at the first step that fails.
+ */
 async function write(
   window: DesktopSettingsWindow,
   host: string,
   changes: readonly Change[],
   settings: AppSettings
-): Promise<void> {
-  let patch: Partial<AppSettings> = {}
-  for (const change of changes) {
-    if (change.kind === 'setting') patch = { ...patch, ...change.entry.patch({ ...settings, ...patch }, host, change.to) }
+): Promise<Written> {
+  const settingChanges = changes.filter((change): change is Extract<Change, { kind: 'setting' }> => change.kind === 'setting')
+  const steps: Change[][] = [
+    settingChanges.filter((change) => !hostKept(change.entry.key)),
+    settingChanges.filter((change) => hostKept(change.entry.key)),
+    ...changes.filter((change) => change.kind === 'plugin').map((change) => [change])
+  ].filter((step) => step.length > 0)
+  const done: Change[] = []
+  let current = settings
+  for (const [index, step] of steps.entries()) {
+    try {
+      const first = step[0]
+      if (first?.kind === 'plugin') {
+        await window.setPlugin(host, first.each.plugin.path, first.each.which, first.to)
+      } else {
+        let patch: Partial<AppSettings> = {}
+        for (const change of step) {
+          if (change.kind === 'setting') patch = { ...patch, ...change.entry.patch({ ...current, ...patch }, host, change.to) }
+        }
+        await window.save(host, patch)
+        current = { ...current, ...patch }
+      }
+      done.push(...step)
+    } catch (error) {
+      return { done, failed: { changes: step, problem: readable(error) }, untried: steps.slice(index + 1).flat() }
+    }
   }
-  if (Object.keys(patch).length > 0) await window.save(host, patch)
-  for (const change of changes) {
-    if (change.kind === 'plugin') await window.setPlugin(host, change.each.plugin.path, change.each.which, change.to)
-  }
+  return { done, failed: null, untried: [] }
 }
 
 /** The same changes, back to what each was. */
@@ -324,7 +366,11 @@ const reversed = (changes: readonly Change[]): Change[] =>
     change.kind === 'setting' ? { ...change, from: change.to, to: change.from } : { ...change, to: change.each.value }
   )
 
-/** Answers `desktop_set`: judges every change, writes them all or none, and raises the toast with Undo. */
+/**
+ * Answers `desktop_set`: judges every change and refuses the call whole for
+ * any refusal, writes the rest, and raises the toast with Undo for whatever
+ * was written, saying what landed where and what failed.
+ */
 export async function setSettings(call: DesktopCall, window: DesktopSettingsWindow): Promise<DesktopToolResult> {
   const args = (typeof call.arguments === 'object' && call.arguments !== null ? call.arguments : {}) as Record<string, unknown>
   if (!isChanges(args.changes)) {
@@ -362,44 +408,51 @@ export async function setSettings(call: DesktopCall, window: DesktopSettingsWind
     })
   }
 
-  try {
-    await write(window, host.id, changes, settings)
-  } catch (error) {
-    return refused(`Floti could not save that: ${readable(error)}.`)
+  const { done, failed, untried } = await write(window, host.id, changes, settings)
+  const listed = (some: readonly Change[]): string =>
+    some.map((change) => `${changeLabel(change)}: ${changeWords(change)} (${changeName(change)})`).join('; ')
+  if (done.length === 0) {
+    return refused(
+      `Floti could not save ${listed(failed?.changes ?? [])}: ${failed?.problem ?? 'it did not say why'}.${untried.length === 0 ? '' : ` ${listed(untried)} was not tried.`} Nothing was changed.`
+    )
   }
 
-  const said = changes.map((change) => `${changeLabel(change)}: ${changeWords(change)}`)
-  const named = changes.map((change) => `${changeLabel(change)}: ${changeWords(change)} (${changeName(change)})`)
   const who = window.sessionName(call.host, call.session)
   window.raise(
-    changes.length === 1 ? `${who} changed a setting` : `${who} changed ${String(changes.length)} settings`,
-    said.join(' · '),
+    done.length === 1 ? `${who} changed a setting` : `${who} changed ${String(done.length)} settings`,
+    done.map((change) => `${changeLabel(change)}: ${changeWords(change)}`).join(' · '),
     async () => {
+      let now: AppSettings
       try {
-        await write(window, host.id, reversed(changes), await window.settingsOn(host.id))
-        return null
+        now = await window.settingsOn(host.id)
       } catch (error) {
         return readable(error)
       }
+      const back = await write(window, host.id, reversed(done), now)
+      return back.failed === null ? null : back.failed.problem
     }
   )
 
-  const told = changes.some((change) => change.kind === 'setting' && change.entry.toldToHost)
+  const changed = done.map((change) => `${changeLabel(change)}: ${changeWords(change)} (${changeName(change)}) ${landing(change, host)}`)
+  const told = done.some((change) => change.kind === 'setting' && change.entry.toldToHost)
   const follows = !told
     ? ''
     : call.host === LOCAL_HOST_KEY
       ? ' Floti’s host follows at once: sessions started from now on get what it says.'
-      : ` This PC’s host follows at once, but ${window.hosts().find((each) => each.id === call.host)?.name ?? call.host}, the host your session runs on, is not told this setting: its sessions go on as they were.`
-  return answered(
-    `Changed ${named.join('; ')} on ${host.name}. The user sees a toast naming your session, with Undo.${follows}`,
-    {
-      changed: changes.map((change) => ({
-        name: changeName(change),
-        from: change.kind === 'setting' ? change.from : change.each.value,
-        to: change.to
-      })),
-      host: host.id,
-      ...(told ? { yourHostFollows: call.host === LOCAL_HOST_KEY } : {})
-    }
-  )
+      : ` This PC’s host follows at once, but ${hosts.find((each) => each.id === call.host)?.name ?? call.host}, the host your session runs on, is not told this setting: its sessions go on as they were.`
+  if (failed !== null) {
+    return refused(
+      `Changed ${changed.join('; ')}, but Floti could not save ${listed(failed.changes)}: ${failed.problem}.${untried.length === 0 ? '' : ` ${listed(untried)} was not tried.`} The user sees a toast naming your session, with Undo, for what changed.${follows}`
+    )
+  }
+  return answered(`Changed ${changed.join('; ')}. The user sees a toast naming your session, with Undo.${follows}`, {
+    changed: done.map((change) => ({
+      name: changeName(change),
+      from: change.kind === 'setting' ? change.from : change.each.value,
+      to: change.to,
+      landed: landing(change, host)
+    })),
+    host: host.id,
+    ...(told ? { yourHostFollows: call.host === LOCAL_HOST_KEY } : {})
+  })
 }
