@@ -61,7 +61,9 @@ impl WorkspaceContext {
         let terminals = Arc::clone(hosted);
         settings.on_change(move |settings| {
             use_chosen_executables(&backends, settings);
-            terminals.terminals().use_shell(settings.terminal_shell.clone());
+            terminals
+                .terminals()
+                .use_shell(settings.terminal_shell.clone());
         });
         let sessions = Arc::clone(hosted);
         let roots = Arc::new(KnownRoots::new(store, move || {

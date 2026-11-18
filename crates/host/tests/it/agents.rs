@@ -1239,7 +1239,10 @@ async fn agents_turned_off_by_one_client_reach_every_client_and_every_later_sess
     let world = World::new();
     let host = world.host().await;
     let mut other_device = world.client().await;
-    let before: HostSettings = match other_device.subscribe_on(SETTINGS, SettingsChanged::NAME).await {
+    let before: HostSettings = match other_device
+        .subscribe_on(SETTINGS, SettingsChanged::NAME)
+        .await
+    {
         Message::Snapshot(snapshot) => from_payload(&snapshot.state).unwrap(),
         other => panic!("settings:changed starts with its state, not {other:?}"),
     };
@@ -1266,7 +1269,9 @@ async fn agents_turned_off_by_one_client_reach_every_client_and_every_later_sess
     };
     assert!(!heard.session_agents);
 
-    let agent = world.session(CLAUDE, &world.project("after"), "after").await;
+    let agent = world
+        .session(CLAUDE, &world.project("after"), "after")
+        .await;
     assert!(
         !agent.run.server_names().contains(&FAMILY.to_owned()),
         "{:?}",
