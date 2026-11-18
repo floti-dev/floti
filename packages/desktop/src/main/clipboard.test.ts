@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CLIPBOARD_RETRY_DELAYS_MS, createClipboardText, type TextClipboard } from './clipboard'
+import {
+  CLIPBOARD_RETRY_DELAYS_MS,
+  RUN_CLIPBOARD_ENV,
+  RUN_CLIPBOARD_GLOBAL,
+  createClipboardText,
+  desktopClipboard,
+  memoryClipboard,
+  type TextClipboard
+} from './clipboard'
 
 /**
  * A clipboard another program can hold, as Windows' is: while it is held,
@@ -154,5 +162,50 @@ describe('reading the clipboard', () => {
     expect(await settled(reading)).toBe(false)
     await vi.advanceTimersByTimeAsync(1)
     await expect(reading).resolves.toEqual({ refused: true })
+  })
+})
+
+describe('the clipboard the desktop copies to', () => {
+  const run = (env: NodeJS.ProcessEnv, packaged = false) => ({ packaged, env, global: {} as Record<string, unknown> })
+
+  it('is the system clipboard, unless an end-to-end run asks for its own', () => {
+    const system = windowsClipboard()
+    expect(desktopClipboard(system, run({}))).toBe(system)
+    expect(desktopClipboard(system, run({ [RUN_CLIPBOARD_ENV]: '0' }))).toBe(system)
+  })
+
+  it('is the system clipboard in a packaged build, whatever the environment says', () => {
+    const system = windowsClipboard()
+    const packaged = run({ [RUN_CLIPBOARD_ENV]: '1' }, true)
+    expect(desktopClipboard(system, packaged)).toBe(system)
+    expect(packaged.global[RUN_CLIPBOARD_GLOBAL]).toBeUndefined()
+  })
+
+  it('is the run’s own in an end-to-end run, one for the whole run, published for the tests, and never the system’s', async () => {
+    const system = windowsClipboard()
+    const e2e = run({ [RUN_CLIPBOARD_ENV]: '1' })
+    const board = desktopClipboard(system, e2e)
+    expect(board).not.toBe(system)
+    expect(desktopClipboard(system, e2e)).toBe(board)
+    expect(e2e.global[RUN_CLIPBOARD_GLOBAL]).toBe(board)
+
+    // Another program holding the system clipboard changes nothing for the run.
+    system.held = true
+    const text = createClipboardText(board)
+    await expect(text.write('clip-4821')).resolves.toBe('copied')
+    await expect(text.read()).resolves.toEqual({ text: 'clip-4821' })
+    expect(system.writes).toEqual([])
+  })
+})
+
+describe('a clipboard held in memory', () => {
+  it('gives back the text last written, and says it holds text only when it does', () => {
+    const board = memoryClipboard()
+    expect(board.readText()).toBe('')
+    expect(board.availableFormats()).toEqual([])
+    board.writeText('one')
+    board.writeText('two\nlines')
+    expect(board.readText()).toBe('two\nlines')
+    expect(board.availableFormats()).toEqual(['text/plain'])
   })
 })

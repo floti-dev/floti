@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, startSession, test as base } from './desktop'
+import { expect, runClipboard, startSession, test as base } from './desktop'
 
 /**
  * The Files view: a project's tree with git's letters on it, a file read beside
@@ -115,7 +115,7 @@ test('Ctrl+P opens a file by a few letters, and a file goes to VS Code, Explorer
   await expect(pane.getByTitle('No changes since the last commit')).toBeVisible()
 
   await pane.getByRole('button', { name: 'Copy path' }).click()
-  await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe(file)
+  await expect.poll(() => runClipboard(desktop)).toBe(file)
 
   await pane.getByRole('button', { name: 'Reveal in Explorer' }).click()
   await expect.poll(() => app.evaluate(() => (globalThis as { shown?: string[] }).shown)).toEqual([file])

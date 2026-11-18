@@ -20,7 +20,7 @@ import { appMode, dataDir, dbFile } from './paths'
 import type { PluginHost } from './plugins/host'
 import type { OwnDataCopy } from './host/own-data'
 import { activePty, windowsBuildNumber } from './pty'
-import { createClipboardText } from './clipboard'
+import { createClipboardText, desktopClipboard } from './clipboard'
 import { nativeProfileDialogs } from './profiles'
 import { updateSettings, type Services } from './services'
 import type { WorkspaceService } from './host/workspace'
@@ -211,7 +211,9 @@ export function registerIpc(ctx: IpcContext): void {
   const { services, workspace } = ctx
   registerConfirmAnswers()
   // One for the app, so a later copy supersedes one still retrying.
-  const clipboardText = createClipboardText(clipboard)
+  const clipboardText = createClipboardText(
+    desktopClipboard(clipboard, { packaged: app.isPackaged, env: process.env, global: globalThis as unknown as Record<string, unknown> })
+  )
 
   const profileDialogs = nativeProfileDialogs(ctx.window)
 
