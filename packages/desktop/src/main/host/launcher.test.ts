@@ -22,6 +22,7 @@ import {
   flotiBinary,
   fromBeforeRestart,
   hostEnvironment,
+  hostLogsFolder,
   oldHostOffer,
   localHostRestartFrame,
   restartLocalHost,
@@ -231,6 +232,22 @@ describe('the local host launcher', { timeout: PATIENCE }, () => {
           FLOTI_RUNTIME_DIR: `${WIN_PLACES.dataDir}\\host\\run`
         })
       }
+    })
+
+    it('puts main.log in the folder the host it starts logs to', () => {
+      for (const appMode of ['dev', 'portable', 'dev-live'] as const) {
+        const told = hostEnvironment({ ...WIN_PLACES, appMode }, { platform: 'win32', env: {}, tmpdir: () => 'C:\\Temp' })
+        expect(hostLogsFolder({ ...WIN_PLACES, appMode }, { platform: 'win32', env: {}, home: 'C:\\Users\\me' })).toBe(
+          told['FLOTI_LOG_DIR']
+        )
+      }
+      // The installed app's host logs where its own rule says.
+      expect(
+        hostLogsFolder(
+          { ...WIN_PLACES, appMode: 'installed' },
+          { platform: 'win32', env: { LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local' }, home: 'C:\\Users\\me' }
+        )
+      ).toBe('C:\\Users\\me\\AppData\\Local\\Floti\\logs')
     })
 
     it('tells a development run’s host that its config folder is not its to write, and no other', () => {

@@ -104,6 +104,7 @@ pub mod server;
 pub mod session;
 pub mod setup;
 pub mod sha256;
+pub mod status;
 pub mod store;
 pub mod this_computer;
 pub mod uninstall;

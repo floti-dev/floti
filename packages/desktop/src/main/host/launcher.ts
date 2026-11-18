@@ -13,6 +13,7 @@ import {
   type UpdateSide
 } from './protocol'
 import type { AppMode, LocalHostRestartOffer, LocalHostStep } from '../../shared/ipc'
+import { flotiLogsDirFor, type FolderEnv } from '../dataFolder'
 
 /**
  * Finds the local host and connects the desktop to it, through the `floti`
@@ -340,6 +341,25 @@ const CONFIG_READ_ONLY = 'FLOTI_CONFIG_READ_ONLY'
  * none, and the host uses the Node shipped beside it. A `FLOTI_NODE` already
  * in the environment is kept.
  */
+/** The folder a run other than the installed app gives the host it starts: its own, in the desktop's data directory. */
+function ownHostFolder(places: Pick<HostPlaces, 'dataDir'>, platform: NodeJS.Platform): string {
+  return pathsFor(platform).join(places.dataDir, 'host')
+}
+
+/**
+ * Where the host this desktop starts keeps its logs (`hostEnvironment`), so
+ * main writes its own `main.log` beside the host's `host.log`: the host's own
+ * rule for the installed app, the folder this run gives it otherwise.
+ */
+export function hostLogsFolder(
+  places: Pick<HostPlaces, 'appMode' | 'dataDir'>,
+  deps: { platform: NodeJS.Platform; env: FolderEnv; home: string }
+): string {
+  return places.appMode === 'installed'
+    ? flotiLogsDirFor(deps.platform, deps.env, deps.home)
+    : pathsFor(deps.platform).join(ownHostFolder(places, deps.platform), 'logs')
+}
+
 export function hostEnvironment(
   places: HostPlaces,
   deps: Pick<LauncherDeps, 'platform' | 'env' | 'tmpdir'> & Partial<Pick<LauncherDeps, 'exists'>>
@@ -352,7 +372,7 @@ export function hostEnvironment(
     node === null ? inherited : { ...inherited, FLOTI_NODE: node }
   // The host's own rule decides, as it does for the host started at sign-in.
   if (places.appMode === 'installed') return env
-  const root = paths.join(places.dataDir, 'host')
+  const root = ownHostFolder(places, deps.platform)
   return {
     ...env,
     FLOTI_DATA_DIR: paths.join(root, 'data'),

@@ -20,13 +20,19 @@
 //!
 //! Only the executable does any of this. A host started inside a test process
 //! leaves that process's standard error alone, and its lines go there.
+//!
+//! [`tail`] reads its latest lines back for `desktop_log`, newest last, from
+//! the end of the file and no further back than it needs, each with anything
+//! shaped like a secret hidden ([`hide_secrets`]): the log holds none by
+//! design, and an answer an agent reads holds none even if a line ever did.
 
 #[cfg(test)]
 mod tests;
 
+use std::borrow::Cow;
 use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
-use std::io;
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -304,4 +310,144 @@ fn open_append(path: &Path) -> io::Result<File> {
         Err(err) => return Err(err),
     }
     OpenOptions::new().append(true).open(path)
+}
+
+/// The most lines [`tail`] answers.
+pub const TAIL_MOST: usize = 500;
+
+/// How much of the file [`tail`] reads at a time, from the end back.
+const TAIL_CHUNK: u64 = 64 * 1024;
+
+/// What a hidden secret reads as.
+pub const HIDDEN: &str = "[hidden]";
+
+/// A run of hex digits this long is a token, a hash or a whole key, never a
+/// fingerprint (which is a few bytes), so it is hidden.
+const SECRET_HEX_RUN: usize = 64;
+
+/// The last `most` (at most [`TAIL_MOST`]) non-empty lines of the log at
+/// `path`, oldest first; with `word`, only lines holding it, in any case.
+/// Each has its secrets hidden. `None` when there is no file there yet.
+///
+/// # Errors
+///
+/// The file could not be opened or read.
+pub fn tail(path: &Path, most: usize, word: Option<&str>) -> io::Result<Option<Vec<String>>> {
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err),
+    };
+    let most = most.min(TAIL_MOST);
+    let word = word
+        .map(str::trim)
+        .filter(|word| !word.is_empty())
+        .map(str::to_lowercase);
+    let mut found: Vec<String> = Vec::new();
+    let mut end = file.metadata()?.len();
+    // The start of the line the last chunk read began inside, not yet whole.
+    let mut pending: Vec<u8> = Vec::new();
+    while found.len() < most {
+        let start = end.saturating_sub(TAIL_CHUNK);
+        let mut chunk = vec![0; usize::try_from(end - start).unwrap_or(0)];
+        file.seek(SeekFrom::Start(start))?;
+        file.read_exact(&mut chunk)?;
+        chunk.extend_from_slice(&pending);
+        let mut segments: Vec<&[u8]> = chunk.split(|byte| *byte == b'\n').collect();
+        pending = if start > 0 {
+            segments.remove(0).to_vec()
+        } else {
+            Vec::new()
+        };
+        for segment in segments.into_iter().rev() {
+            let line = String::from_utf8_lossy(segment);
+            let line = line.trim_end_matches('\r');
+            if line.is_empty()
+                || word
+                    .as_deref()
+                    .is_some_and(|word| !line.to_lowercase().contains(word))
+            {
+                continue;
+            }
+            found.push(hide_secrets(line).into_owned());
+            if found.len() == most {
+                break;
+            }
+        }
+        if start == 0 {
+            break;
+        }
+        end = start;
+    }
+    found.reverse();
+    Ok(Some(found))
+}
+
+/// `line` with what is shaped like a secret hidden: the value after
+/// `Bearer `, and any run of [`SECRET_HEX_RUN`] or more hex digits (a token,
+/// a hash, a whole key). A key's fingerprint, a few bytes, stays.
+pub fn hide_secrets(line: &str) -> Cow<'_, str> {
+    match hide_bearers(line) {
+        Cow::Borrowed(line) => hide_hex_runs(line),
+        Cow::Owned(line) => Cow::Owned(hide_hex_runs(&line).into_owned()),
+    }
+}
+
+/// `line` with the value after each `Bearer ` (any case) hidden.
+fn hide_bearers(line: &str) -> Cow<'_, str> {
+    const BEARER: &[u8] = b"bearer ";
+    let bytes = line.as_bytes();
+    hide_spans(line, |at| {
+        if bytes.len() - at <= BEARER.len()
+            || !bytes[at..at + BEARER.len()].eq_ignore_ascii_case(BEARER)
+        {
+            return None;
+        }
+        let value = at + BEARER.len();
+        let past = bytes[value..]
+            .iter()
+            .position(u8::is_ascii_whitespace)
+            .map_or(bytes.len(), |end| value + end);
+        (past > value).then_some((value, past))
+    })
+}
+
+/// `line` with every run of [`SECRET_HEX_RUN`] or more hex digits hidden.
+fn hide_hex_runs(line: &str) -> Cow<'_, str> {
+    let bytes = line.as_bytes();
+    hide_spans(line, |at| {
+        if !bytes[at].is_ascii_hexdigit() || (at > 0 && bytes[at - 1].is_ascii_hexdigit()) {
+            return None;
+        }
+        let past = bytes[at..]
+            .iter()
+            .position(|byte| !byte.is_ascii_hexdigit())
+            .map_or(bytes.len(), |end| at + end);
+        (past - at >= SECRET_HEX_RUN).then_some((at, past))
+    })
+}
+
+/// `line` with each span `found` names, from where it is asked, replaced by
+/// [`HIDDEN`]. Spans begin and end at ASCII bytes, so on char boundaries.
+fn hide_spans(line: &str, found: impl Fn(usize) -> Option<(usize, usize)>) -> Cow<'_, str> {
+    let mut out = String::new();
+    let mut kept = 0;
+    let mut at = 0;
+    while at < line.len() {
+        match found(at) {
+            Some((start, past)) => {
+                out.push_str(&line[kept..start]);
+                out.push_str(HIDDEN);
+                kept = past;
+                at = past;
+            }
+            None => at += 1,
+        }
+    }
+    if kept == 0 {
+        Cow::Borrowed(line)
+    } else {
+        out.push_str(&line[kept..]);
+        Cow::Owned(out)
+    }
 }

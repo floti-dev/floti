@@ -8,7 +8,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::{HostLog, KEPT_LOGS, LOG_FILE, LOG_LIMIT, TEST_LOG_LIMIT_MARKER, log_limit};
+use super::{
+    HIDDEN, HostLog, KEPT_LOGS, LOG_FILE, LOG_LIMIT, TAIL_MOST, TEST_LOG_LIMIT_MARKER,
+    hide_secrets, log_limit, tail,
+};
 use crate::platform::private_files::{Native as NativeFiles, PrivateFiles};
 use crate::platform::standard_error::StandardError;
 use crate::testkit::TestDirs;
@@ -163,4 +166,72 @@ fn the_start_line_stamps_utc_and_a_local_offset_never_reaches_it() {
     // The same moment given as Mountain time is still stamped in UTC.
     let local: jiff::Timestamp = "2026-11-15T19:51:13.5-07:00".parse().unwrap();
     assert_eq!(super::start_line(local), line);
+}
+
+#[test]
+fn a_tail_answers_the_latest_lines_oldest_first_reading_back_across_chunks() {
+    let dirs = TestDirs::new();
+    let path = dirs.folder("logs dir").join(LOG_FILE);
+    // Lines long enough that the last 500 span several 64 KiB chunks.
+    let line = |n: usize| format!("line {n:04} {}", "x".repeat(300));
+    let text: String = (0..2000).map(|n| format!("{}\r\n", line(n))).collect();
+    fs::write(&path, text).unwrap();
+    assert_eq!(
+        tail(&path, 3, None).unwrap().unwrap(),
+        [line(1997), line(1998), line(1999)]
+    );
+    // Never more than 500, and every line whole across a chunk's edge.
+    let most = tail(&path, 10_000, None).unwrap().unwrap();
+    assert_eq!(most.len(), TAIL_MOST);
+    assert_eq!(most, (1500..2000).map(line).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_tail_with_a_word_keeps_only_lines_holding_it_in_any_case_and_reads_to_the_start() {
+    let dirs = TestDirs::new();
+    let path = dirs.folder("logs dir").join(LOG_FILE);
+    fs::write(
+        &path,
+        "first Plugin trackr loaded\n\nsecond nothing\nthird plugin x crashed\nlast",
+    )
+    .unwrap();
+    assert_eq!(
+        tail(&path, 10, Some(" PLUGIN ")).unwrap().unwrap(),
+        ["first Plugin trackr loaded", "third plugin x crashed"]
+    );
+    assert_eq!(
+        tail(&path, 10, None).unwrap().unwrap(),
+        [
+            "first Plugin trackr loaded",
+            "second nothing",
+            "third plugin x crashed",
+            "last"
+        ]
+    );
+    assert_eq!(tail(&path, 0, None).unwrap().unwrap(), Vec::<String>::new());
+    // No log yet: nothing, not an error.
+    assert_eq!(
+        tail(&dirs.folder("empty").join(LOG_FILE), 5, None).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn secrets_are_hidden_and_a_fingerprint_stays() {
+    let token = "0123456789abcdef".repeat(4);
+    assert_eq!(
+        hide_secrets(&format!("granted {token} to session 4")),
+        format!("granted {HIDDEN} to session 4")
+    );
+    assert_eq!(
+        hide_secrets("Authorization: Bearer abc.DEF-123 sent"),
+        format!("Authorization: Bearer {HIDDEN} sent")
+    );
+    assert_eq!(
+        hide_secrets("authorization: bearer x"),
+        format!("authorization: bearer {HIDDEN}")
+    );
+    let plain = "device 1a2b3c4d5e6f7a8b attached, \u{fc}n\u{ef}code kept";
+    assert!(matches!(hide_secrets(plain), std::borrow::Cow::Borrowed(_)));
+    assert_eq!(hide_secrets("Bearer "), "Bearer ");
 }

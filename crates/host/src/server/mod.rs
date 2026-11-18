@@ -538,8 +538,8 @@ impl Host {
             .updates
             .clone()
             .map(|binary| (binary, folders.data.clone()));
-        let features = Arc::new(Features::new(Arc::clone(&hosted), folders, run)?);
-        let agent_tools = start_agent_tools(&hosted, &features)?;
+        let features = Arc::new(Features::new(Arc::clone(&hosted), folders.clone(), run)?);
+        let agent_tools = start_agent_tools(&hosted, &features, folders)?;
 
         let (stopper, stop_requested) = Stopper::new();
         if let Some((binary, data)) = updates {
@@ -740,7 +740,11 @@ fn start_background_update(features: &Features, data: PathBuf, binary: PathBuf, 
 /// answering from the sessions, the activity pass and the processes-and-ports
 /// pass, given to every launch from now on, and revoking each session's token
 /// as it ends.
-fn start_agent_tools(hosted: &Arc<Hosted>, features: &Features) -> Result<Arc<HostAgentTools>> {
+fn start_agent_tools(
+    hosted: &Arc<Hosted>,
+    features: &Features,
+    folders: Folders,
+) -> Result<Arc<HostAgentTools>> {
     let tools = Arc::new(HostAgentTools::new(
         Arc::clone(features.browser()),
         Arc::clone(features.desktop()),
@@ -766,9 +770,14 @@ fn start_agent_tools(hosted: &Arc<Hosted>, features: &Features) -> Result<Arc<Ho
         activity: features.activity().clone(),
         resources: features.resources().clone(),
     }));
+    let listening = Arc::downgrade(&tools);
     tools.open_through(Arc::new(HostDesktopWorld {
         hosted: Arc::downgrade(hosted),
         roots: Arc::downgrade(features.roots()),
+        settings: Arc::downgrade(features.settings()),
+        plugins: features.plugins().downgrade(),
+        folders,
+        tool_families: Box::new(move || listening.upgrade().map(|tools| tools.tool_families())),
     }));
     tokio::spawn(agent_tools::revoke_at_exit(
         hosted.ledger().exits(),

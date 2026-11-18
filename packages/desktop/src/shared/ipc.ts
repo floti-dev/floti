@@ -898,6 +898,12 @@ export interface ForwardedPort {
 /** What the desktop's own build says of itself; `app:info` adds the host's log file. */
 export type OwnAppInfo = Omit<AppInfo, 'hostLogFile'>
 
+/** What `ownLog:tail` answers: the log's path and its latest lines, or null while there is none. */
+export interface OwnLogTail {
+  path: string
+  lines: string[] | null
+}
+
 /** How many rows of each kind a copy of the desktop's own data added to the local host. */
 export interface OwnDataCopied {
   conversations: number
@@ -1040,6 +1046,14 @@ export interface IpcRequests {
   'ownSettings:write': { request: Partial<AppSettings>; response: AppSettings }
   /** The desktop's own build, data folder and runtime versions. */
   'ownApp:info': { request: void; response: OwnAppInfo }
+  /**
+   * The latest lines of the desktop's own log, `main.log` beside the host's
+   * `host.log` (`main/mainLog.ts`), for a session's `desktop_log`: at most
+   * 500, oldest first, only those holding `word` in any case when one is
+   * given, with what is shaped like a secret hidden. `lines` is null while
+   * there is no log yet.
+   */
+  'ownLog:tail': { request: { lines: number; word?: string }; response: OwnLogTail }
   /**
    * Where the copy of the desktop's own database into the local host stands, which
    * main runs and keeps; changes arrive on `ownData:changed`.
@@ -2380,6 +2394,7 @@ export const REQUEST_CHANNELS = Object.keys({
   'ownSettings:read': true,
   'ownSettings:write': true,
   'ownApp:info': true,
+  'ownLog:tail': true,
   'ownData:state': true,
   'profileDialog:export': true,
   'profileDialog:import': true,

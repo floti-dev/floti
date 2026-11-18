@@ -6389,3 +6389,215 @@ async fn desktop_tools_switched_off_leave_later_launches_without_them_and_answer
     );
     host.stop(HostStopReason::Stop).await;
 }
+
+/// `window` answers `call` with the sentence `said` and `part` as its JSON.
+async fn answer_with(
+    window: &mut TestClient,
+    call: &AgentDesktopToolCall,
+    said: &str,
+    part: Value,
+) {
+    let result = json!({
+        "content": [
+            { "type": "text", "text": said },
+            { "type": "text", "text": part.to_string() },
+        ],
+    });
+    window
+        .request::<AgentDesktopAnswer>(&AgentDesktopToolAnswer {
+            call_id: call.call_id,
+            outcome: AgentDesktopOutcome::Done {
+                value: to_payload(&result).expect("encode a tool result"),
+            },
+        })
+        .await
+        .expect("the window's answer is taken");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn desktop_status_and_desktop_log_answer_the_hosts_part_and_the_windows_and_never_the_sessions_token()
+ {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("diagnosed project");
+    let mut window = world.window().await;
+    let alpha = world.session(CLAUDE, &folder, "alpha").await;
+    let (url, token) = alpha.run.servers[DESKTOP].clone();
+
+    // Both tools and both commands are allowed at launch, each by name.
+    let allowed = alpha.run.allowed();
+    for rule in [
+        "mcp__floti-desktop__desktop_status",
+        "mcp__floti-desktop__desktop_log",
+        "Bash(floti desktop status:*)",
+        "Bash(floti desktop log:*)",
+    ] {
+        assert!(
+            allowed.iter().any(|got| got == rule),
+            "{rule} in {allowed:?}"
+        );
+    }
+
+    // The host's log, as a host that wrote a line it never should have would
+    // leave it: the session's token, bare and as a bearer.
+    std::fs::write(
+        world.dirs.logs.join("host.log"),
+        format!(
+            "floti host started\nplugin trackr loaded\ngranted {token} to a launch\nsent Authorization: Bearer {token}\nlast plugin line\n"
+        ),
+    )
+    .unwrap();
+    let holds_no_token = |what: &str, said: &str| {
+        assert!(!said.contains(&token), "{what} holds the token: {said}");
+    };
+
+    // desktop_status: the host's part, merged with the window's.
+    let calling = tokio::spawn({
+        let (url, token) = (url.clone(), token.clone());
+        async move { called(&url, &token, "desktop_status", json!({})).await }
+    });
+    let call = desktop_call(&mut window).await;
+    assert_eq!(call.tool, "desktop_status");
+    assert_eq!(call.session, alpha.id());
+    answer_with(
+        &mut window,
+        &call,
+        "Floti desktop 9.9.9; main's log is x.",
+        json!({ "desktop": { "version": "9.9.9" }, "hosts": [{ "id": "box", "state": "failed", "lastError": format!("Bearer {token}") }] }),
+    )
+    .await;
+    let status = calling.await.unwrap();
+    let text = status.text().to_owned();
+    for said in [
+        "Floti host ",
+        "Agent tool families on: ",
+        "floti-desktop",
+        "Agents: sessions can start agents ",
+        "Floti desktop 9.9.9",
+    ] {
+        assert!(text.contains(said), "{said} in {text}");
+    }
+    let part = status.done();
+    assert_eq!(part["window"]["desktop"]["version"], "9.9.9");
+    assert!(
+        part["host"]["toolFamilies"]["address"].is_string(),
+        "{part}"
+    );
+    holds_no_token("desktop_status", &text);
+    holds_no_token("desktop_status's JSON", &part.to_string());
+
+    // desktop_log: the host's lines holding the word, then main's.
+    let calling = tokio::spawn({
+        let (url, token) = (url.clone(), token.clone());
+        async move {
+            called(
+                &url,
+                &token,
+                "desktop_log",
+                json!({ "word": "PLUGIN", "lines": 5 }),
+            )
+            .await
+        }
+    });
+    let call = desktop_call(&mut window).await;
+    assert_eq!(call.tool, "desktop_log");
+    assert_eq!(
+        from_payload::<Value>(&call.arguments).unwrap(),
+        json!({ "lines": 5, "word": "PLUGIN" })
+    );
+    answer_with(
+        &mut window,
+        &call,
+        "main.log (m), its last 1 lines holding \"PLUGIN\":\nplugin page shown",
+        json!({ "path": "m", "lines": ["plugin page shown"] }),
+    )
+    .await;
+    let log = calling.await.unwrap();
+    let part = log.done();
+    assert_eq!(
+        part["host"]["lines"],
+        json!(["plugin trackr loaded", "last plugin line"])
+    );
+    assert_eq!(part["main"]["lines"], json!(["plugin page shown"]));
+    holds_no_token("desktop_log", log.text());
+    holds_no_token("desktop_log's JSON", &part.to_string());
+    let everything = called(&url, &token, "desktop_log", json!({}));
+    let (everything, ()) = tokio::join!(everything, async {
+        let call = desktop_call(&mut window).await;
+        answer_with(
+            &mut window,
+            &call,
+            "main.log (m) has no lines.",
+            json!({ "path": "m", "lines": [] }),
+        )
+        .await;
+    });
+    assert!(
+        everything.text().contains("granted [hidden] to a launch"),
+        "{everything:?}"
+    );
+    assert!(
+        everything.text().contains("Bearer [hidden]"),
+        "{everything:?}"
+    );
+    holds_no_token("desktop_log of every line", &format!("{everything:?}"));
+
+    // From the shell: the same answers, and the token in neither.
+    let (ran, ()) = tokio::join!(world.shell(&alpha, "floti desktop status"), async {
+        let call = desktop_call(&mut window).await;
+        assert_eq!(call.tool, "desktop_status");
+        answer_with(
+            &mut window,
+            &call,
+            "Floti desktop 9.9.9.",
+            json!({ "desktop": { "version": "9.9.9" }, "hosts": [] }),
+        )
+        .await;
+    });
+    assert_eq!(ran.code, Some(0), "{ran:?}");
+    assert!(ran.stdout.contains("Floti host "), "{ran:?}");
+    assert!(ran.stdout.contains("Floti desktop 9.9.9."), "{ran:?}");
+    holds_no_token("floti desktop status", &format!("{ran:?}"));
+    let (ran, ()) = tokio::join!(
+        world.shell(&alpha, "floti desktop log --lines 500"),
+        async {
+            let call = desktop_call(&mut window).await;
+            assert_eq!(call.tool, "desktop_log");
+            answer_with(
+                &mut window,
+                &call,
+                "main.log (m) has no lines.",
+                json!({ "path": "m", "lines": [] }),
+            )
+            .await;
+        }
+    );
+    assert_eq!(ran.code, Some(0), "{ran:?}");
+    assert!(ran.stdout.contains("floti host started"), "{ran:?}");
+    holds_no_token("floti desktop log", &format!("{ran:?}"));
+
+    // The window leaves: the host's part still answers, naming what only a
+    // window can tell.
+    drop(window);
+    let alone = called(&url, &token, "desktop_status", json!({})).await;
+    assert!(alone.text().contains("Floti host "), "{alone:?}");
+    assert!(
+        alone
+            .text()
+            .contains("Only a Floti window can tell the desktop's version"),
+        "{alone:?}"
+    );
+    let part = alone.done();
+    assert_eq!(part["window"], Value::Null);
+    assert_eq!(part["needsWindow"].as_array().map(Vec::len), Some(3));
+    holds_no_token("desktop_status with no window", &format!("{alone:?}"));
+    let alone = called(&url, &token, "desktop_log", json!({ "word": "started" })).await;
+    assert_eq!(alone.done()["host"]["lines"], json!(["floti host started"]));
+    assert!(
+        alone
+            .text()
+            .contains("Main's log is read through a Floti window: "),
+        "{alone:?}"
+    );
+    host.stop(HostStopReason::Stop).await;
+}

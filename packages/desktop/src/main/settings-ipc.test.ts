@@ -141,6 +141,7 @@ describe('settings over IPC', () => {
       plugins: { pushTheme: vi.fn() } as never,
       localHost: {} as never,
       ownData: {} as never,
+      mainLog: {} as never,
       rendererReady: () => undefined,
       walkthrough,
       hostSettingsChanged

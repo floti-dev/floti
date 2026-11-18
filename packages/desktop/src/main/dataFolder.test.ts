@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { realDataDirFor } from '../../scripts/isolate.mjs'
-import { flotiDataDirFor, userConfigDirFor } from './dataFolder'
+import { flotiDataDirFor, flotiLogsDirFor, userConfigDirFor } from './dataFolder'
 
 /** The desktop's data folder on each OS (design I12), and the user's config folder. */
 
@@ -19,6 +19,16 @@ describe("Floti's data folder on each OS", () => {
   it('ignores a relative XDG_DATA_HOME or LOCALAPPDATA, as the host does', () => {
     expect(flotiDataDirFor('linux', { XDG_DATA_HOME: 'relative' }, '/home/me')).toBe('/home/me/.local/share/floti/desktop')
     expect(flotiDataDirFor('win32', { LOCALAPPDATA: 'relative' }, 'C:\\Users\\me')).toBe('C:\\Users\\me\\AppData\\Local\\Floti\\desktop')
+  })
+
+  it("puts the installed host's logs where the host's own rule does, FLOTI_LOG_DIR first", () => {
+    expect(flotiLogsDirFor('win32', WIN_ENV, 'C:\\Users\\Some One')).toBe('C:\\Users\\Some One\\AppData\\Local\\Floti\\logs')
+    expect(flotiLogsDirFor('darwin', {}, '/Users/some one')).toBe('/Users/some one/Library/Application Support/Floti/logs')
+    expect(flotiLogsDirFor('linux', {}, '/home/some one')).toBe('/home/some one/.local/state/floti')
+    expect(flotiLogsDirFor('linux', { XDG_STATE_HOME: '/state home' }, '/home/me')).toBe('/state home/floti')
+    expect(flotiLogsDirFor('linux', { XDG_STATE_HOME: 'relative' }, '/home/me')).toBe('/home/me/.local/state/floti')
+    expect(flotiLogsDirFor('linux', { FLOTI_LOG_DIR: '/moved logs' }, '/home/me')).toBe('/moved logs')
+    expect(flotiLogsDirFor('win32', { FLOTI_LOG_DIR: 'relative' }, 'C:\\Users\\me')).toBe('C:\\Users\\me\\AppData\\Local\\Floti\\logs')
   })
 
   it('is the same folder the scripts name', () => {

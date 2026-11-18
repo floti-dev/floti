@@ -12,6 +12,15 @@
 //! in a terminal (`ssh build-box floti connect`, or the command followed by
 //! `floti connect`).
 //!
+//! Of this computer's host, once it answers, it reports how it stands, one
+//! fact a line (`This PC: <fact>`): its version and protocol, its folders,
+//! each agent CLI against its tested range and its sign-in, each plugin with
+//! its load state and error, and the agent limits. It asks the host for them
+//! (`app:info`, `setup:status`, `plugins:list`, `settings:read`) and says
+//! them through [`crate::status`], as `desktop_status` does, so the two never
+//! say a thing two ways. None of them is a problem; one it could not ask is
+//! said as a line too.
+//!
 //! Beside this computer's host it reports each problem it finds on this
 //! computer, one line each with the line that fixes it
 //! (`This PC: <problem> | fix: <line>`), and each thing it could not tell,
@@ -40,8 +49,12 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use floti_protocol::BackendId;
+use floti_protocol::channel::RequestChannel;
 use floti_protocol::channels::host::HostPing;
-use floti_protocol::message::ClientKind;
+use floti_protocol::channels::plugins::PluginsList;
+use floti_protocol::channels::workspace::{ReadAppInfo, ReadSettings, ReadSetupStatus};
+use floti_protocol::message::{ClientKind, ErrorReply, Welcome};
 use floti_protocol::noise::KeyPair;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinSet;
@@ -53,6 +66,7 @@ use crate::platform::folders::{self, Folders, UserEnv};
 use crate::platform::private_files::{Native as NativeFiles, PrivateFiles};
 use crate::platform::wsl::{self, WslSide, distro_name_problem};
 use crate::server::{host_public_key, local_endpoint};
+use crate::status::{self, HostStatus, StatusFolders, StatusParts};
 use crate::this_computer::{self, Finding};
 
 /// `-d <distro> --`: what follows `wsl.exe` to run a line in `distro`.
@@ -355,7 +369,7 @@ async fn check(
     here: impl FnOnce() -> Vec<Finding> + Send + 'static,
 ) -> Vec<Line> {
     let mut checks = JoinSet::new();
-    checks.spawn(async move { (0, vec![check_local(&folders).await]) });
+    checks.spawn(async move { (0, check_local(&folders).await) });
     checks.spawn(async move {
         let findings = tokio::task::spawn_blocking(here)
             .await
@@ -394,10 +408,13 @@ fn finding_line(finding: &Finding) -> Option<Line> {
     })
 }
 
-async fn check_local(folders: &Folders) -> Line {
-    let not_answering = |why: &str| Line {
-        text: format!("{THIS_PC}: does not answer: {why}"),
-        well: false,
+/// This computer's host: whether it answers, then how it stands.
+async fn check_local(folders: &Folders) -> Vec<Line> {
+    let not_answering = |why: &str| {
+        vec![Line {
+            text: format!("{THIS_PC}: does not answer: {why}"),
+            well: false,
+        }]
     };
     let host = match host_public_key(&folders.data) {
         Ok(Some(host)) => host,
@@ -410,18 +427,88 @@ async fn check_local(folders: &Folders) -> Line {
     };
     let endpoint = local_endpoint(folders);
     let reached = tokio::time::timeout(LOCAL_DEADLINE, async {
-        let connection = client::connect(&endpoint, &device, &host).await?;
-        ping(connection).await
+        let mut connection = client::connect(&endpoint, &device, &host).await?;
+        let (welcome, answer) = timed_ping(&mut connection).await?;
+        let standing = ask_status(&mut connection, &welcome).await;
+        connection.close().await;
+        Ok::<_, ClientError>((answer, standing))
     })
     .await;
     match reached {
-        Ok(Ok(answer)) => answer.line(THIS_PC),
+        Ok(Ok((answer, standing))) => {
+            let mut lines = vec![answer.line(THIS_PC)];
+            lines.extend(status_lines(THIS_PC, standing));
+            lines
+        }
         Ok(Err(ClientError::Unreachable { .. })) => {
             not_answering("no Floti host is running on this computer.")
         }
         Ok(Err(err)) => not_answering(&err.to_string()),
         Err(_) => not_answering(&format!("it did not answer within {LOCAL_DEADLINE:?}.")),
     }
+}
+
+/// How the host on `connection`, which welcomed us with `welcome`, stands,
+/// from what it serves every client, or why it could not be asked.
+async fn ask_status(connection: &mut Connection, welcome: &Welcome) -> Result<HostStatus, String> {
+    let app = asked::<ReadAppInfo>(connection, 2).await?;
+    let setup = asked::<ReadSetupStatus>(connection, 3).await?;
+    let plugins = asked::<PluginsList>(connection, 4).await?;
+    let settings = asked::<ReadSettings>(connection, 5).await?;
+    let backend_name = |id: &str| {
+        welcome
+            .backend(&BackendId::new(id))
+            .map(|backend| backend.name.clone())
+    };
+    let logs = Path::new(&app.log_file)
+        .parent()
+        .map_or_else(String::new, |logs| logs.display().to_string());
+    Ok(status::host_status(&StatusParts {
+        version: &welcome.host_version,
+        protocol: welcome.protocol.to_string(),
+        folders: StatusFolders {
+            data: app.data_dir,
+            config: None,
+            logs,
+            host_log: app.log_file,
+        },
+        setup: &setup,
+        backend_name: &backend_name,
+        plugins: &plugins,
+        settings: &settings,
+        tool_families: None,
+    }))
+}
+
+/// `C`'s answer from the host on `connection`, or why there is none.
+async fn asked<C: RequestChannel>(
+    connection: &mut Connection,
+    id: u64,
+) -> Result<C::Response, String>
+where
+    C::Request: Default,
+{
+    match connection.request::<C>(id, &C::Request::default()).await {
+        Ok(Ok(answer)) => Ok(answer),
+        Ok(Err(ErrorReply { message, .. })) => Err(format!("{} was refused: {message}", C::NAME)),
+        Err(err) => Err(format!("{} was not answered: {err}", C::NAME)),
+    }
+}
+
+/// `standing` as lines about `name`, none of them a problem: each fact, or
+/// that it could not be asked and why.
+fn status_lines(name: &str, standing: Result<HostStatus, String>) -> Vec<Line> {
+    let texts = match standing {
+        Ok(status) => status::lines(&status),
+        Err(why) => vec![format!("could not ask how it stands: {why}")],
+    };
+    texts
+        .into_iter()
+        .map(|text| Line {
+            text: format!("{name}: {text}"),
+            well: true,
+        })
+        .collect()
 }
 
 async fn check_remote(host: &RecordedHost) -> Line {
@@ -487,16 +574,24 @@ impl Answer {
 
 /// Says `hello` on `connection`, times one `host:ping`, and closes it.
 async fn ping(mut connection: Connection) -> Result<Answer, ClientError> {
+    let answered = timed_ping(&mut connection).await;
+    connection.close().await;
+    answered.map(|(_, answer)| answer)
+}
+
+/// Says `hello` on `connection` and times one `host:ping`: the welcome and
+/// what the host said.
+async fn timed_ping(connection: &mut Connection) -> Result<(Welcome, Answer), ClientError> {
     let welcome = connection.say_hello(CLIENT_NAME, ClientKind::Tui).await?;
     let sent = Instant::now();
     let answered = connection.request::<HostPing>(1, &()).await?;
     let round_trip = sent.elapsed();
-    connection.close().await;
     answered.map_err(|refused| ClientError::Refused(refused.message))?;
-    Ok(Answer {
-        version: welcome.host_version,
+    let answer = Answer {
+        version: welcome.host_version.clone(),
         round_trip,
-    })
+    };
+    Ok((welcome, answer))
 }
 
 /// Says `why` on standard error, as one line, and fails.
@@ -569,6 +664,17 @@ mod tests {
         assert!(unknown.well);
 
         assert!(finding_line(&Finding::Fine).is_none());
+    }
+
+    #[test]
+    fn how_the_host_stands_is_said_line_by_line_and_none_is_a_problem() {
+        let refused = status_lines(THIS_PC, Err("setup:status was refused: no".to_owned()));
+        assert_eq!(refused.len(), 1);
+        assert_eq!(
+            refused[0].text,
+            "This PC: could not ask how it stands: setup:status was refused: no"
+        );
+        assert!(refused[0].well);
     }
 
     #[test]

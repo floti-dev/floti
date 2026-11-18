@@ -27,6 +27,7 @@ import { updateSettings, type Services } from './services'
 import type { WorkspaceService } from './host/workspace'
 import { registerConfirmAnswers, showExitNotification, showNeedsYouNotification } from './host/confirm'
 import { isClientOnly } from '../shared/host/protocol'
+import { TAIL_MOST, type MainLog } from './mainLog'
 import type {
   EventChannel,
   EventPayload,
@@ -150,6 +151,8 @@ export interface IpcContext {
   localHost: LocalHostControl
   /** The copy of the desktop's own database into the local host (`host/own-data.ts`): its state answers `ownData:state`. */
   ownData: OwnDataCopy
+  /** Main's own log, `main.log` (`mainLog.ts`): its latest lines answer `ownLog:tail`. */
+  mainLog: Pick<MainLog, 'path' | 'tail'>
   /** Called when the renderer reports it has mounted. */
   rendererReady: () => void
   /**
@@ -360,6 +363,13 @@ export function registerIpc(ctx: IpcContext): void {
     'forwards:read': () => ctx.forwards.list(),
 
     'ownApp:info': () => ownAppInfo(),
+    'ownLog:tail': async ({ lines, word }) => ({
+      path: ctx.mainLog.path,
+      lines: await ctx.mainLog.tail(
+        Number.isInteger(lines) ? lines : TAIL_MOST,
+        typeof word === 'string' ? word : undefined
+      )
+    }),
     'walkthrough:openShell': () => ctx.walkthrough.openShell(),
     'walkthrough:open': ({ step }) => ctx.walkthrough.open(step),
     'ownData:state': () => ctx.ownData.state(),

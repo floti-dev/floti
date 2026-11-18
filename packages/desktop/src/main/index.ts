@@ -32,6 +32,8 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { emit, pushTheme, registerIpc } from './ipc'
 import { createClipboardText } from './clipboard'
 import { appMode, dataDir, initDataDir, themesDir } from './paths'
+import { createMainLog, startLine, teeConsole } from './mainLog'
+import { hostLogsFolder } from './host/launcher'
 import { createThemeService } from './themes'
 import { activePty, killPty, spawnPty, windowsBuildNumber } from './pty'
 import { adoptExistingProfile, createServices, updateSettings, type Services } from './services'
@@ -152,6 +154,18 @@ if (mode !== 'app') {
 }
 
 initDataDir()
+
+/**
+ * Main's log, `main.log` beside the host's `host.log` (`mainLog.ts`): from
+ * here on, what main prints is kept there too, so the installed app, whose
+ * console nobody sees, keeps it.
+ */
+const mainLog = createMainLog(
+  hostLogsFolder({ appMode, dataDir }, { platform: process.platform, env: process.env, home: homedir() }),
+  { onFailure: (error) => console.warn(`main.log is not written from here on: ${error.message}`) }
+)
+teeConsole(mainLog)
+mainLog.write(startLine(app.getVersion(), new Date(), process.pid))
 
 /**
  * The scheme HTML artifacts are served on, declared before the app is ready
@@ -683,6 +697,7 @@ function startApp(options: AppOptions = {}): void {
     themes,
     plugins,
     ownData: desktopHost.ownData,
+    mainLog,
     localHost: {
       sessionCount: async () => {
         const rows = await (await desktopHost.link.connection()).request('session:list', null)
