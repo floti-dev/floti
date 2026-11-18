@@ -5,7 +5,8 @@ import { DEFAULT_SETTINGS, type DetectedShell } from '@floti/core/types'
 import { SettingsPane, type SettingsPaneProps, type TerminalSettings } from './SettingsPane'
 
 /**
- * The Settings pane's Terminal group, rendered from props. Other groups have files of their own.
+ * The Settings pane's Terminal group, and the shell for project panes in
+ * Programs, rendered from props. Other groups have files of their own.
  */
 
 const PWSH = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
@@ -21,7 +22,6 @@ const TERMINAL: TerminalSettings = {
   terminalCursorStyle: DEFAULT_SETTINGS.terminalCursorStyle,
   terminalCursorBlink: DEFAULT_SETTINGS.terminalCursorBlink,
   terminalScrollback: DEFAULT_SETTINGS.terminalScrollback,
-  terminalShell: DEFAULT_SETTINGS.terminalShell,
   projectShellHeightPct: DEFAULT_SETTINGS.projectShellHeightPct
 }
 
@@ -68,6 +68,8 @@ function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProp
     terminal: TERMINAL,
     onTerminalChange: vi.fn(),
     terminalFontStack: '"Cascadia Mono", "SF Mono", Menlo, Consolas, ui-monospace, monospace',
+    terminalShell: DEFAULT_SETTINGS.terminalShell,
+    onTerminalShellChange: vi.fn(),
     shells: SHELLS,
     onLocateShell: vi.fn(),
     onShellPath: vi.fn(async () => null),
@@ -228,11 +230,13 @@ describe('the Terminal group', () => {
       [{ terminalScrollback: 500 }]
     ])
   })
+})
 
+describe('Programs: the shell for project panes', () => {
   it('picks the default shell for project panes, or leaves it to detection', async () => {
     const user = userEvent.setup()
-    const props = renderPane()
-    const picker = within(group('Terminal')).getByRole('combobox', { name: 'Default shell' })
+    const props = renderPane({ section: 'programs' })
+    const picker = within(group('Shell for project panes')).getByRole('combobox', { name: 'Default shell' })
     expect(within(picker).getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Detect automatically',
       'pwsh.exe - PowerShell 7',
@@ -242,25 +246,23 @@ describe('the Terminal group', () => {
     await user.selectOptions(picker, 'bash.exe - Bash')
     await user.selectOptions(picker, 'Detect automatically')
 
-    expect(vi.mocked(props.onTerminalChange).mock.calls).toEqual([
-      [{ terminalShell: BASH }],
-      [{ terminalShell: null }]
-    ])
+    expect(vi.mocked(props.onTerminalShellChange).mock.calls).toEqual([[BASH], [null]])
+    expect(props.onTerminalChange).not.toHaveBeenCalled()
   })
 
   it('keeps a shell chosen by hand in the picker, selected', () => {
     const chosen = 'D:\\Tools\\nu.exe'
-    renderPane({ terminal: { ...TERMINAL, terminalShell: chosen } })
+    renderPane({ section: 'programs', terminalShell: chosen })
 
-    const picker = within(group('Terminal')).getByRole('combobox', { name: 'Default shell' })
+    const picker = within(group('Shell for project panes')).getByRole('combobox', { name: 'Default shell' })
     expect(within(picker).getByRole('option', { name: 'nu.exe - Chosen by you' })).toHaveProperty('selected', true)
   })
 
   it('hands over a typed shell path, trimmed, and clears the field once it is kept', async () => {
     const user = userEvent.setup()
     const alias = 'C:\\Users\\someone\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'
-    const props = renderPane()
-    const terminal = within(group('Terminal'))
+    const props = renderPane({ section: 'programs' })
+    const terminal = within(group('Shell for project panes'))
     const field = terminal.getByRole('textbox', { name: 'Shell path' })
     expect(terminal.getByRole('button', { name: 'Use' })).toHaveProperty('disabled', true)
 
@@ -276,8 +278,8 @@ describe('the Terminal group', () => {
     const user = userEvent.setup()
     const missing = 'D:\\gone\\nu.exe'
     const onShellPath = vi.fn(async (path: string) => (path === missing ? `Nothing is at ${missing}.` : null))
-    renderPane({ onShellPath })
-    const terminal = within(group('Terminal'))
+    renderPane({ section: 'programs', onShellPath })
+    const terminal = within(group('Shell for project panes'))
     const field = terminal.getByRole('textbox', { name: 'Shell path' })
 
     await user.type(field, missing)
@@ -292,5 +294,12 @@ describe('the Terminal group', () => {
     await user.type(field, 'D:\\tools\\nu.exe{Enter}')
     expect(onShellPath).toHaveBeenLastCalledWith('D:\\tools\\nu.exe')
     await vi.waitFor(() => expect(field).toHaveProperty('value', ''))
+  })
+})
+
+describe('the Terminal group without the shell', () => {
+  it('has no shell row: the shell for project panes is a host’s, in Programs', () => {
+    renderPane()
+    expect(within(group('Terminal')).queryByRole('combobox', { name: 'Default shell' })).toBeNull()
   })
 })

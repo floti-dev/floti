@@ -6,8 +6,10 @@ import { DEFAULT_SETTINGS, settingEntry } from '@floti/core/types'
 import { SettingsPane, type SettingsPaneProps } from './SettingsPane'
 
 /**
- * The settings pane's Agents section: whether sessions can start agents, and
- * the four limits on a family. The other sections are tested in their own files.
+ * The settings pane's Agents section (the host's agents and the limits on a
+ * family), the Tools section's four choices, and the tick in Sessions that
+ * shows children in their parent's tab. The other sections are tested in
+ * their own files.
  */
 
 function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProps {
@@ -57,11 +59,12 @@ function paneProps(overrides: Partial<SettingsPaneProps> = {}): SettingsPaneProp
       terminalCursorStyle: s.terminalCursorStyle,
       terminalCursorBlink: s.terminalCursorBlink,
       terminalScrollback: s.terminalScrollback,
-      terminalShell: s.terminalShell,
       projectShellHeightPct: s.projectShellHeightPct
     },
     onTerminalChange: vi.fn(),
     terminalFontStack: 'monospace',
+    terminalShell: s.terminalShell,
+    onTerminalShellChange: vi.fn(),
     shells: [],
     onLocateShell: vi.fn(),
     onShellPath: vi.fn(async () => null),
@@ -159,21 +162,24 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}): SettingsPanePro
   return props
 }
 
+const OVERVIEW = { count: 5, hostName: 'This PC', folder: '~/.config/floti/agents', onOpen: vi.fn() }
+
 const group = (): HTMLElement => screen.getByRole('region', { name: 'Agents' })
+const tools = (host = 'This PC'): HTMLElement => screen.getByRole('region', { name: `What sessions on ${host} get` })
 const limits = (): HTMLElement => screen.getByRole('region', { name: 'Limits' })
 const limit = (name: string): HTMLInputElement =>
   within(limits()).getByRole('textbox', { name }) as HTMLInputElement
 
-describe('SettingsPane - Agents', () => {
-  it('shows its three choices, each a tick with its sentence beside it, and nothing else in the group', () => {
-    renderPane()
+describe('SettingsPane - Tools', () => {
+  it('shows its four choices, each a tick with its sentence beside it, naming the host', () => {
+    renderPane({ section: 'tools' })
 
-    const rows = [...group().querySelectorAll('label')]
-    expect(rows).toHaveLength(3)
+    const rows = [...tools().querySelectorAll('label')]
     expect(rows.map((row) => row.querySelector('input[type="checkbox"]')?.getAttribute('aria-label'))).toEqual([
-      'Sessions can start agents',
+      'Let Claude see the other sessions',
       "Sessions can use Floti's window",
-      "Show children in their parent's tab"
+      'Let Claude drive the browser',
+      'Sessions can start agents'
     ])
     // The tick leads the row and the text follows it, so it sits to the left of its words.
     for (const row of rows) {
@@ -182,76 +188,116 @@ describe('SettingsPane - Agents', () => {
       expect(tick.compareDocumentPosition(words) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(row.firstElementChild?.contains(tick)).toBe(true)
     }
-    // Each label and sentence is the settings table's, which the floti-desktop tools read too.
-    expect(rows.map((row) => row.textContent)).toEqual(
-      (['sessionAgents', 'desktopMcp', 'showChildrenInParentTab'] as const).map(
-        (key) => `${settingEntry(key).label}${settingEntry(key).description}`
-      )
+    // Each label is the settings table's, which the floti-desktop tools read too.
+    for (const [row, key] of rows.map((row, at) => [row, (['sessionMcp', 'desktopMcp', 'browserMcp', 'sessionAgents'] as const)[at]!] as const)) {
+      expect(row.textContent?.startsWith(settingEntry(key).label)).toBe(true)
+    }
+    expect(rows[3]?.textContent).toBe(
+      'Sessions can start agentsSessions started on This PC get the floti-agents tools and floti agent, within the limits in Agents. A profile can turn it off for its own sessions.'
     )
-    expect(rows[0]?.textContent).toBe(
-      'Sessions can start agentsEvery session you start gets the floti-agents tools and floti agent. A profile can turn it off for its own sessions.'
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Tools')
+    expect(screen.getByText('This PC', { selector: '[data-settings-host-line] span' })).toBeTruthy()
+    expect(within(tools()).queryAllByRole('textbox')).toHaveLength(0)
+  })
+
+  it('says a choice that is off is off on that host, by name', () => {
+    renderPane({
+      section: 'tools',
+      host: { name: 'buildbox', remote: true, unknown: null },
+      sessionAgents: false
+    })
+    expect(tools('buildbox').textContent).toContain(
+      'Off on buildbox. Sessions started there get no floti-agents tools and no floti agent, whichever window started them.'
     )
-    // No limit field and no hint of the group's own in it.
-    expect(within(group()).queryAllByRole('textbox')).toHaveLength(0)
-    expect(group().querySelector('header p')).toBeNull()
+    expect(document.querySelector('[data-settings-host-line="buildbox"]')?.textContent).toBe(
+      'On buildbox. Every window attached to it shows the same values.'
+    )
   })
 
-  it('opens with a row naming how many agents the host has, with Open Agents', async () => {
-    const onOpen = vi.fn()
-    renderPane({ agentsOverview: { count: 5, hostName: 'This PC', folder: '~/.config/floti/agents', onOpen } })
-    expect(within(group()).getByText('5 agents on This PC')).toBeTruthy()
-    expect(within(group()).getByText(/Kept as files in ~\/\.config\/floti\/agents\./)).toBeTruthy()
-    await userEvent.click(within(group()).getByRole('button', { name: 'Open Agents' }))
-    expect(onOpen).toHaveBeenCalledOnce()
-  })
-
-  it('keeps the choice to show children in their parent’s tab, on by default and kept for this device', async () => {
-    const props = renderPane()
-    const tick = within(group()).getByRole('checkbox', { name: "Show children in their parent's tab" }) as HTMLInputElement
-    expect(tick.checked).toBe(true)
-    await userEvent.click(tick)
-    expect(props.onShowChildrenInParentTabChange).toHaveBeenCalledWith(false)
-    expect(tick.checked).toBe(false)
-    cleanup()
-
-    const off = renderPane({ showChildrenInParentTab: false })
-    const offTick = within(group()).getByRole('checkbox', { name: "Show children in their parent's tab" }) as HTMLInputElement
-    expect(offTick.checked).toBe(false)
-    await userEvent.click(offTick)
-    expect(off.onShowChildrenInParentTabChange).toHaveBeenCalledWith(true)
-  })
-
-  it('keeps the choice to let sessions use Floti’s window, on by default and told to the host', async () => {
-    const props = renderPane()
-    const tick = within(group()).getByRole('checkbox', { name: "Sessions can use Floti's window" }) as HTMLInputElement
+  it('keeps the choice to let sessions use Floti’s window, on by default', async () => {
+    const props = renderPane({ section: 'tools' })
+    const tick = within(tools()).getByRole('checkbox', { name: "Sessions can use Floti's window" }) as HTMLInputElement
     expect(tick.checked).toBe(true)
     await userEvent.click(tick)
     expect(props.onDesktopMcpChange).toHaveBeenCalledWith(false)
     cleanup()
 
-    const off = renderPane({ desktopMcp: false })
-    const offTick = within(group()).getByRole('checkbox', { name: "Sessions can use Floti's window" }) as HTMLInputElement
+    const off = renderPane({ section: 'tools', desktopMcp: false })
+    const offTick = within(tools()).getByRole('checkbox', { name: "Sessions can use Floti's window" }) as HTMLInputElement
     expect(offTick.checked).toBe(false)
     await userEvent.click(offTick)
     expect(off.onDesktopMcpChange).toHaveBeenCalledWith(true)
   })
 
   it('a tick is also switched by pressing its words', async () => {
-    const props = renderPane()
-    await userEvent.click(within(group()).getByText('Sessions can start agents', { selector: 'span.block' }))
+    const props = renderPane({ section: 'tools' })
+    await userEvent.click(within(tools()).getByText('Sessions can start agents', { selector: 'span.block' }))
     expect(props.onSessionAgentsChange).toHaveBeenCalledWith(false)
   })
 
-  it('S16: shows Sessions can start agents and each limit with its default', () => {
+  it('S16: keeps the choice to let sessions start agents', async () => {
+    const props = renderPane({ section: 'tools' })
+    const tick = within(tools()).getByRole('checkbox', { name: 'Sessions can start agents' }) as HTMLInputElement
+    expect(tick.checked).toBe(true)
+    await userEvent.click(tick)
+    expect(props.onSessionAgentsChange).toHaveBeenCalledWith(false)
+    cleanup()
+
+    const off = renderPane({ section: 'tools', sessionAgents: false })
+    await userEvent.click(within(tools()).getByRole('checkbox', { name: 'Sessions can start agents' }))
+    expect(off.onSessionAgentsChange).toHaveBeenCalledWith(true)
+  })
+
+  it('writes the other sessions and the browser choices from their ticks', async () => {
+    const props = renderPane({ section: 'tools' })
+    await userEvent.click(within(tools()).getByRole('checkbox', { name: 'Let Claude see the other sessions' }))
+    await userEvent.click(within(tools()).getByRole('checkbox', { name: 'Let Claude drive the browser' }))
+    expect(props.onSessionMcpChange).toHaveBeenCalledWith(false)
+    expect(props.onBrowserMcpChange).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('SettingsPane - Sessions: children in their parent’s tab', () => {
+  it('keeps the choice, on by default and kept for this device, with no host line', async () => {
+    const props = renderPane({ section: 'sessions' })
+    const sessions = screen.getByRole('region', { name: 'Sessions' })
+    const tick = within(sessions).getByRole('checkbox', { name: "Show children in their parent's tab" }) as HTMLInputElement
+    expect(tick.checked).toBe(true)
+    await userEvent.click(tick)
+    expect(props.onShowChildrenInParentTabChange).toHaveBeenCalledWith(false)
+    expect(tick.checked).toBe(false)
+    expect(document.querySelector('[data-settings-host-line]')).toBeNull()
+    cleanup()
+
+    const off = renderPane({ section: 'sessions', showChildrenInParentTab: false })
+    const offTick = within(screen.getByRole('region', { name: 'Sessions' })).getByRole('checkbox', {
+      name: "Show children in their parent's tab"
+    }) as HTMLInputElement
+    expect(offTick.checked).toBe(false)
+    await userEvent.click(offTick)
+    expect(off.onShowChildrenInParentTabChange).toHaveBeenCalledWith(true)
+  })
+})
+
+describe('SettingsPane - Agents', () => {
+  it('opens with a row naming how many agents the host has, with Open Agents', async () => {
+    const onOpen = vi.fn()
+    renderPane({ agentsOverview: { ...OVERVIEW, onOpen } })
+    expect(within(group()).getByText('5 agents on This PC')).toBeTruthy()
+    expect(within(group()).getByText(/Kept as files in ~\/\.config\/floti\/agents\./)).toBeTruthy()
+    await userEvent.click(within(group()).getByRole('button', { name: 'Open Agents' }))
+    expect(onOpen).toHaveBeenCalledOnce()
+  })
+
+  it('says the host Settings shows enforces the limits', () => {
+    renderPane({ host: { name: 'buildbox', remote: true, unknown: null } })
+    expect(limits().textContent).toContain('buildbox enforces each of these whether or not a window is open.')
+  })
+
+  it('S16: shows each limit with its default', () => {
     renderPane()
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Agents')
-    const tick = within(group()).getByRole('checkbox', { name: 'Sessions can start agents' }) as HTMLInputElement
-    expect(tick.checked).toBe(true)
-    expect(group().textContent).toContain(
-      'Every session you start gets the floti-agents tools and floti agent. A profile can turn it off for its own sessions.'
-    )
-
     expect(limit('Children per parent').value).toBe('4')
     expect(limit('Command children per parent').value).toBe('4')
     expect(limit('Agent sessions per host').value).toBe('8')
@@ -261,7 +307,6 @@ describe('SettingsPane - Agents', () => {
 
   it('S16: shows what the settings hold when they are not the defaults', () => {
     renderPane({
-      sessionAgents: false,
       agentLimits: {
         agentChildrenPerParent: 6,
         agentCommandsPerParent: 9,
@@ -270,24 +315,11 @@ describe('SettingsPane - Agents', () => {
         agentStartsPerParent: 40
       }
     })
-    const tick = within(group()).getByRole('checkbox', { name: 'Sessions can start agents' }) as HTMLInputElement
-    expect(tick.checked).toBe(false)
     expect(limit('Children per parent').value).toBe('6')
     expect(limit('Command children per parent').value).toBe('9')
     expect(limit('Agent sessions per host').value).toBe('12')
     expect(limit('Depth').value).toBe('3')
     expect(limit('Starts per parent').value).toBe('40')
-  })
-
-  it('S16: keeps the choice to let sessions start agents', async () => {
-    const props = renderPane()
-    await userEvent.click(within(group()).getByRole('checkbox', { name: 'Sessions can start agents' }))
-    expect(props.onSessionAgentsChange).toHaveBeenCalledWith(false)
-    cleanup()
-
-    const off = renderPane({ sessionAgents: false })
-    await userEvent.click(within(group()).getByRole('checkbox', { name: 'Sessions can start agents' }))
-    expect(off.onSessionAgentsChange).toHaveBeenCalledWith(true)
   })
 
   it('S16: keeps a value the user enters, for each limit, on Enter', async () => {
@@ -382,8 +414,9 @@ describe('SettingsPane - Agents', () => {
     expect(props.onAgentLimitsChange).toHaveBeenCalledTimes(1)
   })
 
-  it('does not show the sessions group’s rows', () => {
-    renderPane()
-    expect(within(group()).queryByRole('button', { name: 'Stop host' })).toBeNull()
+  it('does not show the sessions group’s rows or the Tools choices', () => {
+    renderPane({ agentsOverview: OVERVIEW })
+    expect(screen.queryByRole('button', { name: 'Stop host' })).toBeNull()
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
   })
 })

@@ -2094,7 +2094,7 @@ function AgentLimitsGroup({
                 max={bounds.max}
                 label={labelOf(key)}
                 {...dataHook(mark, String(limits[key]))}
-                onCommit={(value) => onLimitsChange({ [key]: value })}
+                onCommit={(value) => onLimitsChange({ [key]: value } as Partial<AgentLimitSettings>)}
               />
             )}
           </Row>

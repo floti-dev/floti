@@ -199,4 +199,46 @@ describe('useHostWorkspaces', () => {
     await waitFor(() => expect(result.current.byHost.get(BOX)?.scanError).toBe('Its scan roots could not be read.'))
     expect(result.current.byHost.get(BOX)?.discovery).toBeNull()
   })
+
+  it('keeps build-box’s settings while connected, forgets them when it drops, and hears another window’s change', async () => {
+    const box = remoteBridge(BOX)
+    box.answer('settings:read', () => ({ ...DEFAULT_SETTINGS, sessionAgents: false }))
+    const { result, rerender } = renderHook(({ connected }) => useHostWorkspaces([BOX], connected), {
+      initialProps: { connected: [BOX] }
+    })
+    await waitFor(() => expect(result.current.byHost.get(BOX)?.settings?.sessionAgents).toBe(false))
+
+    // Changed by another window attached to build-box: its settings:changed reaches this one.
+    act(() => box.emit('settings:changed', { ...DEFAULT_SETTINGS, sessionAgents: true }))
+    expect(result.current.byHost.get(BOX)?.settings?.sessionAgents).toBe(true)
+
+    // Out of reach: Unknown, never what it last said.
+    rerender({ connected: [] })
+    expect(result.current.byHost.get(BOX)?.settings).toBeNull()
+  })
+
+  it('writes a setting build-box keeps through its own bridge only, and adopts what it answers', async () => {
+    const box = remoteBridge(BOX)
+    const { result } = renderHook(() => useHostWorkspaces([BOX], [BOX]))
+    await waitFor(() => expect(result.current.byHost.get(BOX)?.settings).not.toBeNull())
+    box.clearRecords()
+
+    let refused: string | null = 'unset'
+    await act(async () => {
+      refused = await result.current.writeSettings(BOX, { agentDepth: 3 })
+    })
+    expect(refused).toBeNull()
+    expect(box.invoked('settings:write')).toEqual([{ agentDepth: 3 }])
+    expect(result.current.byHost.get(BOX)?.settings?.agentDepth).toBe(3)
+    expect(bridge.invocations).toEqual([])
+
+    box.answer('settings:write', () => {
+      throw new Error('build-box refused it.')
+    })
+    await act(async () => {
+      refused = await result.current.writeSettings(BOX, { agentDepth: 9 })
+    })
+    expect(refused).toBe('build-box refused it.')
+    expect(result.current.byHost.get(BOX)?.settings?.agentDepth).toBe(3)
+  })
 })

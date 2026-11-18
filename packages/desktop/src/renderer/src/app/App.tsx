@@ -5324,218 +5324,218 @@ export function App(): JSX.Element {
       ? undefined
       : hostWork.byHost.get(settingsHost);
     return (
-    <SettingsPane
-      section={settingsSection}
-      host={settingsHostView}
-      onShowSection={(section) => setSettingsSection(section)}
-      agentsOverview={{
-        count: settingsAgents.listing?.agents.length ?? null,
-        hostName: hostName(settingsHost),
-        folder: settingsAgents.listing?.folder ?? null,
-        onOpen: () => {
-          showHostOn("agents", settingsHost);
-          setSidebarView("agents");
-          setSidebarHidden(false);
-        },
-      }}
-      status={settingsHostLocal ? setup.status : settingsClaude.status}
-      statusError={
-        settingsHostLocal ? setup.statusError : settingsClaude.statusError
-      }
-      checking={settingsHostLocal ? setup.checking : settingsClaude.checking}
-      onRecheck={settingsHostLocal ? setup.recheck : settingsClaude.recheck}
-      // This PC's picker browses this PC: a host on another computer finds its own.
-      onLocateClaude={settingsHostLocal ? setup.locateClaude : undefined}
-      onClearClaudeOverride={
-        settingsHostLocal
-          ? launcher.clearClaudePath
-          : () => {
-              void writeSettingsOn(settingsHost, { claudePath: null }).then(
-                settingsClaude.recheck,
-              );
-            }
-      }
-      onShowWalkthrough={() => void desktop.invoke("walkthrough:open", { step: 1 })}
-      roots={kept.scanRoots}
-      projectCount={
-        settingsHostLocal
-          ? (discovery?.projects.length ?? 0)
-          : (remoteWork?.discovery?.projects.length ?? 0)
-      }
-      scanning={
-        settingsHostLocal ? launcher.scanning : (remoteWork?.scanning ?? false)
-      }
-      onAddRoot={launcher.addRoot}
-      onAddRootPath={settingsHostLocal ? undefined : addRootOn}
-      onRemoveRoot={
-        settingsHostLocal
-          ? launcher.removeRoot
-          : (path) => {
-              void bridgeFor(settingsHost)
-                .invoke("roots:remove", { path })
-                .then(
-                  () => rescanOn(settingsHost),
-                  () => undefined,
-                );
-            }
-      }
-      pinnedProjects={kept.pinnedProjects}
-      // The same writer the tree's star goes through, so the two surfaces
-      // cannot hold different ideas of what is pinned.
-      onUnpinProject={(path) => treeHostActions.onTogglePin(settingsHost, path)}
-      appearance={{
-        theme: settings?.theme ?? DEFAULT_SETTINGS.theme,
-        themeDark: settings?.themeDark ?? DEFAULT_SETTINGS.themeDark,
-        themeLight: settings?.themeLight ?? DEFAULT_SETTINGS.themeLight,
-        paneGap: settings?.paneGap ?? DEFAULT_SETTINGS.paneGap,
-        cornerRadius: settings?.cornerRadius ?? DEFAULT_SETTINGS.cornerRadius,
-        density: settings?.density ?? DEFAULT_SETTINGS.density,
-        accentColor: settings?.accentColor ?? DEFAULT_SETTINGS.accentColor,
-      }}
-      onAppearanceChange={writeSettings}
-      themes={themes.listing}
-      themeState={themes.state}
-      onOpenThemesFolder={themes.openFolder}
-      onDuplicateTheme={themes.duplicate}
-      updateCheck={kept.updateCheck}
-      onUpdateCheckChange={(updateCheck) => writeHostSettings({ updateCheck })}
-      appVersion={info?.version ?? null}
-      // From `app:info` rather than from a check's result: the states that
-      // produce no result are exactly the ones where somebody wants this link.
-      releasesUrl={info?.releasesUrl ?? null}
-      update={check.view}
-      updateError={check.error}
-      updateChecking={check.checking}
-      onCheckForUpdate={check.check}
-      onInstallUpdate={check.install}
-      onOpenReleases={() => {
-        if (info?.releasesUrl !== undefined)
-          void desktopOpenExternal(info.releasesUrl);
-      }}
-      terminal={terminalSettings}
-      onTerminalChange={launcher.writeSettings}
-      // The stack the terminals are actually running, so the preview well
-      // cannot show a font the panes are not using.
-      terminalFontStack={terminalFontStack(terminalSettings.terminalFontFamily)}
-      terminalShell={kept.terminalShell}
-      onTerminalShellChange={(terminalShell) =>
-        writeHostSettings({ terminalShell })
-      }
-      shells={settingsShells}
-      onLocateShell={settingsHostLocal ? locateShell : undefined}
-      onShellPath={chooseShellPathOn}
-      // What the archive on the host Settings shows holds, kept current by
-      // that host's `archive:changed`.
-      archiveStats={settingsArchiveStats}
-      transcriptArchiveMaxBytes={kept.transcriptArchiveMaxBytes}
-      // The authored templates, so the built-in Starter row does not make an
-      // empty templates folder read as one that has something in it.
-      templateCount={
-        templates.templates.filter((choice) => !choice.builtIn).length
-      }
-      templatesDir={templates.templatesDir}
-      onManageTemplates={templates.openManager}
-      onRevealTemplates={() => launcher.reveal(templates.templatesDir)}
-      browserReach={settings?.browserReach ?? DEFAULT_SETTINGS.browserReach}
-      onBrowserReachChange={(browserReach) => writeSettings({ browserReach })}
-      browserSearch={settings?.browserSearch ?? DEFAULT_SETTINGS.browserSearch}
-      onBrowserSearchChange={(browserSearch) =>
-        writeSettings({ browserSearch })
-      }
-      browserMcp={kept.browserMcp}
-      onBrowserMcpChange={(browserMcp) => writeHostSettings({ browserMcp })}
-      browserMcpLocalOnly={
-        settings?.browserMcpLocalOnly ?? DEFAULT_SETTINGS.browserMcpLocalOnly
-      }
-      onBrowserMcpLocalOnlyChange={(browserMcpLocalOnly) =>
-        writeSettings({ browserMcpLocalOnly })
-      }
-      sessionMcp={kept.sessionMcp}
-      onSessionMcpChange={(sessionMcp) => writeHostSettings({ sessionMcp })}
-      sessionAgents={kept.sessionAgents}
-      onSessionAgentsChange={(sessionAgents) =>
-        writeHostSettings({ sessionAgents })
-      }
-      desktopMcp={kept.desktopMcp}
-      onDesktopMcpChange={(desktopMcp) => writeHostSettings({ desktopMcp })}
-      agentLimits={{
-        agentChildrenPerParent: kept.agentChildrenPerParent,
-        agentCommandsPerParent: kept.agentCommandsPerParent,
-        agentSessionsPerHost: kept.agentSessionsPerHost,
-        agentDepth: kept.agentDepth,
-        agentStartsPerParent: kept.agentStartsPerParent,
-      }}
-      onAgentLimitsChange={(limits) => writeHostSettings(limits)}
-      showChildrenInParentTab={
-        settings?.showChildrenInParentTab ??
-        DEFAULT_SETTINGS.showChildrenInParentTab
-      }
-      onShowChildrenInParentTabChange={(showChildrenInParentTab) =>
-        writeSettings({ showChildrenInParentTab })
-      }
-      restoreWithoutAsking={
-        settings?.restoreWithoutAsking ?? DEFAULT_SETTINGS.restoreWithoutAsking
-      }
-      onRestoreWithoutAskingChange={(restoreWithoutAsking) =>
-        writeSettings({ restoreWithoutAsking })
-      }
-      quitSessions={
-        quitEndsSessions(settings ?? DEFAULT_SETTINGS) ? "end" : "keep"
-      }
-      // Only this PC's entry: a later host's is its own, and Settings keeps it.
-      onQuitSessionsChange={(choice) =>
-        writeSettings({
-          quitSessions: {
-            ...(settings ?? DEFAULT_SETTINGS).quitSessions,
-            [LOCAL_HOST_KEY]: choice,
+      <SettingsPane
+        section={settingsSection}
+        host={settingsHostView}
+        onShowSection={(section) => setSettingsSection(section)}
+        agentsOverview={{
+          count: settingsAgents.listing?.agents.length ?? null,
+          hostName: hostName(settingsHost),
+          folder: settingsAgents.listing?.folder ?? null,
+          onOpen: () => {
+            showHostOn("agents", settingsHost);
+            setSidebarView("agents");
+            setSidebarHidden(false);
           },
-        })
-      }
-      onStopHost={askStopHost}
-      hostLogFile={info?.hostLogFile ?? null}
-      // Each host's own quit choice, Keep them running until set, and where
-      // main's link to it stands.
-      hosts={remoteHosts.map((host) => ({
-        host,
-        quit: quitChoice(currentSettings, host.id),
-        connection: remoteView[host.id]?.connection ?? null,
-      }))}
-      onAddHost={() => setAddingHost(true)}
-      // Forgets it on this device with its quit choice; nothing on it ends.
-      onRemoveHost={(id) =>
-        writeSettings(withoutRemoteHost(currentSettings, id))
-      }
-      onHostQuitChange={(id, choice) =>
-        writeSettings({
-          quitSessions: { ...currentSettings.quitSessions, [id]: choice },
-        })
-      }
-      // Main checks, installs and updates floti there, after the yes the
-      // window asks for; the window never says what to run.
-      hostInstall={hostInstall}
-      // The path the desktop installed floti at there, which every line run there
-      // starts with from now on.
-      onHostInstalled={(id, floti, system) =>
-        writeSettings({
-          hosts: currentSettings.hosts.map((host) =>
-            host.id === id ? { ...host, floti, system } : host,
-          ),
-        })
-      }
-      hostUpdateRequest={hostUpdateRequest}
-      onReconnectHost={(id) => remoteHostLinks.reconnect(id)}
-      localHost={
-        localVersions === null
-          ? null
-          : { versions: localVersions, onRestart: askRestartHost }
-      }
-      devices={devicesSettings}
-      filesWrap={filesWrap}
-      onFilesWrapChange={setFilesWrap}
-      onTranscriptArchiveMaxBytesChange={(transcriptArchiveMaxBytes) =>
-        writeHostSettings({ transcriptArchiveMaxBytes })
-      }
-    />
+        }}
+        status={settingsHostLocal ? setup.status : settingsClaude.status}
+        statusError={
+          settingsHostLocal ? setup.statusError : settingsClaude.statusError
+        }
+        checking={settingsHostLocal ? setup.checking : settingsClaude.checking}
+        onRecheck={settingsHostLocal ? setup.recheck : settingsClaude.recheck}
+        // This PC's picker browses this PC: a host on another computer finds its own.
+        onLocateClaude={settingsHostLocal ? setup.locateClaude : undefined}
+        onClearClaudeOverride={
+          settingsHostLocal
+            ? launcher.clearClaudePath
+            : () => {
+                void writeSettingsOn(settingsHost, { claudePath: null }).then(
+                  settingsClaude.recheck,
+                );
+              }
+        }
+        onShowWalkthrough={() => void desktop.invoke("walkthrough:open", { step: 1 })}
+        roots={kept.scanRoots}
+        projectCount={
+          settingsHostLocal
+            ? (discovery?.projects.length ?? 0)
+            : (remoteWork?.discovery?.projects.length ?? 0)
+        }
+        scanning={
+          settingsHostLocal ? launcher.scanning : (remoteWork?.scanning ?? false)
+        }
+        onAddRoot={launcher.addRoot}
+        onAddRootPath={settingsHostLocal ? undefined : addRootOn}
+        onRemoveRoot={
+          settingsHostLocal
+            ? launcher.removeRoot
+            : (path) => {
+                void bridgeFor(settingsHost)
+                  .invoke("roots:remove", { path })
+                  .then(
+                    () => rescanOn(settingsHost),
+                    () => undefined,
+                  );
+              }
+        }
+        pinnedProjects={kept.pinnedProjects}
+        // The same writer the tree's star goes through, so the two surfaces
+        // cannot hold different ideas of what is pinned.
+        onUnpinProject={(path) => treeHostActions.onTogglePin(settingsHost, path)}
+        appearance={{
+          theme: settings?.theme ?? DEFAULT_SETTINGS.theme,
+          themeDark: settings?.themeDark ?? DEFAULT_SETTINGS.themeDark,
+          themeLight: settings?.themeLight ?? DEFAULT_SETTINGS.themeLight,
+          paneGap: settings?.paneGap ?? DEFAULT_SETTINGS.paneGap,
+          cornerRadius: settings?.cornerRadius ?? DEFAULT_SETTINGS.cornerRadius,
+          density: settings?.density ?? DEFAULT_SETTINGS.density,
+          accentColor: settings?.accentColor ?? DEFAULT_SETTINGS.accentColor,
+        }}
+        onAppearanceChange={writeSettings}
+        themes={themes.listing}
+        themeState={themes.state}
+        onOpenThemesFolder={themes.openFolder}
+        onDuplicateTheme={themes.duplicate}
+        updateCheck={kept.updateCheck}
+        onUpdateCheckChange={(updateCheck) => writeHostSettings({ updateCheck })}
+        appVersion={info?.version ?? null}
+        // From `app:info` rather than from a check's result: the states that
+        // produce no result are exactly the ones where somebody wants this link.
+        releasesUrl={info?.releasesUrl ?? null}
+        update={check.view}
+        updateError={check.error}
+        updateChecking={check.checking}
+        onCheckForUpdate={check.check}
+        onInstallUpdate={check.install}
+        onOpenReleases={() => {
+          if (info?.releasesUrl !== undefined)
+            void desktopOpenExternal(info.releasesUrl);
+        }}
+        terminal={terminalSettings}
+        onTerminalChange={launcher.writeSettings}
+        // The stack the terminals are actually running, so the preview well
+        // cannot show a font the panes are not using.
+        terminalFontStack={terminalFontStack(terminalSettings.terminalFontFamily)}
+        terminalShell={kept.terminalShell}
+        onTerminalShellChange={(terminalShell) =>
+          writeHostSettings({ terminalShell })
+        }
+        shells={settingsShells}
+        onLocateShell={settingsHostLocal ? locateShell : undefined}
+        onShellPath={chooseShellPathOn}
+        // What the archive on the host Settings shows holds, kept current by
+        // that host's `archive:changed`.
+        archiveStats={settingsArchiveStats}
+        transcriptArchiveMaxBytes={kept.transcriptArchiveMaxBytes}
+        // The authored templates, so the built-in Starter row does not make an
+        // empty templates folder read as one that has something in it.
+        templateCount={
+          templates.templates.filter((choice) => !choice.builtIn).length
+        }
+        templatesDir={templates.templatesDir}
+        onManageTemplates={templates.openManager}
+        onRevealTemplates={() => launcher.reveal(templates.templatesDir)}
+        browserReach={settings?.browserReach ?? DEFAULT_SETTINGS.browserReach}
+        onBrowserReachChange={(browserReach) => writeSettings({ browserReach })}
+        browserSearch={settings?.browserSearch ?? DEFAULT_SETTINGS.browserSearch}
+        onBrowserSearchChange={(browserSearch) =>
+          writeSettings({ browserSearch })
+        }
+        browserMcp={kept.browserMcp}
+        onBrowserMcpChange={(browserMcp) => writeHostSettings({ browserMcp })}
+        browserMcpLocalOnly={
+          settings?.browserMcpLocalOnly ?? DEFAULT_SETTINGS.browserMcpLocalOnly
+        }
+        onBrowserMcpLocalOnlyChange={(browserMcpLocalOnly) =>
+          writeSettings({ browserMcpLocalOnly })
+        }
+        sessionMcp={kept.sessionMcp}
+        onSessionMcpChange={(sessionMcp) => writeHostSettings({ sessionMcp })}
+        sessionAgents={kept.sessionAgents}
+        onSessionAgentsChange={(sessionAgents) =>
+          writeHostSettings({ sessionAgents })
+        }
+        desktopMcp={kept.desktopMcp}
+        onDesktopMcpChange={(desktopMcp) => writeHostSettings({ desktopMcp })}
+        agentLimits={{
+          agentChildrenPerParent: kept.agentChildrenPerParent,
+          agentCommandsPerParent: kept.agentCommandsPerParent,
+          agentSessionsPerHost: kept.agentSessionsPerHost,
+          agentDepth: kept.agentDepth,
+          agentStartsPerParent: kept.agentStartsPerParent,
+        }}
+        onAgentLimitsChange={(limits) => writeHostSettings(limits)}
+        showChildrenInParentTab={
+          settings?.showChildrenInParentTab ??
+          DEFAULT_SETTINGS.showChildrenInParentTab
+        }
+        onShowChildrenInParentTabChange={(showChildrenInParentTab) =>
+          writeSettings({ showChildrenInParentTab })
+        }
+        restoreWithoutAsking={
+          settings?.restoreWithoutAsking ?? DEFAULT_SETTINGS.restoreWithoutAsking
+        }
+        onRestoreWithoutAskingChange={(restoreWithoutAsking) =>
+          writeSettings({ restoreWithoutAsking })
+        }
+        quitSessions={
+          quitEndsSessions(settings ?? DEFAULT_SETTINGS) ? "end" : "keep"
+        }
+        // Only this PC's entry: a later host's is its own, and Settings keeps it.
+        onQuitSessionsChange={(choice) =>
+          writeSettings({
+            quitSessions: {
+              ...(settings ?? DEFAULT_SETTINGS).quitSessions,
+              [LOCAL_HOST_KEY]: choice,
+            },
+          })
+        }
+        onStopHost={askStopHost}
+        hostLogFile={info?.hostLogFile ?? null}
+        // Each host's own quit choice, Keep them running until set, and where
+        // main's link to it stands.
+        hosts={remoteHosts.map((host) => ({
+          host,
+          quit: quitChoice(currentSettings, host.id),
+          connection: remoteView[host.id]?.connection ?? null,
+        }))}
+        onAddHost={() => setAddingHost(true)}
+        // Forgets it on this device with its quit choice; nothing on it ends.
+        onRemoveHost={(id) =>
+          writeSettings(withoutRemoteHost(currentSettings, id))
+        }
+        onHostQuitChange={(id, choice) =>
+          writeSettings({
+            quitSessions: { ...currentSettings.quitSessions, [id]: choice },
+          })
+        }
+        // Main checks, installs and updates floti there, after the yes the
+        // window asks for; the window never says what to run.
+        hostInstall={hostInstall}
+        // The path the desktop installed floti at there, which every line run there
+        // starts with from now on.
+        onHostInstalled={(id, floti, system) =>
+          writeSettings({
+            hosts: currentSettings.hosts.map((host) =>
+              host.id === id ? { ...host, floti, system } : host,
+            ),
+          })
+        }
+        hostUpdateRequest={hostUpdateRequest}
+        onReconnectHost={(id) => remoteHostLinks.reconnect(id)}
+        localHost={
+          localVersions === null
+            ? null
+            : { versions: localVersions, onRestart: askRestartHost }
+        }
+        devices={devicesSettings}
+        filesWrap={filesWrap}
+        onFilesWrapChange={setFilesWrap}
+        onTranscriptArchiveMaxBytesChange={(transcriptArchiveMaxBytes) =>
+          writeHostSettings({ transcriptArchiveMaxBytes })
+        }
+      />
     );
   };
 

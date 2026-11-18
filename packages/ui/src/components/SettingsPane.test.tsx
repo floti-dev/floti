@@ -63,7 +63,7 @@ const DISCOVERED: SetupClaudeStatus = {
 
 function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
   const props: SettingsPaneProps = {
-    section: 'general',
+    section: 'programs',
     status: DISCOVERED,
     checking: false,
     onRecheck: vi.fn(),
@@ -99,11 +99,12 @@ function renderPane(overrides: Partial<SettingsPaneProps> = {}) {
       terminalCursorStyle: DEFAULT_SETTINGS.terminalCursorStyle,
       terminalCursorBlink: DEFAULT_SETTINGS.terminalCursorBlink,
       terminalScrollback: DEFAULT_SETTINGS.terminalScrollback,
-      terminalShell: null,
       projectShellHeightPct: DEFAULT_SETTINGS.projectShellHeightPct
     },
     onTerminalChange: vi.fn(),
     terminalFontStack: 'Cascadia Mono, monospace',
+    terminalShell: null,
+    onTerminalShellChange: vi.fn(),
     shells: [],
     onLocateShell: vi.fn(),
     onShellPath: vi.fn(async () => null),
@@ -170,26 +171,33 @@ function fact(container: HTMLElement, label: string): string {
 
 describe('SettingsPane', () => {
   it('opens the walkthrough again from General', async () => {
-    const { props } = renderPane()
+    const { props } = renderPane({ section: 'general' })
     await userEvent.click(within(group('Walkthrough')).getByRole('button', { name: 'Show the walkthrough' }))
     expect(props.onShowWalkthrough).toHaveBeenCalledTimes(1)
   })
 
   it('draws each section on its own: its title, its groups in order, and their controls', () => {
-    const { rerender } = renderPane()
-    const sections: Array<[SettingsSectionId, string, string[]]> = [
-      ['general', 'General', ['Claude CLI', 'Walkthrough']],
-      ['appearance', 'Appearance', ['Appearance']],
-      ['terminal', 'Terminal', ['Terminal']],
-      ['sessions', 'Sessions', ['Sessions']],
-      ['agents', 'Agents', ['Agents', 'Limits']],
-      ['hosts', 'Hosts', ['Hosts']],
-      ['devices', 'Devices', ['Devices']],
-      ['workspace', 'Workspace', ['Workspace', 'Workspace templates']],
-      ['files', 'Files', ['Files']],
-      ['browser', 'Browser', ['Browser']],
-      ['archive', 'Archive', ['Transcript archive']],
-      ['updates', 'Updates', ['Updates']]
+    const { rerender } = renderPane({
+      agentsOverview: { count: 4, hostName: 'This PC', folder: null, onOpen: vi.fn() }
+    })
+    // Each section, its title, its groups, and the caps headings drawn: none
+    // for a section of one group, and none for a first group the title
+    // already introduces (Browser's pane, Agents' overview).
+    const sections: Array<[SettingsSectionId, string, string[], string[]]> = [
+      ['general', 'General', ['Walkthrough'], []],
+      ['appearance', 'Appearance', ['Appearance'], []],
+      ['terminal', 'Terminal', ['Terminal'], []],
+      ['sessions', 'Sessions', ['Sessions'], []],
+      ['browser', 'Browser', ['Browser', 'Claude in this browser'], ['Claude in this browser']],
+      ['files', 'Files', ['Files'], []],
+      ['hosts', 'Hosts', ['Hosts'], []],
+      ['devices', 'Devices', ['Devices'], []],
+      ['programs', 'Programs', ['Claude CLI', 'Shell for project panes'], ['Claude CLI', 'Shell for project panes']],
+      ['tools', 'Tools', ['What sessions on This PC get'], ['What sessions on This PC get']],
+      ['agents', 'Agents', ['Agents', 'Limits'], ['Limits']],
+      ['workspace', 'Workspace', ['Workspace', 'Workspace templates'], ['Workspace', 'Workspace templates']],
+      ['archive', 'Archive', ['Transcript archive'], []],
+      ['updates', 'Updates', ['Updates'], []]
     ]
     // Plugins and Secrets are listed with the rest but drawn by pages of their
     // own (PluginSettings, SecretsSettings), each with its tests.
@@ -226,20 +234,30 @@ describe('SettingsPane', () => {
       Files: [['checkbox', 'Wrap long lines in files']],
       Browser: [
         ['combobox', 'Where the browser pane may go'],
-        ['combobox', 'Search from the address bar'],
-        ['checkbox', 'Let Claude drive the browser'],
-        ['checkbox', 'Confine Claude’s browser tools to this machine']
+        ['combobox', 'Search from the address bar']
+      ],
+      'Claude in this browser': [
+        ['checkbox', 'Hold Claude to localhost'],
+        ['button', 'Floti host › Tools']
       ],
       Sessions: [
-        ['checkbox', 'Let Claude see the other sessions'],
         ['checkbox', 'Resume after a crash without asking'],
+        ['checkbox', "Show children in their parent's tab"],
         ['combobox', 'When you quit Floti'],
         ['button', 'Stop host']
       ],
-      Agents: [
-        ['checkbox', 'Sessions can start agents'],
-        ['checkbox', "Show children in their parent's tab"]
+      'Shell for project panes': [
+        ['combobox', 'Default shell'],
+        ['button', 'Choose…'],
+        ['textbox', 'Shell path']
       ],
+      'What sessions on This PC get': [
+        ['checkbox', 'Let Claude see the other sessions'],
+        ["checkbox", "Sessions can use Floti's window"],
+        ['checkbox', 'Let Claude drive the browser'],
+        ['checkbox', 'Sessions can start agents']
+      ],
+      Agents: [['button', 'Open Agents']],
       Limits: [
         ['textbox', 'Children per parent'],
         ['textbox', 'Agent sessions per host'],
@@ -257,8 +275,8 @@ describe('SettingsPane', () => {
       ],
       'Transcript archive': [['combobox', 'How much of the database the archive may use']]
     }
-    for (const [section, title, groups] of sections) {
-      rerender({ section })
+    for (const [section, title, groups, headings] of sections) {
+      rerender({ section, onShowSection: vi.fn() })
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(title)
       const named = (region: HTMLElement): string | null =>
         region.getAttribute('aria-label') ??
@@ -267,9 +285,7 @@ describe('SettingsPane', () => {
       expect(screen.getAllByRole('region').map(named)).toEqual(groups)
       // A section of one group is that group: its title is the page's, so it
       // draws no heading of its own.
-      expect(screen.queryAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(
-        groups.length === 1 ? [] : groups
-      )
+      expect(screen.queryAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(headings)
       for (const name of groups) {
         for (const [role, label] of controls[name] ?? []) {
           expect(within(group(name)).getByRole(role, { name: label }), `${name}: ${role} ${label}`).toBeTruthy()
