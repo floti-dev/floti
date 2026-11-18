@@ -12,9 +12,17 @@ description: Fixed procedures in Floti - adding an app setting, changing the dat
 2. A validator in `SETTING_VALIDATORS` (`core/src/store/settings.ts`). The map
    is keyed by `keyof AppSettings`, so a key without one does not compile. Add
    its valid and invalid cases to the table in `store.test.ts`.
-3. A row in the matching group of `ui/src/components/SettingsPane.tsx`, with
-   its test.
-4. Only if the value drives something outside the database: a branch in the
+3. Its entry in the settings table (`core/src/settingsTable.ts`): label,
+   description, section, the values it takes, scope (device or per host),
+   what a session may do to it (change, only narrow, or nothing) and whether
+   `hostSettingsFor` tells the host. A setting that decides what agents may
+   reach or do, or what Floti or its sessions do on their own, is
+   narrow-only. State the page does not show goes in
+   `STATE_KEYS` instead. `settingsTable.test.ts` fails until one of the two
+   holds the key, and when the values disagree with the validator.
+4. A row in the matching group of `ui/src/components/SettingsPane.tsx`, its
+   label and hint drawn from the table (`labelOf`, `hintOf`), with its test.
+5. Only if the value drives something outside the database: a branch in the
    `settings:write` handler in `main/ipc.ts`.
 
 Reads are tolerant (unknown keys ignored, bad JSON falls back per key); writes

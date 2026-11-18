@@ -38,6 +38,8 @@ export interface LauncherState {
   reveal: (path: string) => void
   /** Any subset of the settings, for a pane that owns several of them. */
   writeSettings: (patch: Partial<AppSettings>) => void
+  /** The same write, for a caller that waits on it: the settings as they now are, or why it was refused. */
+  saveSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>
 }
 
 /** Turns cached rows into something the tree can render before a scan runs. */
@@ -199,6 +201,14 @@ export function useLauncher(): LauncherState {
    * whole object as the main process now holds it, and a surface that trusted
    * its own patch would drift from a value a validator had rejected.
    */
+  const saveSettings = useCallback(
+    async (patch: Partial<AppSettings>): Promise<AppSettings> => {
+      const next = await desktop.invoke('settings:write', patch)
+      adopt(next)
+      return next
+    },
+    [adopt]
+  )
   const writeSettings = useCallback(
     (patch: Partial<AppSettings>) => {
       void desktop.invoke('settings:write', patch).then(adopt)
@@ -249,6 +259,7 @@ export function useLauncher(): LauncherState {
     setTheme,
     clearClaudePath,
     reveal,
-    writeSettings
+    writeSettings,
+    saveSettings
   }
 }

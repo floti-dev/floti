@@ -1,7 +1,7 @@
 {
   "name": "floti-desktop",
   "path": "/mcp/desktop",
-  "instructions": "These tools open Floti's views, in the window of Floti, the app hosting this session, so you can show the user what you are talking about instead of describing where to find it. What you open appears beside this session's tab and the keyboard stays in the terminal, so the user can keep typing to you. A tab you open is a preview: the next one you open takes its place, unless the user has kept it, so show things one at a time. Floti's views: a file's tab shows a file's text with its changed lines marked, scrolled to a line when you give one - use it to show code you wrote, read or are asking about; the Files view is the sidebar's tree of a project's folders with every changed file marked - use it to show what changed in a folder or where files are; a project's page shows a project at a glance - its git state, its configuration, the skills, agents and commands it gives a session, and its agent worktrees - with a button to start a session in it; History is the palette that searches every past session's conversation, and opens over the window, taking the keyboard until the user closes it; Settings is where the user changes how Floti behaves, one section at a time. Paths may be relative to your own folder, and must be under a folder Floti knows. The same tool runs from your shell as `floti desktop open`, with `--json` for its answer as JSON.",
+  "instructions": "These tools open Floti's views, in the window of Floti, the app hosting this session, so you can show the user what you are talking about instead of describing where to find it. What you open appears beside this session's tab and the keyboard stays in the terminal, so the user can keep typing to you. A tab you open is a preview: the next one you open takes its place, unless the user has kept it, so show things one at a time. Floti's views: a file's tab shows a file's text with its changed lines marked, scrolled to a line when you give one - use it to show code you wrote, read or are asking about; the Files view is the sidebar's tree of a project's folders with every changed file marked - use it to show what changed in a folder or where files are; a project's page shows a project at a glance - its git state, its configuration, the skills, agents and commands it gives a session, and its agent worktrees - with a button to start a session in it; History is the palette that searches every past session's conversation, and opens over the window, taking the keyboard until the user closes it; Settings is where the user changes how Floti behaves, one section at a time. Paths may be relative to your own folder, and must be under a folder Floti knows. desktop_settings lists every one of Floti's settings with what it does, its value, the values it takes and its default, and desktop_set changes one or several by name: use them when the user asks you to change how Floti behaves, such as \"turn off agents\". A setting that decides what agents may reach or do (the tool families' switches, Sessions can start agents, the browser's reach, the agent limits, plugins' switches and the folders Floti scans), or what Floti or its sessions do on their own (updating by itself, address-bar search, keeping sessions running on quit, resuming after a crash without asking), you may narrow but never widen: only the user widens one, in Settings. Every change shows the user a toast naming your session, with Undo. The same tools run from your shell as `floti desktop open`, `floti desktop settings` and `floti desktop set`, with `--json` for an answer as JSON.",
   "tools": [
     {
       "name": "desktop_open",
@@ -49,6 +49,36 @@
           }
         },
         "required": ["view"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "desktop_settings",
+      "readOnly": true,
+      "description": "Lists every one of Floti's settings, as Settings shows them, and plugins' switches: each one's name, label, section, what it does, its value, the values it takes, its default, whether it is kept per host (with each host's own value), and what you may do to it: change it, only narrow it, or nothing (only the user changes it). Changes nothing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "desktop_set",
+      "description": "Changes one or several of Floti's settings by name, through the same save Settings makes, and shows the user a toast naming your session with Undo. changes maps each name desktop_settings lists to its new value, such as {\"sessionAgents\": false}. A setting kept per host, and a plugin's switch, changes on host: your own session's host unless you name another. A value a setting does not take is refused naming the ones it does, and a change that would widen what agents, or Floti on its own, may reach or do is refused saying the user makes it in Settings; either way nothing in the call changes. Use it when the user asks you to change how Floti behaves, such as \"turn off agents\".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "object",
+            "minProperties": 1,
+            "description": "Each setting's name, as desktop_settings lists it, and its new value."
+          },
+          "host": {
+            "type": "string",
+            "description": "For a setting kept per host and a plugin's switch: the host to change it on, by its id in desktop_settings. Your own session's host when left out."
+          }
+        },
+        "required": ["changes"],
         "additionalProperties": false
       }
     }

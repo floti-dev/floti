@@ -6,6 +6,10 @@
 //! schema come from `desktop_tools.json`. `desktop_open` opens one view: a
 //! file's tab at a line, the Files view on a folder, a project's page, the
 //! History palette with a search typed in, or a Settings section.
+//! `desktop_settings` lists Floti's settings and `desktop_set` changes them:
+//! the settings, what each takes and what a session may do to it are the
+//! window's (its settings table), so the host passes those calls on as they
+//! are and checks only their shape.
 //!
 //! **The host has no window.** Each call is relayed ([`DesktopRelay`]) to an
 //! attached client that declared `desktop`, the one the relay chooses for the
@@ -41,7 +45,7 @@ use super::features::{DesktopCaller, DesktopRelay};
 use super::hosted::{Hosted, session_id};
 use crate::agent_config::normalize;
 use crate::agent_tools::{
-    CallToolResult, Caller, ContentBlock, JsonObject, Tool, ToolFamily, ToolFuture,
+    CallToolResult, Caller, ContentBlock, JsonObject, Tool, ToolAnnotations, ToolFamily, ToolFuture,
 };
 use crate::session::SessionId;
 use crate::workspace::roots::{KnownRoot, KnownRoots};
@@ -60,6 +64,9 @@ struct Spec {
     name: String,
     description: String,
     input_schema: JsonObject,
+    /// It changes nothing: listed with `readOnlyHint`.
+    #[serde(default)]
+    read_only: bool,
 }
 
 static TABLE: LazyLock<Table> = LazyLock::new(|| {
@@ -71,9 +78,15 @@ static TABLE: LazyLock<Table> = LazyLock::new(|| {
 pub(crate) const DESKTOP_FAMILY: &str = "floti-desktop";
 
 const DESKTOP_OPEN: &str = "desktop_open";
+const DESKTOP_SETTINGS: &str = "desktop_settings";
+const DESKTOP_SET: &str = "desktop_set";
 
 /// The command that runs `desktop_open` from a session's shell.
 pub(crate) const OPEN_COMMAND: &str = "floti desktop open";
+/// The command that runs `desktop_settings` from a session's shell.
+pub(crate) const SETTINGS_COMMAND: &str = "floti desktop settings";
+/// The command that runs `desktop_set` from a session's shell.
+pub(crate) const SET_COMMAND: &str = "floti desktop set";
 
 /// The answer to a call from a token whose session has not started yet.
 const NO_SESSION_YET: &str = "Floti cannot tell which session this call is from yet - it is still starting. Try again in a moment.";
@@ -163,6 +176,37 @@ impl DesktopTools {
         };
         tool_result(self.relay.call(&caller, DESKTOP_OPEN, arguments).await)
     }
+
+    /// `desktop_settings` and `desktop_set`: checked for their shape and
+    /// passed on to the window as they are, as the caller asked them.
+    async fn pass_on(
+        &self,
+        session: u64,
+        tool: &'static str,
+        arguments: JsonObject,
+    ) -> CallToolResult {
+        if let Err(refused) = settings_shape(tool, &arguments) {
+            return problem(&refused);
+        }
+        let Some(world) = self.world.get().cloned() else {
+            return problem(STILL_STARTING);
+        };
+        let caller = tokio::task::spawn_blocking(move || {
+            let mine = world.session(session)?.ok_or(NO_RECORD)?;
+            Ok::<_, String>(caller_of(world.as_ref(), session, mine))
+        })
+        .await;
+        let caller = match caller {
+            Ok(Ok(caller)) => caller,
+            Ok(Err(refused)) => return problem(&refused),
+            Err(_) => return problem(STILL_STARTING),
+        };
+        let arguments = match to_payload(&arguments) {
+            Ok(arguments) => arguments,
+            Err(err) => return problem(&format!("Floti could not pass that call on: {err}.")),
+        };
+        tool_result(self.relay.call(&caller, tool, arguments).await)
+    }
 }
 
 impl ToolFamily for DesktopTools {
@@ -191,23 +235,39 @@ impl ToolFamily for DesktopTools {
             .tools
             .iter()
             .map(|spec| {
-                Tool::new(
+                let tool = Tool::new(
                     spec.name.clone(),
                     spec.description.clone(),
                     spec.input_schema.clone(),
-                )
+                );
+                if spec.read_only {
+                    tool.with_annotations(ToolAnnotations::new().read_only(true))
+                } else {
+                    tool
+                }
             })
             .collect()
     }
 
-    /// Opening a view changes nothing but what the user's window shows,
-    /// beside the caller's own tab, so it is allowed at launch.
+    /// Every tool is allowed at launch, each named on its own: opening a view
+    /// changes nothing but what the user's window shows, beside the caller's
+    /// own tab; listing the settings changes nothing; and a set can only
+    /// narrow what agents may reach or do, shows the user a toast with Undo,
+    /// and is refused for anything else the window does not allow.
     fn allowed_tools(&self) -> Vec<String> {
-        vec![DESKTOP_OPEN.to_owned()]
+        vec![
+            DESKTOP_OPEN.to_owned(),
+            DESKTOP_SETTINGS.to_owned(),
+            DESKTOP_SET.to_owned(),
+        ]
     }
 
     fn allowed_commands(&self) -> Vec<String> {
-        vec![OPEN_COMMAND.to_owned()]
+        vec![
+            OPEN_COMMAND.to_owned(),
+            SETTINGS_COMMAND.to_owned(),
+            SET_COMMAND.to_owned(),
+        ]
     }
 
     fn call<'a>(&'a self, caller: Caller, name: &'a str, arguments: JsonObject) -> ToolFuture<'a> {
@@ -220,6 +280,8 @@ impl ToolFamily for DesktopTools {
             };
             match name {
                 DESKTOP_OPEN => self.open(session, arguments).await,
+                DESKTOP_SETTINGS => self.pass_on(session, DESKTOP_SETTINGS, arguments).await,
+                DESKTOP_SET => self.pass_on(session, DESKTOP_SET, arguments).await,
                 other => problem(&format!("{} has no tool named {other}.", TABLE.name)),
             }
         })
@@ -371,6 +433,37 @@ fn resolve_open(
             };
             Ok(DesktopOpen::Settings { section })
         }
+    }
+}
+
+/// Whether `arguments` have the shape `tool`'s schema gives them, or the
+/// sentence saying why not. What a setting is called and what it takes are
+/// the window's to judge.
+fn settings_shape(tool: &str, arguments: &JsonObject) -> Result<(), String> {
+    let takes: &[&str] = if tool == DESKTOP_SET {
+        &["changes", "host"]
+    } else {
+        &[]
+    };
+    if let Some(stray) = arguments.keys().find(|key| !takes.contains(&key.as_str())) {
+        return Err(if takes.is_empty() {
+            format!("{tool} takes nothing, not `{stray}`.")
+        } else {
+            format!("`{stray}` is not something {tool} takes: it takes changes and host.")
+        });
+    }
+    if tool != DESKTOP_SET {
+        return Ok(());
+    }
+    match arguments.get("changes") {
+        Some(Value::Object(changes)) if !changes.is_empty() => {}
+        _ => {
+            return Err("Say what to change in changes: each setting's name and its new value, such as {\"sessionAgents\": false}.".to_owned());
+        }
+    }
+    match arguments.get("host") {
+        None | Some(Value::String(_)) => Ok(()),
+        Some(_) => Err("host is a host's id, as desktop_settings lists it.".to_owned()),
     }
 }
 
@@ -563,11 +656,11 @@ mod tests {
     }
 
     #[test]
-    fn the_table_is_floti_desktop_at_mcp_desktop_with_desktop_open() {
+    fn the_table_is_floti_desktop_at_mcp_desktop_with_its_three_tools() {
         assert_eq!(TABLE.name, DESKTOP_FAMILY);
         assert_eq!(TABLE.path, "/mcp/desktop");
         let names: Vec<&str> = TABLE.tools.iter().map(|tool| tool.name.as_str()).collect();
-        assert_eq!(names, [DESKTOP_OPEN]);
+        assert_eq!(names, [DESKTOP_OPEN, DESKTOP_SETTINGS, DESKTOP_SET]);
         // The instructions say what each view is for.
         for view in [
             "file's tab",
@@ -580,15 +673,77 @@ mod tests {
         }
         assert!(TABLE.instructions.contains(OPEN_COMMAND));
         assert!(settings_sections().contains(&"agents"));
+        // The instructions say a session narrows and never widens.
+        assert!(TABLE.instructions.contains("narrow but never widen"));
     }
 
     #[test]
-    fn desktop_open_and_its_command_are_allowed_at_launch_each_named_on_its_own() {
+    fn only_desktop_settings_is_marked_read_only() {
         let events = Arc::new(super::super::events::Events::new());
         let focus = Arc::new(std::sync::Mutex::new(Default::default()));
         let tools = DesktopTools::new(Arc::new(DesktopRelay::new(&events, focus, |_| None)));
-        assert_eq!(tools.allowed_tools(), [DESKTOP_OPEN]);
-        assert_eq!(tools.allowed_commands(), ["floti desktop open"]);
+        assert_eq!(
+            crate::agent_tools::read_only_tools(&tools.tools()),
+            [DESKTOP_SETTINGS]
+        );
+    }
+
+    #[test]
+    fn a_settings_call_is_refused_for_its_shape_before_it_is_passed_on() {
+        for (tool, arguments, says) in [
+            (
+                DESKTOP_SETTINGS,
+                json!({ "host": "local" }),
+                "takes nothing",
+            ),
+            (DESKTOP_SET, json!({}), "Say what to change"),
+            (DESKTOP_SET, json!({ "changes": {} }), "Say what to change"),
+            (
+                DESKTOP_SET,
+                json!({ "changes": [false] }),
+                "Say what to change",
+            ),
+            (
+                DESKTOP_SET,
+                json!({ "changes": { "sessionAgents": false }, "host": 3 }),
+                "host's id",
+            ),
+            (
+                DESKTOP_SET,
+                json!({ "changes": { "sessionAgents": false }, "name": "x" }),
+                "not something desktop_set takes",
+            ),
+        ] {
+            let refused = settings_shape(tool, &object(arguments.clone())).unwrap_err();
+            assert!(refused.contains(says), "{tool} {arguments}: {refused}");
+        }
+        assert_eq!(settings_shape(DESKTOP_SETTINGS, &object(json!({}))), Ok(()));
+        assert_eq!(
+            settings_shape(
+                DESKTOP_SET,
+                &object(json!({ "changes": { "sessionAgents": false }, "host": "build-box" }))
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn every_tool_and_its_command_are_allowed_at_launch_each_named_on_its_own() {
+        let events = Arc::new(super::super::events::Events::new());
+        let focus = Arc::new(std::sync::Mutex::new(Default::default()));
+        let tools = DesktopTools::new(Arc::new(DesktopRelay::new(&events, focus, |_| None)));
+        assert_eq!(
+            tools.allowed_tools(),
+            [DESKTOP_OPEN, DESKTOP_SETTINGS, DESKTOP_SET]
+        );
+        assert_eq!(
+            tools.allowed_commands(),
+            [
+                "floti desktop open",
+                "floti desktop settings",
+                "floti desktop set"
+            ]
+        );
         // No window attached: a launch now is not given it.
         assert!(!tools.grantable());
     }

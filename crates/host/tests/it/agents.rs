@@ -6199,6 +6199,90 @@ async fn desktop_open_goes_to_the_window_showing_the_callers_tab_with_its_path_r
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn desktop_settings_and_desktop_set_reach_the_window_as_asked_from_the_agent_and_its_shell() {
+    let world = World::new();
+    let host = world.host().await;
+    let folder = world.project("settings project");
+    let mut window = world.window().await;
+    let alpha = world.session(CLAUDE, &folder, "alpha").await;
+
+    // Both tools and both commands are allowed at launch, each by name.
+    let allowed = alpha.run.allowed();
+    for rule in [
+        "mcp__floti-desktop__desktop_settings",
+        "mcp__floti-desktop__desktop_set",
+        "Bash(floti desktop settings:*)",
+        "Bash(floti desktop set:*)",
+    ] {
+        assert!(
+            allowed.iter().any(|got| got == rule),
+            "{rule} in {allowed:?}"
+        );
+    }
+    shows(&mut window, &[alpha.id()], true).await;
+
+    // The window is asked with the caller and the arguments as they came,
+    // and its answer is the tool's.
+    let (url, token) = alpha.run.servers[DESKTOP].clone();
+    let changes = json!({ "changes": { "sessionAgents": false } });
+    let calling = tokio::spawn({
+        let (url, token, changes) = (url.clone(), token.clone(), changes.clone());
+        async move { called(&url, &token, "desktop_set", changes).await }
+    });
+    let call = desktop_call(&mut window).await;
+    assert_eq!(call.session, alpha.id());
+    assert_eq!(call.tool, "desktop_set");
+    assert_eq!(
+        from_payload::<serde_json::Value>(&call.arguments).unwrap(),
+        changes
+    );
+    opened(&mut window, &call, "Sessions can start agents is now off.").await;
+    assert_eq!(
+        calling.await.unwrap().text(),
+        "Sessions can start agents is now off."
+    );
+
+    // A call of the wrong shape never reaches the window.
+    let refused = called(&url, &token, "desktop_set", json!({ "changes": {} })).await;
+    assert!(
+        refused.refused().contains("Say what to change"),
+        "{refused:?}"
+    );
+
+    // From the shell: a value is read as JSON where it is JSON, and every
+    // pair is one change of the same call.
+    let (ran, ()) = tokio::join!(
+        world.shell(
+            &alpha,
+            "floti desktop set sessionAgents false browserReach local"
+        ),
+        async {
+            let call = desktop_call(&mut window).await;
+            assert_eq!(call.tool, "desktop_set");
+            assert_eq!(
+                from_payload::<serde_json::Value>(&call.arguments).unwrap(),
+                json!({ "changes": { "sessionAgents": false, "browserReach": "local" } })
+            );
+            opened(&mut window, &call, "Changed 2 settings.").await;
+        }
+    );
+    assert_eq!(ran.code, Some(0), "{ran:?}");
+    assert!(ran.stdout.contains("Changed 2 settings."), "{ran:?}");
+    let (ran, ()) = tokio::join!(world.shell(&alpha, "floti desktop settings"), async {
+        let call = desktop_call(&mut window).await;
+        assert_eq!(call.tool, "desktop_settings");
+        assert_eq!(
+            from_payload::<serde_json::Value>(&call.arguments).unwrap(),
+            json!({})
+        );
+        opened(&mut window, &call, "Floti's settings.").await;
+    });
+    assert_eq!(ran.code, Some(0), "{ran:?}");
+    assert!(ran.stdout.contains("Floti's settings."), "{ran:?}");
+    host.stop(HostStopReason::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn desktop_tools_need_a_window_a_call_with_none_fails_at_once_and_one_that_leaves_fails_its_calls()
  {
     let world = World::new();

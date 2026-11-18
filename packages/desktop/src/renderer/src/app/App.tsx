@@ -331,6 +331,13 @@ import {
 } from "./DocumentTab";
 import { fileKey, joinRoot, relativeTo, useFiles } from "./useFiles";
 import { openForAgent, type DesktopOpenWindow } from "./desktopOpen";
+import {
+  listSettings,
+  setSettings,
+  type DesktopSettingsWindow,
+} from "./desktopSettings";
+import type { DesktopToolHandlers } from "./host/desktopTools";
+import { HOST_WORKSPACE_KEYS } from "../../../shared/host/records";
 import { focusByHost, stillTold } from "./focusByHost";
 import { useHistoryPalette } from "./useHistoryPalette";
 import { useStoppedGroup } from "./useStoppedGroup";
@@ -3284,6 +3291,63 @@ export function App(): JSX.Element {
   );
 
   /**
+   * What a session's agent reads and changes here with `desktop_settings`
+   * and `desktop_set` (`desktopSettings.ts`): the settings through the same
+   * save the Settings page makes - a host's own keys on that host, the rest
+   * on this device, which main tells this PC's host - and plugins' switches
+   * through each host's own, with the toast every change raises.
+   */
+  const { saveSettings } = launcher;
+  const raiseAgentToast = agentToasts.raise;
+  const settingsTools = useMemo((): DesktopToolHandlers => {
+    const hostKept = (key: string): boolean =>
+      (HOST_WORKSPACE_KEYS as readonly string[]).includes(key);
+    const window: DesktopSettingsWindow = {
+      hosts: () => launcherHosts.map(({ id, name }) => ({ id, name })),
+      settingsOn: (host) => bridgeFor(host).invoke("settings:read"),
+      pluginsOn: (host) => bridgeFor(host).invoke("plugins:list"),
+      save: async (host, patch) => {
+        if (host === LOCAL_HOST_KEY) {
+          await saveSettings(patch);
+          return;
+        }
+        const entries = Object.entries(patch);
+        const own = Object.fromEntries(entries.filter(([key]) => !hostKept(key)));
+        const kept = Object.fromEntries(entries.filter(([key]) => hostKept(key)));
+        if (Object.keys(own).length > 0) await saveSettings(own);
+        if (Object.keys(kept).length > 0)
+          await bridgeFor(host).invoke("settings:write", kept);
+      },
+      setPlugin: async (host, path, which, on) => {
+        await bridgeFor(host).invoke(
+          which === "on" ? "plugins:setEnabled" : "plugins:setTools",
+          { path, enabled: on },
+        );
+      },
+      sessionName: (host, id) => {
+        const record =
+          host === LOCAL_HOST_KEY
+            ? sessionsById.get(id)
+            : remoteSessionOf(host, id);
+        return record === undefined
+          ? `Session ${String(id)}`
+          : sessionLabel(record);
+      },
+      raise: raiseAgentToast,
+    };
+    return {
+      desktop_settings: (call) => listSettings(call, window),
+      desktop_set: (call) => setSettings(call, window),
+    };
+  }, [
+    launcherHosts,
+    saveSettings,
+    sessionsById,
+    remoteSessionOf,
+    raiseAgentToast,
+  ]);
+
+  /**
    * What a session's agent opens here with `desktop_open` (`desktopOpen.ts`):
    * beside the tab showing the session that asked, the focus left where it
    * is, so the person goes on typing to that session. Registered again on
@@ -3357,8 +3421,10 @@ export function App(): JSX.Element {
     };
     return desktopTools.answerWith({
       desktop_open: (call) => openForAgent(call, opener),
+      ...settingsTools,
     });
   }, [
+    settingsTools,
     open,
     preview,
     commit,

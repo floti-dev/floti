@@ -120,15 +120,62 @@ and [PLUGINS.md](PLUGINS.md) how a plugin offers tools.
   attached, and only while `desktopMcp` is on (Settings > Agents, on by
   default). A call with none attached, or waiting on a window that leaves,
   fails at once saying no window is attached. Nothing waits on a timer.
+- `desktop_settings` lists every setting the Settings page shows and
+  `desktop_set` changes one or several by name (`changes`, and `host` for a
+  setting kept per host). What a setting is called, what it does, its
+  section, the values it takes, its default, whether it is kept per host and
+  what a session may do to it come from one table in core
+  (`packages/core/src/settingsTable.ts`, exported through
+  `@floti/core/types`), which Settings draws its labels and hints from too; a
+  core test fails when a validated setting has no entry or the values it
+  takes disagree with its validator. What Floti remembers rather than what
+  anyone chose (`STATE_KEYS`: the pane layout, first-run records, the hosts
+  list and the like) is not listed, and no secret is a setting. Plugins'
+  switches are each host's plugin state, listed beside the settings as
+  `plugin.<id>.on` and `plugin.<id>.tools`.
+- The host checks only a call's shape and passes both on as they are; the
+  window judges and applies them (`app/desktopSettings.ts`) through the save
+  the Settings page makes: settings through `settings:write`, so desktop.db,
+  the host's own keys and `hostSettingsFor` follow as they do for a click, a
+  host's own keys on that host, and plugins' switches through that host's
+  `plugins:setEnabled` and `plugins:setTools`. A set is judged whole before
+  anything is written. A setting that decides what agents may reach or do
+  (the tool families' switches, Sessions can start agents, the browser's
+  reach and local-only rule, the five agent limits, plugins' switches and the
+  folders Floti scans, each kept folder compared exactly) or what Floti or
+  its sessions do on their own (`updateCheck`, `browserSearch`,
+  `quitSessions`, which moves only toward end in end < ask < keep, and
+  `restoreWithoutAsking`) may be
+  narrowed and never widened from a session; a set that would widen one is
+  refused saying the user changes it in Settings. The `claude` executable, the project shell and the archive's
+  ceiling (lowering it drops conversations an undo cannot bring back) only the
+  user changes. A value a setting does not take is refused naming the ones it
+  does. One refusal and nothing in the call changes.
+- Every change shows a toast in the window naming the session and what it
+  changed, with Undo, which puts back every value the call changed. A set is
+  written in steps that land whole or not at all (this device's settings, the
+  host's own, then each plugin's switch); when one fails, what was already
+  written still gets the toast and its Undo, and the answer says what changed,
+  where each change landed, and what failed. A setting
+  kept per host and a plugin's switch change on the caller's own host unless
+  `host` names another. Main tells only this PC's host the settings it keeps
+  for sessions, so the answer to a session on a host on another computer says
+  that host is not told, rather than claim it follows.
 - From a session's shell it is `floti desktop open <view> ...`
   (`crates/host/src/desktop_cli.rs`: `file <path> [--line <n>]`,
   `folder <path>`, `project <path>`, `history [<search>...]`,
-  `settings [<section>]`, each with `--json`), which reaches the family at
-  `FLOTI_AGENT_DESKTOP_URL` with the session's token, makes a relative path
-  absolute against the shell's own folder, prints the window's sentence and
-  exits 1 on a refusal. `desktop_open` and `floti desktop open` are allowed at
-  launch, each named on its own (`mcp__floti-desktop__desktop_open`,
-  `Bash(floti desktop open:*)`); a user's deny rule still wins.
+  `settings [<section>]`), `floti desktop settings` and
+  `floti desktop set <name> <value> [<name> <value>...] [--host <id>]`, each
+  with `--json`. A value is read as JSON where it is JSON and as text
+  otherwise. Each reaches the family at `FLOTI_AGENT_DESKTOP_URL` with the
+  session's token; `open` makes a relative path absolute against the shell's
+  own folder. Each prints the window's sentence and exits 1 on a refusal. All
+  three tools and all three commands are allowed at launch, each named on its
+  own (`mcp__floti-desktop__desktop_open`, `..._desktop_settings`,
+  `..._desktop_set`, `Bash(floti desktop open:*)`,
+  `Bash(floti desktop settings:*)`, `Bash(floti desktop set:*)`);
+  `desktop_settings` is marked `readOnlyHint`, and a user's deny rule still
+  wins.
 
 ## floti-sessions
 

@@ -124,6 +124,14 @@ export * from './hostAgents'
 export * from './sshConfig'
 
 /**
+ * Every setting the Settings page shows, described once, re-exported for the
+ * same reason: the page draws its labels and hints from it, and the window
+ * checks a session's `desktop_set` against it. It reads this file's constants
+ * only once it is first asked, never at load.
+ */
+export * from './settingsTable'
+
+/**
  * What the editors do when you press a key.
  *
  * Re-exported here rather than reached for through the package root, because
@@ -1881,14 +1889,16 @@ export interface AppSettings {
   sessionMcp: boolean
 
   /**
-   * Whether the sessions a host starts can open Floti's views in this window:
-   * the host's floti-desktop tools and `floti desktop open`, which open a file
-   * beside the session's tab, Files on a folder, a project's page, History or
-   * a Settings section. Told to the host like the other families' switches;
-   * off, a session started from then on has no route, entry or tool, and a
-   * running one is answered 404. On by default, because all it can do is show
-   * the user something beside the session that asked, under a folder Floti
-   * already knows, without taking the keyboard.
+   * Whether the sessions a host starts can use Floti's window: the host's
+   * floti-desktop tools and `floti desktop`, which open a file beside the
+   * session's tab, Files on a folder, a project's page, History or a Settings
+   * section, and read and change the settings (`settingsTable.ts`). Told to the
+   * host like the other families' switches; off, a session started from then
+   * on has no route, entry or tool, and a running one is answered 404. On by
+   * default, because what it opens shows the user something beside the
+   * session that asked, under a folder Floti already knows, without taking the
+   * keyboard, and what it changes it can only narrow where agents' reach is
+   * concerned, with a toast the user can undo.
    */
   desktopMcp: boolean
 
